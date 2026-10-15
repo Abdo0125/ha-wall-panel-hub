@@ -56,6 +56,8 @@ class Panel:
     key_hash: str
     paired_at: float
     last_seen: float = 0.0
+    # Room the panel is mounted in (an HA area id). Management data, not part of the layout.
+    area_id: str | None = None
 
 
 @dataclass
@@ -164,6 +166,10 @@ class Store:
 
     def rename(self, panel_id: str, name: str) -> None:
         self.panels[panel_id].name = name[:60]
+        self._save_panels()
+
+    def place(self, panel_id: str, area_id: str | None) -> None:
+        self.panels[panel_id].area_id = area_id or None
         self._save_panels()
 
     def revoke(self, panel_id: str) -> None:

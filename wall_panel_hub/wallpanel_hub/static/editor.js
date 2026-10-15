@@ -48,6 +48,22 @@ function pageId(wanted, taken) {
   return `${base}_${n}`;
 }
 
+// Entity type filter chips; the choice is remembered in this browser.
+const TYPE_FILTERS = [
+  ["light", "إنارة"], ["switch", "مفاتيح"], ["cover", "ستائر"], ["climate", "مكيفات"], ["fan", "مراوح"],
+  ["lock", "أقفال"], ["scene", "مشاهد"], ["script", "سكربتات"], ["button", "أزرار"], ["generic", "حساسات"],
+];
+function loadTypes() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("wph.types"));
+    if (Array.isArray(saved)) return new Set(saved);
+  } catch (_) { /* storage unavailable: use the default */ }
+  return new Set(TYPE_FILTERS.map(([t]) => t).filter((t) => t !== "generic"));
+}
+function saveTypes() {
+  try { localStorage.setItem("wph.types", JSON.stringify([...S.types])); } catch (_) { /* ignore */ }
+}
+
 // ---------- state ----------
 
 const S = {
@@ -59,6 +75,7 @@ const S = {
   page: 0,
   sel: { kind: "panel" },
   open: new Set(),     // expanded tree nodes
+  types: null,         // entity types shown in the building tree (set at start)
   notices: [],         // transient messages: {level, text, actions}
 };
 const W = () => S.work[S.current];
@@ -323,15 +340,16 @@ function renderTree() {
   const tree = $("tree");
   tree.replaceChildren();
   if (S.catalogError) { tree.append(el("p", { class: "msg error" }, "تعذّرت قراءة المبنى من HA: " + S.catalogError)); return; }
+  renderTypeChips();
   const q = $("search").value.trim().toLowerCase();
-  const controlsOnly = $("controlsOnly").checked;
   const unusedOnly = $("unusedOnly").checked;
   const used = usage();
   const match = (e) =>
-    (!controlsOnly || e.controllable) && (!unusedOnly || !used[e.entity_id]) &&
+    S.types.has(e.type) && (!unusedOnly || !used[e.entity_id]) &&
     (!q || e.name.toLowerCase().includes(q) || e.entity_id.includes(q));
 
   const entitiesOf = (areaId) => S.catalog.entities.filter((e) => (e.area_id || null) === areaId && match(e));
+  const panelsIn = (areaId) => S.panels.filter((p) => (p.area_id || null) === areaId);
   const filtering = !!q || unusedOnly;
 
   function entityList(areaId) {
@@ -350,7 +368,8 @@ function renderTree() {
 
   function areaNode(area) {
     const ents = entitiesOf(area.id);
-    if (filtering && !ents.length) return null;
+    const panels = panelsIn(area.id);
+    if (filtering && !ents.length && !panels.length) return null;
     const key = "a:" + area.id;
     const open = S.open.has(key) || filtering;
     const li = el("li", { class: "area", dataset: { area: area.id } },
@@ -359,6 +378,8 @@ function renderTree() {
         el("span", {}, area.name),
         el("span", { class: "count" }, ents.length),
       ));
+    // Panels mounted in the room stay visible even when the room is folded.
+    for (const p of panels) li.append(panelNode(p));
     if (open) li.append(entityList(area.id));
     return li;
   }
@@ -368,6 +389,13 @@ function renderTree() {
     for (const a of areas) { const n = areaNode(a); if (n) ul.append(n); }
     sortable("tree", ul, { group: { name: "ha-area", pull: "clone", put: false }, sort: false, handle: ".node" });
     return ul;
+  }
+
+  const unplaced = panelsIn(null);
+  if (unplaced.length) {
+    tree.append(el("h2", {}, "شاشات بدون موقع"));
+    for (const p of unplaced) tree.append(panelNode(p));
+    tree.append(el("p", { class: "muted" }, "حدّد موقع الشاشة من إعدادات الشاشة ← الموقع."));
   }
 
   const root = el("ul", { class: "tree root" });
@@ -395,6 +423,102 @@ function renderTree() {
     tree.append(el("h2", { style: "margin-top:12px" }, "بدون منطقة"));
     tree.append(entityList(null));
   }
+}
+
+function renderTypeChips() {
+  const box = $("typeChips");
+  box.replaceChildren();
+  const count = {};
+  for (const e of S.catalog.entities) count[e.type] = (count[e.type] || 0) + 1;
+  const all = TYPE_FILTERS.every(([t]) => S.types.has(t));
+  box.append(el("span", {
+    class: "chip" + (all ? " on" : ""),
+    onclick: () => { S.types = all ? new Set() : new Set(TYPE_FILTERS.map(([t]) => t)); saveTypes(); renderTree(); },
+  }, "الكل"));
+  for (const [type, label] of TYPE_FILTERS) {
+    if (!count[type]) continue;
+    box.append(el("span", {
+      class: "chip" + (S.types.has(type) ? " on" : ""),
+      onclick: () => { S.types.has(type) ? S.types.delete(type) : S.types.add(type); saveTypes(); renderTree(); },
+    }, label, el("span", { class: "n" }, count[type])));
+  }
+}
+
+function selectPanel(pid) {
+  S.current = pid; S.page = 0; S.sel = { kind: "panel" };
+  render();
+}
+
+// A panel in the building tree: click to open it, drop entities or a room on it.
+function panelNode(p) {
+  const row = el("div", {
+    class: "panelnode" + (p.id === S.current ? " active" : ""),
+    dataset: { pid: p.id },
+    title: "اضغط لفتح الشاشة، أو اسحب إليها كيانات أو غرفة",
+    onclick: () => selectPanel(p.id),
+  },
+    el("span", {}, "🖥"),
+    el("span", { class: "name" }, p.name),
+    S.work[p.id]?.unsent ? el("span", { class: "unsent", title: "تعديلات غير مرسلة" }, "✱") : null,
+    el("span", { class: "dot", style: `color:${p.online ? "var(--ok)" : "var(--muted)"}` }, p.online ? "●" : "○"),
+  );
+  sortable("tree", row, {
+    group: { name: "panel-drop", put: ["ha", "ha-area"], pull: false }, sort: false, draggable: ".none",
+    onAdd: (evt) => {
+      const { entity, area } = evt.item.dataset;
+      evt.item.remove();
+      dropOnPanel(p.id, entity ? [entity] : [], area);
+    },
+  });
+  return row;
+}
+
+// Entities dropped on a panel land on the page of their own room (created if missing),
+// else on the page of the panel's room, else on the page open now. A room dropped on a
+// panel becomes a page. The editor then shows that panel.
+function dropOnPanel(pid, entityIds, areaId) {
+  const sameAsOpen = pid === S.current;
+  const openPage = S.page;
+  S.current = pid;
+  const byId = entityById();
+  const areas = Object.fromEntries(S.catalog.areas.map((a) => [a.id, a]));
+  const panel = S.panels.find((p) => p.id === pid);
+  let pageTitle = "";
+  change((l) => {
+    const pageFor = (target) => {
+      let i = target ? l.pages.findIndex((pg) => pg.id === target) : -1;
+      if (i < 0 && target && areas[target]) {
+        l.pages.push({ id: pageId(target, new Set(l.pages.map((pg) => pg.id))), title: areas[target].name, tiles: [] });
+        i = l.pages.length - 1;
+      }
+      if (i < 0) {
+        if (!l.pages.length) l.pages.push({ id: "page", title: "صفحة جديدة", tiles: [] });
+        i = sameAsOpen ? Math.min(openPage, l.pages.length - 1) : 0;
+      }
+      return i;
+    };
+    if (areaId) {
+      addAreaPages(l, [areaId]);
+      S.page = Math.max(0, l.pages.findIndex((pg) => pg.id === areaId));
+    }
+    for (const id of entityIds) {
+      const e = byId[id];
+      if (!e) continue;
+      S.page = pageFor(e.area_id || panel?.area_id);
+      addTiles(l.pages[S.page], [id]);
+    }
+    S.sel = { kind: "page", page: S.page };
+    pageTitle = l.pages[S.page]?.title || "";
+  });
+  notice("ok", `أُضيف إلى ${panel?.name} ← ${pageTitle}`);
+}
+
+async function placePanel(pid, areaId) {
+  await api(`api/panels/${encodeURIComponent(pid)}/area`, { method: "POST", body: JSON.stringify({ area_id: areaId || null }) });
+  const p = S.panels.find((x) => x.id === pid);
+  if (p) p.area_id = areaId || null;
+  if (areaId) S.open.add("a:" + areaId);
+  render();
 }
 
 function renderPages() {
@@ -536,6 +660,11 @@ function renderProps() {
   const hubPanel = S.panels.find((p) => p.id === S.current);
   box.append(
     el("p", { class: "muted" }, `${hubPanel?.model || ""} · المرسل: ${hubPanel?.sent ? "v" + hubPanel.sent.version : "لا شيء بعد"}`),
+    field("الموقع (الغرفة)", select(
+      [["", "— بدون موقع —"], ...S.catalog.areas.map((a) => [a.id, a.name])],
+      hubPanel?.area_id || "",
+      (v) => placePanel(S.current, v),
+    )),
     field("اسم الشاشة", textInput(panel.name, (v) => change(() => { panel.name = v; }))),
     field("اللغة", select([["ar", "العربية"], ["fr", "Français"], ["en", "English"]], panel.lang || "ar", (v) => change(() => { panel.lang = v; }))),
     field("المظهر", select([["dark", "داكن"], ["light", "فاتح"]], panel.theme || "dark", (v) => change(() => { panel.theme = v; }))),
@@ -577,7 +706,7 @@ $("addPage").onclick = () => change((l) => {
 });
 $("panelProps").onclick = () => { S.sel = { kind: "panel" }; render(); };
 $("refresh").onclick = async () => { await loadCatalog(true); render(); };
-for (const id of ["search", "controlsOnly", "unusedOnly"]) $(id).addEventListener("input", renderTree);
+for (const id of ["search", "unusedOnly"]) $(id).addEventListener("input", renderTree);
 
 document.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
@@ -592,13 +721,19 @@ setInterval(async () => {
   if (!r.ok) return;
   for (const p of r.body.panels) {
     const old = S.panels.find((x) => x.id === p.id);
-    if (old) { old.online = p.online; old.sent = p.sent; }
+    if (old) { old.online = p.online; old.sent = p.sent; old.area_id = p.area_id; }
   }
   renderTabs();
+  for (const node of document.querySelectorAll(".panelnode")) {
+    const p = S.panels.find((x) => x.id === node.dataset.pid);
+    const dot = node.querySelector(".dot");
+    if (p && dot) { dot.textContent = p.online ? "●" : "○"; dot.style.color = p.online ? "var(--ok)" : "var(--muted)"; }
+  }
   renderMessages();
 }, 5000);
 
 (async () => {
+  S.types = loadTypes();
   await Promise.all([loadState(), loadCatalog(false)]);
   render();
 })();

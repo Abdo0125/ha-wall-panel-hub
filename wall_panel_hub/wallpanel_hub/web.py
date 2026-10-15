@@ -92,6 +92,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
                 "id": p.id,
                 "name": p.name,
                 "model": p.model,
+                "area_id": p.area_id,
                 "online": gateway.online(p.id),
                 "sent": store.get_layout(p.id),
                 "draft": store.get_draft(p.id),
@@ -176,6 +177,13 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         store.rename(pid, str((await request.json()).get("name", "")).strip() or "Panel")
         return web.json_response({"ok": True})
 
+    async def place(request: web.Request):
+        pid = request.match_info["pid"]
+        if pid not in store.panels:
+            raise web.HTTPNotFound()
+        store.place(pid, (await request.json()).get("area_id"))
+        return web.json_response({"ok": True})
+
     async def get_layout(request: web.Request):
         return web.json_response({"layout": store.get_layout(request.match_info["pid"])})
 
@@ -193,5 +201,6 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     app.router.add_post("/api/pending/{rid}/reject", reject)
     app.router.add_post("/api/panels/{pid}/revoke", revoke)
     app.router.add_post("/api/panels/{pid}/rename", rename)
+    app.router.add_post("/api/panels/{pid}/area", place)
     app.router.add_get("/api/panels/{pid}/layout", get_layout)
     return app

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- Editor: filter the building by entity type (lights, switches, covers, climate, fans,
+  locks, scenes, scripts, buttons, sensors), remembered in the browser.
+- Panels have a location (an HA area). They show inside their room in the building tree;
+  click one to open it, drop an entity or a room on it to add it there. An entity lands
+  on the page of its own room, created if missing.
+
 ## 0.3.0
 
 - Layout editor in the Wall Panels page, ETS style: HA building (floors → areas →
