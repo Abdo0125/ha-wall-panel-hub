@@ -22,6 +22,14 @@ class LayoutInvalid(ValueError):
     pass
 
 
+class LayoutConflict(Exception):
+    """The panel's layout changed (e.g. edited on the panel) after the draft was started."""
+
+    def __init__(self, current: dict | None):
+        super().__init__("layout changed since the draft was started")
+        self.current = current
+
+
 def validate_layout(layout: dict) -> None:
     errors = sorted(_VALIDATOR.iter_errors(layout), key=lambda e: list(e.path))
     if errors:
@@ -68,6 +76,9 @@ class Store:
         self.dir = data_dir
         self.layouts_dir = data_dir / "layouts"
         self.layouts_dir.mkdir(parents=True, exist_ok=True)
+        # Editor drafts: changes not yet sent to the panel (the explicit "send", like ETS download).
+        self.drafts_dir = data_dir / "drafts"
+        self.drafts_dir.mkdir(parents=True, exist_ok=True)
         self.panels_file = data_dir / "panels.json"
         self.panels: dict[str, Panel] = {}
         if self.panels_file.exists():
@@ -158,12 +169,47 @@ class Store:
     def revoke(self, panel_id: str) -> None:
         self.panels.pop(panel_id, None)
         self._save_panels()
+        self.delete_draft(panel_id)
 
     # ---- layouts ----
 
+    @staticmethod
+    def _safe(panel_id: str) -> str:
+        return "".join(c for c in panel_id if c.isalnum() or c in "-_")
+
     def _layout_file(self, panel_id: str) -> Path:
-        safe = "".join(c for c in panel_id if c.isalnum() or c in "-_")
-        return self.layouts_dir / f"{safe}.json"
+        return self.layouts_dir / f"{self._safe(panel_id)}.json"
+
+    def _draft_file(self, panel_id: str) -> Path:
+        return self.drafts_dir / f"{self._safe(panel_id)}.json"
+
+    # ---- drafts (editor) ----
+
+    def get_draft(self, panel_id: str) -> dict | None:
+        """{"layout": ..., "base_version": version of the sent layout it started from}."""
+        f = self._draft_file(panel_id)
+        return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
+
+    def save_draft(self, panel_id: str, layout: dict, base_version: int | None) -> None:
+        # Not validated: a draft may be half done. Validation happens on send.
+        self._write(self._draft_file(panel_id), {"layout": layout, "base_version": base_version})
+
+    def delete_draft(self, panel_id: str) -> None:
+        self._draft_file(panel_id).unlink(missing_ok=True)
+
+    def send_draft(self, panel_id: str, force: bool = False) -> dict:
+        """Validates and stores the draft as the panel's layout. Raises LayoutConflict if the
+        layout moved on since the draft began, unless forced."""
+        draft = self.get_draft(panel_id)
+        if draft is None:
+            raise KeyError(panel_id)
+        current = self.get_layout(panel_id)
+        current_version = current["version"] if current else None
+        if not force and current_version != draft.get("base_version"):
+            raise LayoutConflict(current)
+        saved = self.save_layout(panel_id, draft["layout"])
+        self.delete_draft(panel_id)
+        return saved
 
     def get_layout(self, panel_id: str) -> dict | None:
         f = self._layout_file(panel_id)

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wall Panels · المحرر</title>
+<style>
+  :root {
+    --bg: #111; --pane: #181818; --fg: #eee; --muted: #999; --line: #2e2e2e;
+    --accent: #e0a060; --danger: #e06060; --ok: #6cc56c; --sel: #2c2418; --drop: #3a3020;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f4f4f4; --pane: #fff; --fg: #111; --muted: #666; --line: #ddd; --accent: #8a5a2b; --sel: #f5e8d8; --drop: #f0dcc0; }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--fg); font: 14px system-ui, sans-serif; display: grid;
+         grid-template-rows: auto 1fr auto; }
+  button { background: none; color: var(--fg); border: 1px solid var(--line); border-radius: 6px;
+           padding: 5px 10px; cursor: pointer; font: inherit; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { border-color: var(--accent); color: var(--accent); }
+  button.danger { border-color: var(--danger); color: var(--danger); }
+  input, select { background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 6px;
+                  padding: 6px 8px; font: inherit; width: 100%; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .badge { font-size: 11px; color: var(--accent); font-weight: 600; letter-spacing: .5px; }
+
+  /* ---- top bar ---- */
+  header { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0 0 0 12px; }
+  header a { color: var(--muted); text-decoration: none; margin-inline-end: 8px; }
+  #tabs { display: flex; gap: 4px; flex: 1; min-height: 34px; flex-wrap: wrap; }
+  .tab { border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+  .tab.active { border-color: var(--accent); background: var(--sel); }
+  .tab .dot { font-size: 10px; margin-inline-end: 4px; }
+  .tab .unsent { color: var(--accent); margin-inline-start: 4px; }
+
+  /* ---- four panes ---- */
+  main { display: grid; grid-template-columns: 300px 220px 1fr 280px; min-height: 0; }
+  .pane { border-inline-end: 1px solid var(--line); overflow: auto; min-height: 0; padding: 10px; background: var(--pane); }
+  .pane h2 { font-size: 13px; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+
+  /* building tree */
+  .tools { display: grid; gap: 6px; margin-bottom: 8px; }
+  .tools label { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+  .tools input[type=checkbox] { width: auto; }
+  .node { padding: 4px 6px; border-radius: 4px; cursor: grab; display: flex; gap: 6px; align-items: center; user-select: none; }
+  .node:hover { background: var(--sel); }
+  .node .twist { width: 14px; cursor: pointer; color: var(--muted); }
+  .node .count { margin-inline-start: auto; color: var(--muted); font-size: 11px; }
+  .floor > .node { font-weight: 600; }
+  ul.tree { list-style: none; margin: 0; padding-inline-start: 14px; }
+  ul.tree.root { padding: 0; }
+  .ent { padding: 3px 6px; border-radius: 4px; cursor: grab; display: flex; gap: 6px; align-items: baseline; }
+  .ent:hover { background: var(--sel); }
+  .ent .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ent .used { margin-inline-start: auto; font-size: 11px; color: var(--ok); white-space: nowrap; }
+
+  /* pages */
+  #pages { list-style: none; padding: 0; margin: 0; min-height: 60px; }
+  #pages li { padding: 8px; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 6px; cursor: pointer;
+              display: flex; justify-content: space-between; gap: 6px; }
+  #pages li.active { border-color: var(--accent); background: var(--sel); }
+  .drophint { color: var(--muted); font-size: 12px; border: 1px dashed var(--line); border-radius: 6px; padding: 10px; text-align: center; }
+
+  /* preview grid */
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; min-height: 140px;
+          align-content: start; padding: 4px; border-radius: 8px; }
+  .tile { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px; height: 96px; cursor: grab;
+          display: flex; flex-direction: column; justify-content: space-between; position: relative; }
+  .tile.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .tile.missing { border-style: dashed; opacity: .6; }
+  .tile .label { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tile .eid { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tile .x { position: absolute; top: 4px; inset-inline-end: 6px; color: var(--muted); cursor: pointer; padding: 2px 4px; }
+  .sortable-ghost { opacity: .35; }
+  .drop-active { background: var(--drop); }
+
+  /* properties */
+  .field { margin-bottom: 10px; }
+  .field label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+
+  /* messages */
+  footer { border-top: 1px solid var(--line); max-height: 150px; overflow: auto; padding: 6px 12px; font-size: 13px; background: var(--pane); }
+  .msg { padding: 3px 0; }
+  .msg.error { color: var(--danger); }
+  .msg.warn { color: var(--accent); }
+  .msg.ok { color: var(--ok); }
+  .msg button { margin-inline-start: 8px; padding: 2px 8px; }
+</style>
+</head>
+<body>
+<header>
+  <a href="./">← الشاشات</a>
+  <h1>محرر التخطيط</h1>
+  <div id="tabs"></div>
+  <button id="undo" title="Ctrl+Z">↶ تراجع</button>
+  <button id="redo" title="Ctrl+Y">↷ إعادة</button>
+  <button id="discard" class="danger">تجاهل التغييرات</button>
+  <button id="send" class="primary">إرسال للشاشة ⇧</button>
+</header>
+
+<main>
+  <section class="pane">
+    <h2>مبنى Home Assistant</h2>
+    <div class="tools">
+      <input id="search" placeholder="بحث بالاسم أو المعرّف">
+      <label><input type="checkbox" id="controlsOnly" checked> أجهزة التحكم فقط</label>
+      <label><input type="checkbox" id="unusedOnly"> غير المستعملة في أي شاشة</label>
+      <button id="refresh">↻ تحديث من HA</button>
+    </div>
+    <div id="tree"></div>
+  </section>
+
+  <section class="pane">
+    <h2>الصفحات</h2>
+    <ul id="pages"></ul>
+    <div class="drophint">اسحب غرفة أو طابقاً هنا</div>
+    <p><button id="addPage">+ صفحة فارغة</button></p>
+    <p><button id="panelProps">إعدادات الشاشة</button></p>
+  </section>
+
+  <section class="pane">
+    <h2 id="pageTitle">المعاينة</h2>
+    <div id="grid"></div>
+    <p class="muted">اسحب كيانات أو غرفة من المبنى إلى هنا. اسحب البلاطات لترتيبها. اسحب صفحة إلى تبويب شاشة أخرى لنسخها.</p>
+  </section>
+
+  <section class="pane">
+    <h2>الخصائص</h2>
+    <div id="props"></div>
+  </section>
+</main>
+
+<footer id="messages"></footer>
+
+<script src="static/vendor/Sortable.min.js"></script>
+<script src="static/editor.js"></script>
+</body>
+</html>

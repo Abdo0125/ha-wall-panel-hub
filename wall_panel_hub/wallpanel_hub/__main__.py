@@ -5,6 +5,8 @@ import aiohttp
 from aiohttp import web
 
 from . import companion, discovery, settings
+from .catalog import CatalogCache
+from .catalog import fetch as fetch_catalog
 from .gateway import Gateway
 from .store import Store
 from .web import management_ui, panel_api
@@ -19,10 +21,11 @@ async def main() -> None:
     store = Store(cfg.data_dir)
     async with aiohttp.ClientSession() as session:
         gateway = Gateway(cfg, store, session)
+        catalog = CatalogCache(lambda: fetch_catalog(session, cfg.ha_ws_url, cfg.ha_token))
 
         runners = []
         for app, port in ((panel_api(store, gateway), cfg.panel_port),
-                          (management_ui(store, gateway, cfg.ui_allowed), cfg.ui_port)):
+                          (management_ui(store, gateway, cfg.ui_allowed, catalog), cfg.ui_port)):
             runner = web.AppRunner(app)
             await runner.setup()
             await web.TCPSite(runner, "0.0.0.0", port).start()

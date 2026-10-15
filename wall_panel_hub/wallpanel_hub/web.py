@@ -12,9 +12,10 @@ from pathlib import Path
 
 from aiohttp import web
 
+from .catalog import CatalogCache
 from .gateway import Gateway
 from .settings import VERSION
-from .store import Store
+from .store import LayoutConflict, LayoutInvalid, Store
 
 STATIC = Path(__file__).parent / "static"
 log = logging.getLogger(__name__)
@@ -55,7 +56,8 @@ def _allowed(remote: str | None, networks: list) -> bool:
     return any(ip in n for n in networks)
 
 
-def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...]) -> web.Application:
+def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
+                  catalog: CatalogCache | None = None) -> web.Application:
     networks = [ipaddress.ip_network(n) for n in allowed]
 
     @web.middleware
@@ -69,6 +71,63 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...]) -> w
 
     async def index(_):
         return web.FileResponse(STATIC / "index.html")
+
+    async def editor(_):
+        return web.FileResponse(STATIC / "editor.html")
+
+    # ---- layout editor ----
+
+    async def editor_catalog(request: web.Request):
+        if catalog is None:
+            raise web.HTTPServiceUnavailable(text="no Home Assistant connection")
+        try:
+            return web.json_response(await catalog.get(refresh=request.query.get("refresh") == "1"))
+        except Exception as e:  # HA down, auth... shown in the editor's message pane
+            log.warning("catalog failed: %s", e)
+            return web.json_response({"error": str(e)}, status=502)
+
+    async def editor_state(_):
+        return web.json_response({"panels": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "model": p.model,
+                "online": gateway.online(p.id),
+                "sent": store.get_layout(p.id),
+                "draft": store.get_draft(p.id),
+            }
+            for p in sorted(store.panels.values(), key=lambda p: p.name)
+        ]})
+
+    def _panel(request: web.Request) -> str:
+        pid = request.match_info["pid"]
+        if pid not in store.panels:
+            raise web.HTTPNotFound(text="unknown panel")
+        return pid
+
+    async def put_draft(request: web.Request):
+        pid = _panel(request)
+        body = await request.json()
+        store.save_draft(pid, body["layout"], body.get("base_version"))
+        return web.json_response({"ok": True})
+
+    async def delete_draft(request: web.Request):
+        store.delete_draft(_panel(request))
+        return web.json_response({"ok": True})
+
+    async def send_draft(request: web.Request):
+        pid = _panel(request)
+        force = bool((await request.json()).get("force")) if request.can_read_body else False
+        try:
+            saved = store.send_draft(pid, force=force)
+        except KeyError:
+            raise web.HTTPNotFound(text="nothing to send")
+        except LayoutInvalid as e:
+            return web.json_response({"error": str(e)}, status=422)
+        except LayoutConflict as e:
+            return web.json_response({"conflict": True, "current": e.current}, status=409)
+        await gateway.notify_layout(pid)
+        return web.json_response({"version": saved["version"], "online": gateway.online(pid)})
 
     async def overview(_):
         now = time.time()
@@ -122,6 +181,13 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...]) -> w
 
     # Paths are relative in the page, so they work behind the ingress prefix.
     app.router.add_get("/", index)
+    app.router.add_get("/editor", editor)
+    app.router.add_static("/static/", STATIC)
+    app.router.add_get("/api/editor/catalog", editor_catalog)
+    app.router.add_get("/api/editor/state", editor_state)
+    app.router.add_put("/api/editor/panels/{pid}/draft", put_draft)
+    app.router.add_delete("/api/editor/panels/{pid}/draft", delete_draft)
+    app.router.add_post("/api/editor/panels/{pid}/send", send_draft)
     app.router.add_get("/api/overview", overview)
     app.router.add_post("/api/pending/{rid}/approve", approve)
     app.router.add_post("/api/pending/{rid}/reject", reject)

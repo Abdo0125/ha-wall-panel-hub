@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+- Layout editor in the Wall Panels page, ETS style: HA building (floors → areas →
+  entities) | pages | page preview | properties, plus a message pane.
+- Drag and drop: an entity or a whole area onto the preview, an area or a floor onto
+  the pages list (one page per area), a page onto another panel's tab to copy it.
+- "Used in" marker per entity and an "unused only" filter.
+- Changes are kept as a draft until **Send to panel**; a conflict warning appears if the
+  panel's layout was edited on the panel in the meantime. Undo/redo (Ctrl+Z / Ctrl+Y).
+- SortableJS 1.15.6 (MIT) bundled, so the editor works without internet.
+
 ## 0.2.0
 
 - Remote panels: the add-on installs a companion integration that opens
