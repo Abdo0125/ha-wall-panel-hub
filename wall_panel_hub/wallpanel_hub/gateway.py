@@ -7,6 +7,9 @@ The hub opens its own connection to HA and forwards only what the panel may do:
 - state subscriptions limited to those entities;
 - read-only registry and state lists (for the layout editor on the panel);
 - wallpanel/* commands for the layout, answered by the hub itself.
+
+Layouts are stored in format v2 (cards). A panel asks for it with "schema": 2 in
+wallpanel/layout/subscribe or /get; an older app, which does not, gets format v1.
 """
 
 import asyncio
@@ -16,6 +19,7 @@ import logging
 import aiohttp
 from aiohttp import WSMsgType, web
 
+from .migrate import SCHEMA, downgrade
 from .store import LayoutInvalid, Store, layout_entities
 
 log = logging.getLogger(__name__)
@@ -79,6 +83,8 @@ class PanelConnection:
         self.panel_id = panel_id
         self.ws = ws
         self.layout_subs: set[int] = set()
+        # Layout format the panel's app reads: 1 until it asks for 2.
+        self.schema = 1
 
     @property
     def allowed(self) -> set[str]:
@@ -88,8 +94,12 @@ class PanelConnection:
         if not self.ws.closed:
             await self.ws.send_str(json.dumps(data, ensure_ascii=False))
 
-    async def push_layout(self) -> None:
+    def layout_for_panel(self) -> dict | None:
         layout = self.gateway.store.get_layout(self.panel_id)
+        return layout if layout is None or self.schema >= SCHEMA else downgrade(layout)
+
+    async def push_layout(self) -> None:
+        layout = self.layout_for_panel()
         for sub in list(self.layout_subs):
             await self.send({"id": sub, "type": "event", "event": {"layout": layout}})
 
@@ -97,9 +107,11 @@ class PanelConnection:
         """wallpanel/* commands, answered by the hub."""
         mid, kind = msg.get("id"), msg.get("type")
         store = self.gateway.store
+        if kind in ("wallpanel/layout/get", "wallpanel/layout/subscribe") and msg.get("schema") == SCHEMA:
+            self.schema = SCHEMA
         if kind == "wallpanel/layout/get":
             await self.send({"id": mid, "type": "result", "success": True,
-                             "result": {"layout": store.get_layout(self.panel_id)}})
+                             "result": {"layout": self.layout_for_panel()}})
         elif kind == "wallpanel/layout/subscribe":
             self.layout_subs.add(mid)
             await self.send({"id": mid, "type": "result", "success": True, "result": None})

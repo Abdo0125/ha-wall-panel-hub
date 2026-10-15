@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Abdo0125/ha-wall-panel/schema/layout.schema.json",
+  "title": "Wall panel layout, version 2",
+  "description": "What one panel shows: pages of cards. Shared by the Android app, the ESP32 firmware and the management add-on; it never carries credentials. Which cards exist, what entities, sizes and options each accepts, is defined in cards.json and checked by the add-on on save.",
+  "type": "object",
+  "required": ["schema", "version", "panel", "pages"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "description": "Layout format. Files without it are version 1 (tiles) and are migrated on read.",
+      "const": 2
+    },
+    "version": {
+      "description": "Layout revision. The add-on increments it on every change; a panel only applies a layout newer than the one it holds.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "panel": { "$ref": "#/$defs/panel" },
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/page" }
+    }
+  },
+  "$defs": {
+    "panel": {
+      "description": "Display settings. They move to the panel configuration (config.schema.json) in phase B; until then the panel reads them here.",
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "lang": { "enum": ["ar", "fr", "en"], "default": "ar" },
+        "theme": { "enum": ["dark", "light"], "default": "dark" },
+        "screensaver": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "idle_seconds": { "type": "integer", "minimum": 10, "default": 60 },
+            "dim_brightness": { "type": "integer", "minimum": 0, "maximum": 100, "default": 10 }
+          }
+        }
+      }
+    },
+    "page": {
+      "type": "object",
+      "required": ["id", "title", "cards"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+        "title": { "type": "string", "minLength": 1 },
+        "icon": { "$ref": "#/$defs/icon" },
+        "cards": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/card" }
+        }
+      }
+    },
+    "card": {
+      "type": "object",
+      "required": ["id", "card", "entities"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Unique in the layout. Stays the same when the card is edited, moved or resized.",
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "card": {
+          "description": "Card type from cards.json, as kind.variant (e.g. light.dimmer).",
+          "type": "string",
+          "pattern": "^[a-z_]+\\.[a-z_]+$"
+        },
+        "entities": {
+          "description": "Home Assistant entity ids. How many, and of which domains, depends on the card type.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/entity" },
+          "uniqueItems": true
+        },
+        "size": {
+          "description": "Grid cells, columns x rows. Omitted: the card type's default size.",
+          "enum": ["1x1", "2x1", "2x2"]
+        },
+        "label": { "type": "string" },
+        "icon": { "$ref": "#/$defs/icon" },
+        "confirm": {
+          "description": "Ask before sending the command. Defaults to true for lock cards.",
+          "type": "boolean"
+        },
+        "options": {
+          "description": "Card type options, as defined in cards.json.",
+          "type": "object"
+        }
+      }
+    },
+    "entity": {
+      "type": "string",
+      "pattern": "^[a-z_]+\\.[a-z0-9_]+$"
+    },
+    "icon": {
+      "description": "Material Design Icons name, as in Home Assistant (e.g. mdi:lightbulb).",
+      "type": "string",
+      "pattern": "^mdi:[a-z0-9-]+$"
+    }
+  }
+}

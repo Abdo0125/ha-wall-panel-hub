@@ -3,7 +3,7 @@
 Same rules as the panel's own editor (HaCatalog.kt), so both show the same entities:
 - an entity's area is its own, or else its device's;
 - hidden, disabled, config and diagnostic entities are left out;
-- only domains the panel has a tile for.
+- only domains the panel has a card for (schema/cards.json).
 Keep the two in step.
 """
 
@@ -12,18 +12,7 @@ import json
 
 import aiohttp
 
-TILE_TYPES = {
-    "light": "light",
-    "switch": "switch", "input_boolean": "switch",
-    "cover": "cover",
-    "climate": "climate",
-    "fan": "fan",
-    "lock": "lock",
-    "scene": "scene",
-    "script": "script",
-    "button": "button", "input_button": "button",
-    "sensor": "generic", "binary_sensor": "generic", "automation": "generic",
-}
+from .cards import KINDS, kind_of
 
 COMMANDS = {
     "floors": "config/floor_registry/list",
@@ -34,10 +23,6 @@ COMMANDS = {
 }
 
 
-def tile_type(entity_id: str) -> str | None:
-    return TILE_TYPES.get(entity_id.split(".", 1)[0])
-
-
 def build(floors: list, areas: list, devices: list, registry: list, states: list) -> dict:
     device_area = {d["id"]: d.get("area_id") for d in devices if "id" in d}
     reg = {e["entity_id"]: e for e in registry if "entity_id" in e}
@@ -45,7 +30,7 @@ def build(floors: list, areas: list, devices: list, registry: list, states: list
     entities = []
     for s in states:
         eid = s.get("entity_id", "")
-        kind = tile_type(eid)
+        kind = kind_of(eid)
         if not kind:
             continue
         r = reg.get(eid)
@@ -57,7 +42,7 @@ def build(floors: list, areas: list, devices: list, registry: list, states: list
             "name": (s.get("attributes") or {}).get("friendly_name") or (r or {}).get("name") or eid,
             "area_id": area,
             "type": kind,
-            "controllable": kind != "generic",
+            "controllable": KINDS[kind]["controllable"],
             "state": s.get("state"),
         })
     entities.sort(key=lambda e: (e["name"].lower(), e["entity_id"]))

@@ -75,9 +75,10 @@
   .drophint { color: var(--muted); font-size: 12px; border: 1px dashed var(--line); border-radius: 6px; padding: 10px; text-align: center; }
 
   /* preview grid */
-  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; min-height: 140px;
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); grid-auto-rows: 96px;
+          grid-auto-flow: dense; gap: 10px; min-height: 140px;
           align-content: start; padding: 4px; border-radius: 8px; }
-  .tile { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px; height: 96px; cursor: grab;
+  .tile { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px; cursor: grab; min-width: 0;
           display: flex; flex-direction: column; justify-content: space-between; position: relative; }
   .tile.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
   .tile.missing { border-style: dashed; opacity: .6; }
@@ -134,7 +135,7 @@
   <section class="pane">
     <h2 id="pageTitle">المعاينة</h2>
     <div id="grid"></div>
-    <p class="muted">اسحب كيانات أو غرفة من المبنى إلى هنا. اسحب البلاطات لترتيبها. اسحب صفحة إلى تبويب شاشة أخرى لنسخها.</p>
+    <p class="muted">اسحب كيانات أو غرفة من المبنى إلى هنا. اسحب البطاقات لترتيبها، واختر شكلها وحجمها من الخصائص. اسحب صفحة إلى تبويب شاشة أخرى لنسخها.</p>
   </section>
 
   <section class="pane">

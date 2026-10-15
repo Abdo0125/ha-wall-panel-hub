@@ -1,4 +1,4 @@
-"""Paired panels, pairing requests and layouts, kept under the add-on's /data."""
+"""Paired panels, pairing requests, layouts and configuration, kept under the add-on's /data."""
 
 import hashlib
 import hmac
@@ -11,10 +11,14 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
+from . import config as panel_config
+from .cards import card_entities, check_card
+from .migrate import is_current, upgrade
+
 PAIRING_TTL_S = 600
 MAX_PENDING = 10
 
-_SCHEMA = json.loads((Path(__file__).parent / "layout.schema.json").read_text(encoding="utf-8"))
+_SCHEMA = json.loads((Path(__file__).parent / "schema" / "layout.schema.json").read_text(encoding="utf-8"))
 _VALIDATOR = Draft202012Validator(_SCHEMA)
 
 
@@ -31,17 +35,29 @@ class LayoutConflict(Exception):
 
 
 def validate_layout(layout: dict) -> None:
+    """The schema, then what it cannot express: unique card ids, and each card against the
+    card registry (entity count and domains, size, options)."""
     errors = sorted(_VALIDATOR.iter_errors(layout), key=lambda e: list(e.path))
     if errors:
         first = errors[0]
         where = "/".join(str(p) for p in first.path) or "(root)"
         raise LayoutInvalid(f"{where}: {first.message}")
+    seen: set[str] = set()
+    for i, page in enumerate(layout["pages"]):
+        for j, card in enumerate(page["cards"]):
+            where = f"pages/{i}/cards/{j}"
+            if card["id"] in seen:
+                raise LayoutInvalid(f"{where}: card id {card['id']} is used twice")
+            seen.add(card["id"])
+            problem = check_card(card)
+            if problem:
+                raise LayoutInvalid(f"{where}: {problem}")
 
 
 def layout_entities(layout: dict | None) -> set[str]:
     if not layout:
         return set()
-    return {t["entity"] for p in layout.get("pages", []) for t in p.get("tiles", [])}
+    return {e for p in layout.get("pages", []) for c in p.get("cards", []) for e in card_entities(c)}
 
 
 def _hash(key: str) -> str:
@@ -81,6 +97,10 @@ class Store:
         # Editor drafts: changes not yet sent to the panel (the explicit "send", like ETS download).
         self.drafts_dir = data_dir / "drafts"
         self.drafts_dir.mkdir(parents=True, exist_ok=True)
+        # Configuration: one site document, one document per panel.
+        self.site_file = data_dir / "site.json"
+        self.config_dir = data_dir / "config"
+        self.config_dir.mkdir(parents=True, exist_ok=True)
         self.panels_file = data_dir / "panels.json"
         self.panels: dict[str, Panel] = {}
         if self.panels_file.exists():
@@ -176,6 +196,7 @@ class Store:
         self.panels.pop(panel_id, None)
         self._save_panels()
         self.delete_draft(panel_id)
+        self._config_file(panel_id).unlink(missing_ok=True)
 
     # ---- layouts ----
 
@@ -189,12 +210,48 @@ class Store:
     def _draft_file(self, panel_id: str) -> Path:
         return self.drafts_dir / f"{self._safe(panel_id)}.json"
 
+    def _config_file(self, panel_id: str) -> Path:
+        return self.config_dir / f"{self._safe(panel_id)}.json"
+
+    # ---- configuration ----
+
+    def get_site(self) -> dict:
+        if self.site_file.exists():
+            return json.loads(self.site_file.read_text(encoding="utf-8"))
+        return panel_config.new_site()
+
+    def save_site(self, site: dict) -> dict:
+        """Stores a new revision of the site document; every panel's effective config changes."""
+        saved = {**site, "version": self.get_site()["version"] + 1}
+        panel_config.validate("site", saved)
+        self._write(self.site_file, saved)
+        return saved
+
+    def get_panel_config(self, panel_id: str) -> dict:
+        f = self._config_file(panel_id)
+        return json.loads(f.read_text(encoding="utf-8")) if f.exists() else panel_config.new_panel()
+
+    def save_panel_config(self, panel_id: str, doc: dict) -> dict:
+        saved = {**doc, "version": self.get_panel_config(panel_id)["version"] + 1}
+        panel_config.validate("panel", saved)
+        self._write(self._config_file(panel_id), saved)
+        return saved
+
+    def effective_config(self, panel_id: str) -> dict:
+        panel = self.panels.get(panel_id)
+        return panel_config.effective(self.get_site(), self.get_panel_config(panel_id), panel.name if panel else "")
+
     # ---- drafts (editor) ----
 
     def get_draft(self, panel_id: str) -> dict | None:
         """{"layout": ..., "base_version": version of the sent layout it started from}."""
         f = self._draft_file(panel_id)
-        return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
+        if not f.exists():
+            return None
+        draft = json.loads(f.read_text(encoding="utf-8"))
+        if not is_current(draft.get("layout") or {}):
+            draft["layout"] = upgrade(draft.get("layout") or {}, self.get_layout(panel_id))
+        return draft
 
     def save_draft(self, panel_id: str, layout: dict, base_version: int | None) -> None:
         # Not validated: a draft may be half done. Validation happens on send.
@@ -219,12 +276,21 @@ class Store:
 
     def get_layout(self, panel_id: str) -> dict | None:
         f = self._layout_file(panel_id)
-        return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
+        if not f.exists():
+            return None
+        layout = json.loads(f.read_text(encoding="utf-8"))
+        if not is_current(layout):
+            # Stored before 0.5.0: upgraded once, same version (the content did not change).
+            layout = upgrade(layout)
+            self._write(f, layout)
+        return layout
 
     def save_layout(self, panel_id: str, layout: dict) -> dict:
-        """Stores a new revision. Its version is above both the stored and the submitted one."""
-        validate_layout(layout)
+        """Stores a new revision. Its version is above both the stored and the submitted one.
+        A v1 layout (from an older app) is upgraded first, keeping the stored cards' settings."""
         current = self.get_layout(panel_id)
+        layout = upgrade(layout, current)
+        validate_layout(layout)
         version = max(layout.get("version", 1), current["version"] if current else 0) + 1
         saved = {**layout, "version": version}
         self._write(self._layout_file(panel_id), saved)

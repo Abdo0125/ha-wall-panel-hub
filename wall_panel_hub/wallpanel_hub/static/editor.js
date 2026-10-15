@@ -27,18 +27,57 @@ async function api(path, options = {}) {
   return { status: r.status, ok: r.ok, body };
 }
 
-// Same rules as the schema and the panel (HaCatalog.kt / LayoutEditing.kt).
-const TILE_TYPES = {
-  light: "light", switch: "switch", input_boolean: "switch", cover: "cover", climate: "climate",
-  fan: "fan", lock: "lock", scene: "scene", script: "script", button: "button", input_button: "button",
-  sensor: "generic", binary_sensor: "generic", automation: "generic",
-};
-const TYPE_DOMAINS = {
-  light: ["light"], switch: ["switch", "input_boolean"], cover: ["cover"], climate: ["climate"], fan: ["fan"],
-  lock: ["lock"], scene: ["scene"], script: ["script"], button: ["button", "input_button"],
-};
+// ---------- card registry (schema/cards.json, loaded from the hub) ----------
+
+let R = { kinds: {}, cards: {} };
 const domainOf = (id) => id.split(".")[0];
-const typesFor = (id) => [...new Set([TILE_TYPES[domainOf(id)], "generic"].filter(Boolean))];
+const kindOf = (entityId) => Object.keys(R.kinds).find((k) => R.kinds[k].domains.includes(domainOf(entityId)));
+const kindOfCard = (cardType) => cardType.split(".")[0];
+const cardDomains = (cardType) => R.cards[cardType]?.entities.domains || R.kinds[kindOfCard(cardType)]?.domains || [];
+const cardEntities = (c) => [
+  ...c.entities,
+  ...Object.entries(c.options || {}).filter(([k, v]) => R.cards[c.card]?.options?.[k]?.type === "entity" && v).map(([, v]) => v),
+];
+
+// Card types that can show these entities: same kind, entity count and domains accepted.
+function variantsFor(card) {
+  return Object.keys(R.cards).filter((type) => {
+    const spec = R.cards[type];
+    if (kindOfCard(type) !== kindOfCard(card.card)) return false;
+    if (card.entities.length < spec.entities.min || card.entities.length > spec.entities.max) return false;
+    const domains = cardDomains(type);
+    return domains.includes("*") || card.entities.every((e) => domains.includes(domainOf(e)));
+  });
+}
+
+function nextCardId(layout) {
+  const taken = new Set(layout.pages.flatMap((p) => p.cards.map((c) => c.id)));
+  let n = 1;
+  while (taken.has(`c${n}`)) n++;
+  return `c${n}`;
+}
+
+// The default card for an entity (e.g. light.toggle for a light).
+function newCard(layout, entityId) {
+  const type = R.kinds[kindOf(entityId)].default;
+  return { id: nextCardId(layout), card: type, entities: [entityId], size: R.cards[type].default_size };
+}
+
+// Same check as the hub (cards.py); the hub re-checks on send.
+function cardProblem(c) {
+  const spec = R.cards[c.card];
+  if (!spec) return `نوع البطاقة ${c.card} غير معروف.`;
+  const { min, max } = spec.entities;
+  if (c.entities.length < min || c.entities.length > max) return `${c.card} تقبل ${min} إلى ${max} كيانات.`;
+  const domains = cardDomains(c.card);
+  const wrong = c.entities.find((e) => !domains.includes("*") && !domains.includes(domainOf(e)));
+  if (wrong) return `${c.card} لا تناسب ${wrong}.`;
+  if (c.size && !spec.sizes.includes(c.size)) return `${c.card} لا تقبل الحجم ${c.size}.`;
+  for (const [key, opt] of Object.entries(spec.options || {})) {
+    if (opt.required && (c.options?.[key] === undefined || c.options[key] === "")) return `${c.card}: الخيار ${key} مطلوب.`;
+  }
+  return null;
+}
 
 function pageId(wanted, taken) {
   const base = (wanted || "").toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "") || "page";
@@ -51,14 +90,15 @@ function pageId(wanted, taken) {
 // Entity type filter chips; the choice is remembered in this browser.
 const TYPE_FILTERS = [
   ["light", "إنارة"], ["switch", "مفاتيح"], ["cover", "ستائر"], ["climate", "مكيفات"], ["fan", "مراوح"],
-  ["lock", "أقفال"], ["scene", "مشاهد"], ["script", "سكربتات"], ["button", "أزرار"], ["generic", "حساسات"],
+  ["lock", "أقفال"], ["scene", "مشاهد"], ["script", "سكربتات"], ["button", "أزرار"], ["sensor", "حساسات"],
 ];
 function loadTypes() {
   try {
     const saved = JSON.parse(localStorage.getItem("wph.types"));
-    if (Array.isArray(saved)) return new Set(saved);
+    // "generic" is what sensors were called before 0.5.0.
+    if (Array.isArray(saved)) return new Set(saved.map((t) => (t === "generic" ? "sensor" : t)));
   } catch (_) { /* storage unavailable: use the default */ }
-  return new Set(TYPE_FILTERS.map(([t]) => t).filter((t) => t !== "generic"));
+  return new Set(TYPE_FILTERS.map(([t]) => t).filter((t) => t !== "sensor"));
 }
 function saveTypes() {
   try { localStorage.setItem("wph.types", JSON.stringify([...S.types])); } catch (_) { /* ignore */ }
@@ -83,7 +123,7 @@ const L = () => W()?.layout;
 const entityById = () => Object.fromEntries(S.catalog.entities.map((e) => [e.entity_id, e]));
 
 function blankLayout(name) {
-  return { version: 1, panel: { name: name || "Panel", lang: "ar", theme: "dark" }, pages: [] };
+  return { schema: 2, version: 1, panel: { name: name || "Panel", lang: "ar", theme: "dark" }, pages: [] };
 }
 
 async function loadState() {
@@ -94,6 +134,11 @@ async function loadState() {
     else S.work[p.id] = { layout: p.sent ? clone(p.sent) : blankLayout(p.name), base: p.sent ? p.sent.version : null, unsent: false, undo: [], redo: [] };
   }
   if (!S.current || !S.work[S.current]) S.current = S.panels[0]?.id || null;
+}
+
+async function loadRegistry() {
+  const r = await api("api/editor/cards");
+  if (r.ok) R = r.body;
 }
 
 async function loadCatalog(refresh) {
@@ -151,36 +196,46 @@ function redo() {
 
 // ---------- edits ----------
 
-function tilesForArea(areaId) {
-  return S.catalog.entities.filter((e) => e.area_id === areaId && e.controllable).map((e) => ({ type: e.type, entity: e.entity_id }));
+function controlsInArea(areaId) {
+  return S.catalog.entities.filter((e) => e.area_id === areaId && e.controllable).map((e) => e.entity_id);
 }
 
 function addAreaPages(layout, areaIds, at) {
   const areas = Object.fromEntries(S.catalog.areas.map((a) => [a.id, a]));
   const newPages = [];
+  const sources = new Map();  // page -> area it is made from
   for (const id of areaIds) {
     const area = areas[id];
     if (!area) continue;
     const existing = layout.pages.find((p) => p.id === id);
     if (existing) {  // re-import: only what is missing
-      const have = new Set(existing.tiles.map((t) => t.entity));
-      existing.tiles.push(...tilesForArea(id).filter((t) => !have.has(t.entity)));
+      addCards(layout, existing, controlsInArea(id));
       continue;
     }
     const taken = new Set([...layout.pages, ...newPages].map((p) => p.id));
-    const page = { id: pageId(id, taken), title: area.name, tiles: tilesForArea(id) };
+    const page = { id: pageId(id, taken), title: area.name, cards: [] };
     if (/^mdi:[a-z0-9-]+$/.test(area.icon || "")) page.icon = area.icon;
     newPages.push(page);
+    sources.set(page, id);
   }
   layout.pages.splice(at ?? layout.pages.length, 0, ...newPages);
+  // Cards are added once the pages are in the layout, so their ids are unique across it.
+  for (const page of newPages) addCards(layout, page, controlsInArea(sources.get(page)));
   return newPages.length;
 }
 
-function addTiles(page, entityIds, at) {
-  const have = new Set(page.tiles.map((t) => t.entity));
+// One default card per entity not yet on the page. Card ids are unique in the layout.
+function addCards(layout, page, entityIds, at) {
+  const have = new Set(page.cards.flatMap((c) => c.entities));
   const byId = entityById();
-  const tiles = entityIds.filter((id) => !have.has(id) && byId[id]).map((id) => ({ type: byId[id].type, entity: id }));
-  page.tiles.splice(at ?? page.tiles.length, 0, ...tiles);
+  const cards = [];
+  for (const id of entityIds) {
+    if (have.has(id) || !byId[id] || !kindOf(id)) continue;
+    const card = newCard({ pages: [...layout.pages, { cards }] }, id);
+    cards.push(card);
+    have.add(id);
+  }
+  page.cards.splice(at ?? page.cards.length, 0, ...cards);
 }
 
 async function copyPageTo(pid, page) {
@@ -189,7 +244,10 @@ async function copyPageTo(pid, page) {
   w.undo.push(JSON.stringify(w.layout));
   const copy = clone(page);
   copy.id = pageId(copy.id, new Set(w.layout.pages.map((p) => p.id)));
+  // Card ids must stay unique in the target layout.
+  copy.cards = [];
   w.layout.pages.push(copy);
+  for (const c of page.cards) copy.cards.push({ ...clone(c), id: nextCardId(w.layout) });
   w.unsent = true;
   await saveDraft(pid);
   const name = S.panels.find((p) => p.id === pid)?.name;
@@ -245,18 +303,24 @@ function validate(layout) {
   if (dim !== undefined && !(dim >= 0 && dim <= 100)) err("سطوع التعتيم خارج 0 إلى 100.");
   if (!layout.pages.length) err("لا توجد صفحات.");
   const ids = new Set();
+  const cardIds = new Set();
   for (const page of layout.pages) {
     if (ids.has(page.id)) err(`معرّف الصفحة "${page.id}" مكرر.`);
     ids.add(page.id);
     if (!/^[a-z0-9_]+$/.test(page.id)) err(`معرّف الصفحة "${page.id}" غير صالح.`);
     if (!page.title?.trim()) err(`الصفحة "${page.id}" بلا عنوان.`);
     if (page.icon && !/^mdi:[a-z0-9-]+$/.test(page.icon)) err(`أيقونة الصفحة "${page.title}" يجب أن تكون بصيغة mdi:name.`);
-    if (!page.tiles.length) warn(`الصفحة "${page.title}" فارغة.`);
-    for (const t of page.tiles) {
-      const allowed = TYPE_DOMAINS[t.type];
-      if (allowed && !allowed.includes(domainOf(t.entity))) err(`${t.entity}: النوع ${t.type} لا يناسب هذا الكيان.`);
-      if (t.icon && !/^mdi:[a-z0-9-]+$/.test(t.icon)) err(`${t.entity}: الأيقونة يجب أن تكون بصيغة mdi:name.`);
-      if (S.catalog.entities.length && !byId[t.entity]) warn(`${t.entity} غير موجود في Home Assistant (في "${page.title}").`);
+    if (!page.cards.length) warn(`الصفحة "${page.title}" فارغة.`);
+    for (const c of page.cards) {
+      const name = c.label || c.entities[0] || c.card;
+      if (cardIds.has(c.id)) err(`معرّف البطاقة "${c.id}" مكرر.`);
+      cardIds.add(c.id);
+      const problem = cardProblem(c);
+      if (problem) err(`${name}: ${problem}`);
+      if (c.icon && !/^mdi:[a-z0-9-]+$/.test(c.icon)) err(`${name}: الأيقونة يجب أن تكون بصيغة mdi:name.`);
+      for (const e of cardEntities(c)) {
+        if (S.catalog.entities.length && !byId[e]) warn(`${e} غير موجود في Home Assistant (في "${page.title}").`);
+      }
     }
   }
   return out;
@@ -329,7 +393,7 @@ function usage() {
   const used = {};
   for (const p of S.panels) {
     for (const page of S.work[p.id]?.layout.pages || []) {
-      for (const t of page.tiles) (used[t.entity] ||= new Set()).add(p.name);
+      for (const c of page.cards) for (const e of cardEntities(c)) (used[e] ||= new Set()).add(p.name);
     }
   }
   return used;
@@ -488,11 +552,11 @@ function dropOnPanel(pid, entityIds, areaId) {
     const pageFor = (target) => {
       let i = target ? l.pages.findIndex((pg) => pg.id === target) : -1;
       if (i < 0 && target && areas[target]) {
-        l.pages.push({ id: pageId(target, new Set(l.pages.map((pg) => pg.id))), title: areas[target].name, tiles: [] });
+        l.pages.push({ id: pageId(target, new Set(l.pages.map((pg) => pg.id))), title: areas[target].name, cards: [] });
         i = l.pages.length - 1;
       }
       if (i < 0) {
-        if (!l.pages.length) l.pages.push({ id: "page", title: "صفحة جديدة", tiles: [] });
+        if (!l.pages.length) l.pages.push({ id: "page", title: "صفحة جديدة", cards: [] });
         i = sameAsOpen ? Math.min(openPage, l.pages.length - 1) : 0;
       }
       return i;
@@ -505,7 +569,7 @@ function dropOnPanel(pid, entityIds, areaId) {
       const e = byId[id];
       if (!e) continue;
       S.page = pageFor(e.area_id || panel?.area_id);
-      addTiles(l.pages[S.page], [id]);
+      addCards(l, l.pages[S.page], [id]);
     }
     S.sel = { kind: "page", page: S.page };
     pageTitle = l.pages[S.page]?.title || "";
@@ -532,7 +596,7 @@ function renderPages() {
       class: i === S.page ? "active" : "",
       dataset: { index: i },
       onclick: () => { S.page = i; S.sel = { kind: "page", page: i }; render(); },
-    }, el("span", {}, p.title || p.id), el("span", { class: "muted" }, p.tiles.length)));
+    }, el("span", {}, p.title || p.id), el("span", { class: "muted" }, p.cards.length)));
   });
   sortable("pages", ul, {
     group: { name: "pages", pull: "clone", put: ["ha-area", "ha-floor"] },
@@ -558,38 +622,43 @@ function renderGrid() {
   $("pageTitle").textContent = page ? `المعاينة · ${page.title}` : "المعاينة";
   if (!page) { grid.append(el("p", { class: "muted" }, layout ? "أضف صفحة أو اسحب غرفة إلى قائمة الصفحات." : "")); return; }
   const byId = entityById();
-  page.tiles.forEach((t, i) => {
-    const e = byId[t.entity];
-    const selected = S.sel.kind === "tile" && S.sel.page === S.page && S.sel.tile === i;
+  page.cards.forEach((c, i) => {
+    const e = byId[c.entities[0]];
+    const missing = S.catalog.entities.length && c.entities.some((id) => !byId[id]);
+    const selected = S.sel.kind === "card" && S.sel.page === S.page && S.sel.card === i;
+    const [cols, rows] = (c.size || R.cards[c.card]?.default_size || "1x1").split("x").map(Number);
     grid.append(el("div", {
-      class: "tile" + (selected ? " selected" : "") + (S.catalog.entities.length && !e ? " missing" : ""),
+      class: "tile" + (selected ? " selected" : "") + (missing ? " missing" : ""),
+      style: `grid-column: span ${cols}; grid-row: span ${rows}`,
       dataset: { index: i },
-      onclick: () => { S.sel = { kind: "tile", page: S.page, tile: i }; render(); },
+      onclick: () => { S.sel = { kind: "card", page: S.page, card: i }; render(); },
     },
-      el("span", { class: "x", title: "حذف", onclick: (ev) => { ev.stopPropagation(); removeTile(i); } }, "✕"),
-      el("span", { class: "badge" }, t.type.toUpperCase()),
-      el("div", {}, el("div", { class: "label" }, t.label || e?.name || t.entity), el("div", { class: "eid" }, t.entity)),
+      el("span", { class: "x", title: "حذف", onclick: (ev) => { ev.stopPropagation(); removeCard(i); } }, "✕"),
+      el("span", { class: "badge" }, c.card.toUpperCase()),
+      el("div", {},
+        el("div", { class: "label" }, c.label || (c.entities.length > 1 ? `${c.entities.length} ×` : e?.name) || c.entities[0] || c.card),
+        el("div", { class: "eid" }, c.entities.join("، ") || c.options?.package || "")),
     ));
   });
   sortable("grid", grid, {
-    group: { name: "tiles", put: ["ha", "ha-area"] },
+    group: { name: "cards", put: ["ha", "ha-area"] },
     onUpdate: (evt) => change((l) => {
-      const tiles = l.pages[S.page].tiles;
-      tiles.splice(evt.newIndex, 0, tiles.splice(evt.oldIndex, 1)[0]);
-      S.sel = { kind: "tile", page: S.page, tile: evt.newIndex };
+      const cards = l.pages[S.page].cards;
+      cards.splice(evt.newIndex, 0, cards.splice(evt.oldIndex, 1)[0]);
+      S.sel = { kind: "card", page: S.page, card: evt.newIndex };
     }),
     onAdd: (evt) => {
       const { entity, area } = evt.item.dataset;
       evt.item.remove();
-      const ids = entity ? [entity] : tilesForArea(area).map((t) => t.entity);
-      change((l) => addTiles(l.pages[S.page], ids, evt.newIndex));
+      const ids = entity ? [entity] : controlsInArea(area);
+      change((l) => addCards(l, l.pages[S.page], ids, evt.newIndex));
     },
   });
 }
 
-function removeTile(i) {
+function removeCard(i) {
   change((l) => {
-    l.pages[S.page].tiles.splice(i, 1);
+    l.pages[S.page].cards.splice(i, 1);
     S.sel = { kind: "page", page: S.page };
   });
 }
@@ -609,6 +678,40 @@ function select(options, value, onCommit) {
   return s;
 }
 
+// A new card type keeps the card's id and entities; size and options it does not accept are dropped.
+function setCardType(c, type) {
+  const spec = R.cards[type];
+  c.card = type;
+  if (!spec.sizes.includes(c.size)) c.size = spec.default_size;
+  for (const key of Object.keys(c.options || {})) if (!spec.options?.[key]) delete c.options[key];
+  if (c.options && !Object.keys(c.options).length) delete c.options;
+}
+
+// A property field built from the registry's option definition.
+function optionField(c, key, opt) {
+  const value = c.options?.[key];
+  const set = (v) => change(() => {
+    if (v === undefined) { if (c.options) delete c.options[key]; if (c.options && !Object.keys(c.options).length) delete c.options; }
+    else c.options = { ...(c.options || {}), [key]: v };
+  });
+  const hint = opt.default !== undefined ? ` (افتراضي: ${opt.default})` : opt.required ? " *" : "";
+  const label = key + hint;
+  if (opt.type === "bool") {
+    return field(label, select([["", "افتراضي"], ["true", "نعم"], ["false", "لا"]],
+      value === undefined ? "" : String(value), (v) => set(v === "" ? undefined : v === "true")));
+  }
+  if (opt.type === "enum") {
+    return field(label, select([["", "افتراضي"], ...opt.values.map((v) => [v, v])], value ?? "", (v) => set(v || undefined)));
+  }
+  if (opt.type === "int") {
+    return field(label, textInput(value, (v) => set(v === "" || isNaN(Number(v)) ? undefined : Number(v)),
+      { type: "number", min: opt.min, max: opt.max, placeholder: opt.default ?? "" }));
+  }
+  // string and entity
+  return field(label, textInput(value, (v) => set(v.trim() || undefined),
+    { dir: "ltr", placeholder: opt.type === "entity" ? `${opt.domains[0]}.…` : "" }));
+}
+
 function renderProps() {
   const box = $("props");
   box.replaceChildren();
@@ -616,19 +719,23 @@ function renderProps() {
   if (!layout) return;
   const sel = S.sel;
 
-  if (sel.kind === "tile") {
-    const t = layout.pages[sel.page]?.tiles[sel.tile];
-    if (!t) { S.sel = { kind: "panel" }; return renderProps(); }
-    const e = entityById()[t.entity];
+  if (sel.kind === "card") {
+    const c = layout.pages[sel.page]?.cards[sel.card];
+    if (!c) { S.sel = { kind: "panel" }; return renderProps(); }
+    const e = entityById()[c.entities[0]];
+    const spec = R.cards[c.card] || { sizes: [], options: {} };
     box.append(
-      el("p", {}, el("b", {}, e?.name || t.entity), el("br"), el("span", { class: "muted" }, t.entity)),
-      field("النوع", select(typesFor(t.entity).map((v) => [v, v]), t.type, (v) => change(() => { t.type = v; }))),
-      field("الاسم على الشاشة", textInput(t.label, (v) => change(() => { v.trim() ? t.label = v.trim() : delete t.label; }), { placeholder: e?.name || "" })),
-      field("الأيقونة (mdi:...)", textInput(t.icon, (v) => change(() => { v.trim() ? t.icon = v.trim() : delete t.icon; }), { placeholder: "mdi:lightbulb", dir: "ltr" })),
+      el("p", {}, el("b", {}, e?.name || c.entities[0] || c.card), el("br"),
+        el("span", { class: "muted", dir: "ltr" }, c.entities.join(", "))),
+      field("شكل البطاقة", select(variantsFor(c).map((v) => [v, v]), c.card, (v) => change(() => setCardType(c, v)))),
+      field("الحجم", select(spec.sizes.map((v) => [v, v]), c.size || spec.default_size, (v) => change(() => { c.size = v; }))),
+      field("الاسم على الشاشة", textInput(c.label, (v) => change(() => { v.trim() ? c.label = v.trim() : delete c.label; }), { placeholder: e?.name || "" })),
+      field("الأيقونة (mdi:...)", textInput(c.icon, (v) => change(() => { v.trim() ? c.icon = v.trim() : delete c.icon; }), { placeholder: "mdi:lightbulb", dir: "ltr" })),
       field("تأكيد قبل التنفيذ", select([["", "افتراضي (الأقفال فقط)"], ["true", "نعم"], ["false", "لا"]],
-        t.confirm === undefined ? "" : String(t.confirm),
-        (v) => change(() => { v === "" ? delete t.confirm : t.confirm = v === "true"; }))),
-      el("button", { class: "danger", onclick: () => removeTile(sel.tile) }, "حذف البلاطة"),
+        c.confirm === undefined ? "" : String(c.confirm),
+        (v) => change(() => { v === "" ? delete c.confirm : c.confirm = v === "true"; }))),
+      ...Object.entries(spec.options || {}).map(([key, opt]) => optionField(c, key, opt)),
+      el("button", { class: "danger", onclick: () => removeCard(sel.card) }, "حذف البطاقة"),
     );
     return;
   }
@@ -700,7 +807,7 @@ $("send").onclick = () => send(false);
 $("discard").onclick = discard;
 $("addPage").onclick = () => change((l) => {
   const id = pageId("page", new Set(l.pages.map((p) => p.id)));
-  l.pages.push({ id, title: "صفحة جديدة", tiles: [] });
+  l.pages.push({ id, title: "صفحة جديدة", cards: [] });
   S.page = l.pages.length - 1;
   S.sel = { kind: "page", page: S.page };
 });
@@ -712,7 +819,7 @@ document.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); }
   else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); }
-  else if (e.key === "Delete" && S.sel.kind === "tile") removeTile(S.sel.tile);
+  else if (e.key === "Delete" && S.sel.kind === "card") removeCard(S.sel.card);
 });
 
 // Panels' online state and versions change while the editor is open.
@@ -734,6 +841,6 @@ setInterval(async () => {
 
 (async () => {
   S.types = loadTypes();
-  await Promise.all([loadState(), loadCatalog(false)]);
+  await Promise.all([loadState(), loadCatalog(false), loadRegistry()]);
   render();
 })();

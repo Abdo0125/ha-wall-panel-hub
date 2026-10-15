@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0
+
+- Layout format v2: pages of **cards**. A card has a type from the card registry
+  (`light.toggle`, `light.dimmer`, `cover.position`, `climate.thermostat`, `scene.bar`...),
+  one or more entities, a size (1x1, 2x1, 2x2) and options. The hub checks every card
+  against the registry on save.
+- Stored layouts and drafts are migrated automatically; nothing is lost. Panels running
+  an older app keep receiving the previous format until they are updated.
+- Editor: choose a card's shape and size, edit its options; the preview shows the size.
+- Project and panel configuration documents (PIN, access, apps, display defaults) are
+  defined and stored; their management page comes in the next version.
+
 ## 0.4.0
 
 - Editor: filter the building by entity type (lights, switches, covers, climate, fans,

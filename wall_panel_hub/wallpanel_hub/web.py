@@ -12,6 +12,7 @@ from pathlib import Path
 
 from aiohttp import web
 
+from .cards import REGISTRY
 from .catalog import CatalogCache
 from .gateway import Gateway
 from .settings import VERSION
@@ -85,6 +86,9 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         except Exception as e:  # HA down, auth... shown in the editor's message pane
             log.warning("catalog failed: %s", e)
             return web.json_response({"error": str(e)}, status=502)
+
+    async def editor_cards(_):
+        return web.json_response(REGISTRY)
 
     async def editor_state(_):
         return web.json_response({"panels": [
@@ -193,6 +197,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     app.router.add_static("/static/", STATIC)
     app.router.add_get("/api/editor/catalog", editor_catalog)
     app.router.add_get("/api/editor/state", editor_state)
+    app.router.add_get("/api/editor/cards", editor_cards)
     app.router.add_put("/api/editor/panels/{pid}/draft", put_draft)
     app.router.add_delete("/api/editor/panels/{pid}/draft", delete_draft)
     app.router.add_post("/api/editor/panels/{pid}/send", send_draft)
