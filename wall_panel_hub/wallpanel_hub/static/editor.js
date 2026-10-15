@@ -123,7 +123,7 @@ const L = () => W()?.layout;
 const entityById = () => Object.fromEntries(S.catalog.entities.map((e) => [e.entity_id, e]));
 
 function blankLayout(name) {
-  return { schema: 2, version: 1, panel: { name: name || "Panel", lang: "ar", theme: "dark" }, pages: [] };
+  return { schema: 2, version: 1, pages: [] };
 }
 
 async function loadState() {
@@ -295,12 +295,6 @@ function validate(layout) {
   const err = (text) => out.push({ level: "error", text });
   const warn = (text) => out.push({ level: "warn", text });
   const byId = entityById();
-  const p = layout.panel;
-  if (!p.name?.trim()) err("اسم الشاشة فارغ.");
-  const idle = p.screensaver?.idle_seconds;
-  if (idle !== undefined && !(idle >= 10)) err("مدة شاشة التوقف أقل من 10 ثوانٍ.");
-  const dim = p.screensaver?.dim_brightness;
-  if (dim !== undefined && !(dim >= 0 && dim <= 100)) err("سطوع التعتيم خارج 0 إلى 100.");
   if (!layout.pages.length) err("لا توجد صفحات.");
   const ids = new Set();
   const cardIds = new Set();
@@ -577,6 +571,15 @@ function dropOnPanel(pid, entityIds, areaId) {
   notice("ok", `أُضيف إلى ${panel?.name} ← ${pageTitle}`);
 }
 
+async function renamePanel(pid, name) {
+  name = name.trim();
+  if (!name) return;
+  await api(`api/panels/${encodeURIComponent(pid)}/rename`, { method: "POST", body: JSON.stringify({ name }) });
+  const p = S.panels.find((x) => x.id === pid);
+  if (p) p.name = name;
+  render();
+}
+
 async function placePanel(pid, areaId) {
   await api(`api/panels/${encodeURIComponent(pid)}/area`, { method: "POST", body: JSON.stringify({ area_id: areaId || null }) });
   const p = S.panels.find((x) => x.id === pid);
@@ -756,14 +759,8 @@ function renderProps() {
     return;
   }
 
-  // Panel settings.
-  const panel = layout.panel;
-  const ss = panel.screensaver || {};
-  const setSS = (key, v) => change(() => {
-    panel.screensaver = { ...(panel.screensaver || {}) };
-    if (v === "" || isNaN(Number(v))) delete panel.screensaver[key];
-    else panel.screensaver[key] = Number(v);
-  });
+  // Panel: location and name. Language, theme, screensaver and access are panel
+  // settings (Wall Panels page), not part of the layout.
   const hubPanel = S.panels.find((p) => p.id === S.current);
   box.append(
     el("p", { class: "muted" }, `${hubPanel?.model || ""} · المرسل: ${hubPanel?.sent ? "v" + hubPanel.sent.version : "لا شيء بعد"}`),
@@ -772,11 +769,8 @@ function renderProps() {
       hubPanel?.area_id || "",
       (v) => placePanel(S.current, v),
     )),
-    field("اسم الشاشة", textInput(panel.name, (v) => change(() => { panel.name = v; }))),
-    field("اللغة", select([["ar", "العربية"], ["fr", "Français"], ["en", "English"]], panel.lang || "ar", (v) => change(() => { panel.lang = v; }))),
-    field("المظهر", select([["dark", "داكن"], ["light", "فاتح"]], panel.theme || "dark", (v) => change(() => { panel.theme = v; }))),
-    field("شاشة التوقف بعد (ثانية)", textInput(ss.idle_seconds, (v) => setSS("idle_seconds", v), { type: "number", min: 10, placeholder: "60" })),
-    field("سطوع التعتيم (%)", textInput(ss.dim_brightness, (v) => setSS("dim_brightness", v), { type: "number", min: 0, max: 100, placeholder: "10" })),
+    field("اسم الشاشة", textInput(hubPanel?.name, (v) => renamePanel(S.current, v))),
+    el("p", { class: "muted" }, "اللغة والمظهر وشاشة التوقف والصلاحيات وكلمات السر: ", el("a", { href: "./", style: "color:var(--accent)" }, "صفحة الشاشات ← الإعدادات"), "."),
   );
 }
 

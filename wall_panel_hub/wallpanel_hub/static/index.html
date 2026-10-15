@@ -5,55 +5,120 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Wall Panels</title>
 <style>
-  :root { --bg: #111; --fg: #eee; --muted: #999; --line: #333; --accent: #e0a060; --danger: #e06060; }
-  @media (prefers-color-scheme: light) { :root { --bg: #fafafa; --fg: #111; --muted: #666; --line: #ddd; --accent: #8a5a2b; } }
+  :root { --bg: #111; --pane: #181818; --fg: #eee; --muted: #999; --line: #333; --accent: #e0a060; --danger: #e06060; --ok: #6cc56c; }
+  @media (prefers-color-scheme: light) { :root { --bg: #fafafa; --pane: #fff; --fg: #111; --muted: #666; --line: #ddd; --accent: #8a5a2b; } }
   body { background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; margin: 0; padding: 16px; }
-  h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 28px; }
+  h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 28px; } h3 { font-size: 14px; margin: 18px 0 8px; color: var(--muted); }
   table { width: 100%; border-collapse: collapse; }
   td, th { padding: 8px; border-bottom: 1px solid var(--line); text-align: start; vertical-align: middle; }
   th { color: var(--muted); font-weight: normal; font-size: 13px; }
   .code { font-family: monospace; font-size: 22px; letter-spacing: 4px; color: var(--accent); }
   .muted { color: var(--muted); font-size: 13px; }
-  .on { color: #6c6; } .off { color: var(--muted); }
-  button { background: none; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; margin-inline-end: 6px; }
+  .on { color: var(--ok); } .off { color: var(--muted); }
+  button { background: none; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; margin-inline-end: 6px; font: inherit; }
   button.primary { border-color: var(--accent); color: var(--accent); }
   button.danger { border-color: var(--danger); color: var(--danger); }
+  input, select { background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; }
+  input[type=checkbox] { width: auto; }
   .empty { color: var(--muted); padding: 8px; }
+  nav { display: flex; gap: 6px; margin: 8px 0 4px; }
+  nav button.active { border-color: var(--accent); background: rgba(224,160,96,.12); }
+  .warn { border: 1px solid var(--accent); color: var(--accent); border-radius: 8px; padding: 10px 12px; margin: 12px 0; }
+  .box { background: var(--pane); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-top: 16px; max-width: 760px; }
+  .grid { display: grid; grid-template-columns: 220px 1fr; gap: 8px 12px; align-items: center; }
+  .grid label { color: var(--muted); font-size: 13px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .access td, .access th { text-align: center; }
+  .access td:first-child, .access th:first-child { text-align: start; }
+  .msg { margin-top: 10px; font-size: 13px; }
+  .msg.error { color: var(--danger); } .msg.ok { color: var(--ok); }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <h1>Wall Panel Hub <span class="muted" id="version"></span></h1>
 <p><a href="editor" style="color:var(--accent)">✎ محرر التخطيط (السحب والإفلات) ←</a></p>
+<nav>
+  <button id="tabPanels" class="active">الشاشات</button>
+  <button id="tabSite">المشروع</button>
+</nav>
+<div id="pinWarning" class="warn" hidden>لم تُضبط كلمة سر المُركِّب بعد: أي شخص أمام الشاشة يستطيع فتح إعداداتها وتعديل بطاقاتها. اضبطها من تبويب المشروع.</div>
 
-<h2>طلبات الربط</h2>
-<p class="muted">وافق فقط إذا كان الرمز هنا مطابقاً للرمز الظاهر على الشاشة.</p>
-<table><thead><tr><th>الرمز</th><th>الاسم</th><th>الموديل</th><th>منذ</th><th></th></tr></thead>
-<tbody id="pending"></tbody></table>
+<!-- ================= Panels ================= -->
+<section id="panelsView">
+  <h2>طلبات الربط</h2>
+  <p class="muted">وافق فقط إذا كان الرمز هنا مطابقاً للرمز الظاهر على الشاشة.</p>
+  <table><thead><tr><th>الرمز</th><th>الاسم</th><th>الموديل</th><th>منذ</th><th></th></tr></thead>
+  <tbody id="pending"></tbody></table>
 
-<h2>الشاشات المربوطة</h2>
-<table><thead><tr><th>الاسم</th><th>الحالة</th><th>الموديل</th><th>التخطيط</th><th>آخر ظهور</th><th></th></tr></thead>
-<tbody id="panels"></tbody></table>
+  <div id="discoveredBox" hidden>
+    <h2>شاشات جديدة في الشبكة</h2>
+    <p class="muted">شاشات غير مربوطة تعلن عن نفسها. تطلب الربط وحدها عندما تجد الـ Hub؛ إذا بقيت هنا، أدخل في الشاشة عنوان الـ Hub يدوياً.</p>
+    <table><thead><tr><th>الاسم</th><th>الموديل</th><th>العنوان</th><th>إصدار التطبيق</th></tr></thead>
+    <tbody id="discovered"></tbody></table>
+  </div>
+
+  <h2>الشاشات المربوطة</h2>
+  <table><thead><tr><th>الاسم</th><th>الحالة</th><th>الموديل</th><th>التخطيط</th><th>آخر ظهور</th><th></th></tr></thead>
+  <tbody id="panels"></tbody></table>
+
+  <div id="panelBox" class="box" hidden></div>
+</section>
+
+<!-- ================= Project ================= -->
+<section id="siteView" hidden>
+  <div class="box">
+    <h3>المشروع</h3>
+    <div class="grid">
+      <label for="siteName">اسم المشروع</label><input id="siteName">
+    </div>
+    <h3>كلمات السر</h3>
+    <p class="muted">رمز المُركِّب يعطي كل الصلاحيات المحلية على الشاشة، ورمز المستخدم يعطي جزءاً منها (يُحدَّد لكل شاشة). يصل للشاشات مشفّراً فقط، ويعمل دون اتصال.</p>
+    <div id="sitePins"></div>
+    <h3>الإعدادات الافتراضية لكل الشاشات</h3>
+    <div class="grid" id="siteDefaults"></div>
+    <p class="row" style="margin-top:14px"><button class="primary" id="siteSave">حفظ</button></p>
+    <div id="siteMsg" class="msg"></div>
+  </div>
+</section>
 
 <script>
+"use strict";
 // Relative URLs: the page is served under Home Assistant's ingress path.
 async function api(path, options) {
   const r = await fetch(path, options);
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
+  let body = null;
+  try { body = await r.json(); } catch (_) { /* empty */ }
+  if (!r.ok) throw new Error(body?.error || (typeof body === "string" ? body : `HTTP ${r.status}`));
+  return body;
 }
-const post = (path, body) => api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+const send = (method, path, body) => api(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+const post = (path, body) => send("POST", path, body);
+const $ = (id) => document.getElementById(id);
 
+// Text only: names come from panels, never render them as HTML.
+function el(tag, attrs = {}, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (v !== undefined && v !== null && v !== false) e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of children.flat()) if (c !== null && c !== undefined && c !== false) e.append(c instanceof Node ? c : String(c));
+  return e;
+}
 function cell(row, text, cls) {
   const td = row.insertCell();
-  td.textContent = text ?? "";   // textContent: panel names come from the panels, never render them as HTML
+  td.textContent = text ?? "";
   if (cls) td.className = cls;
   return td;
 }
 function button(td, label, cls, onClick) {
-  const b = document.createElement("button");
-  b.textContent = label; b.className = cls || "";
-  b.onclick = async () => { try { await onClick(); } catch (e) { alert(e.message); } refresh(); };
-  td.appendChild(b);
+  td.append(el("button", { class: cls || "", onclick: async () => { try { await onClick(); } catch (e) { alert(e.message); } refresh(); } }, label));
+}
+function emptyRow(tbody, cols, text) {
+  const td = tbody.insertRow().insertCell();
+  td.colSpan = cols; td.className = "empty"; td.textContent = text;
 }
 function ago(ts) {
   if (!ts) return "—";
@@ -61,15 +126,183 @@ function ago(ts) {
   if (s < 60) return s + " ث"; if (s < 3600) return Math.round(s / 60) + " د";
   if (s < 86400) return Math.round(s / 3600) + " س"; return Math.round(s / 86400) + " يوم";
 }
+function message(box, level, text) { box.className = "msg " + level; box.textContent = text; }
+
+const LANGS = [["ar", "العربية"], ["fr", "Français"], ["en", "English"]];
+const THEMES = [["dark", "داكن"], ["light", "فاتح"]];
+const ROLES = [["guest", "بدون رمز"], ["user", "رمز المستخدم"], ["installer", "رمز المُركِّب"]];
+const CAPS = [["control", "التحكم"], ["apps", "التطبيقات"], ["edit_cards", "تعديل البطاقات"], ["reorder", "إعادة الترتيب"], ["settings", "الإعدادات المحلية"]];
+
+// ---------- tabs ----------
+
+function show(tab) {
+  $("panelsView").hidden = tab !== "panels";
+  $("siteView").hidden = tab !== "site";
+  $("tabPanels").classList.toggle("active", tab === "panels");
+  $("tabSite").classList.toggle("active", tab === "site");
+  if (tab === "site") loadSite();
+}
+$("tabPanels").onclick = () => show("panels");
+$("tabSite").onclick = () => show("site");
+
+// ---------- shared field builders ----------
+
+function selectEl(options, value) {
+  const s = el("select");
+  for (const [v, label] of options) s.append(el("option", { value: v, selected: v === value }, label));
+  return s;
+}
+// Display settings: blank means "inherit" (panel from project, project from built-in defaults).
+function displayFields(grid, values, inherited, inheritLabel) {
+  const ss = values.screensaver || {};
+  const f = {
+    lang: selectEl([["", `${inheritLabel} (${inherited.lang})`], ...LANGS], values.lang || ""),
+    theme: selectEl([["", `${inheritLabel} (${inherited.theme})`], ...THEMES], values.theme || ""),
+    idle: el("input", { type: "number", min: 10, value: ss.idle_seconds ?? "", placeholder: inherited.screensaver.idle_seconds }),
+    dim: el("input", { type: "number", min: 0, max: 100, value: ss.dim_brightness ?? "", placeholder: inherited.screensaver.dim_brightness }),
+    ret: el("input", { type: "number", min: 30, max: 3600, value: values.app_return_seconds ?? "", placeholder: inherited.app_return_seconds }),
+  };
+  grid.append(
+    el("label", {}, "اللغة"), f.lang,
+    el("label", {}, "المظهر"), f.theme,
+    el("label", {}, "شاشة التوقف بعد (ثانية)"), f.idle,
+    el("label", {}, "سطوع التعتيم (%)"), f.dim,
+    el("label", {}, "العودة من تطبيق آخر بعد (ثانية)"), f.ret,
+  );
+  return () => {
+    const out = {};
+    if (f.lang.value) out.lang = f.lang.value;
+    if (f.theme.value) out.theme = f.theme.value;
+    const screensaver = {};
+    if (f.idle.value !== "") screensaver.idle_seconds = Number(f.idle.value);
+    if (f.dim.value !== "") screensaver.dim_brightness = Number(f.dim.value);
+    if (Object.keys(screensaver).length) out.screensaver = screensaver;
+    if (f.ret.value !== "") out.app_return_seconds = Number(f.ret.value);
+    return out;
+  };
+}
+const BUILT_IN = { lang: "ar", theme: "dark", screensaver: { idle_seconds: 60, dim_brightness: 10 }, app_return_seconds: 300 };
+
+// A PIN row: status, new PIN input, set / remove.
+function pinRow(label, isSet, setText, onSet, onRemove, removeLabel) {
+  const input = el("input", { type: "password", inputmode: "numeric", maxlength: 8, placeholder: "4 إلى 8 أرقام", autocomplete: "new-password", style: "width:140px" });
+  const row = el("div", { class: "row", style: "margin:6px 0" },
+    el("span", { style: "min-width:150px" }, label),
+    el("span", { class: isSet ? "on" : "off", style: "min-width:110px" }, setText),
+    input,
+    el("button", { class: "primary", onclick: async () => {
+      if (!/^[0-9]{4,8}$/.test(input.value)) { alert("الرمز من 4 إلى 8 أرقام."); return; }
+      await onSet(input.value); input.value = "";
+    } }, isSet ? "تغيير" : "ضبط"),
+    isSet ? el("button", { class: "danger", onclick: onRemove }, removeLabel) : null,
+  );
+  return row;
+}
+
+// ---------- project ----------
+
+async function loadSite() {
+  const site = await api("api/site");
+  $("siteName").value = site.name || "";
+  const pins = $("sitePins");
+  pins.replaceChildren(
+    pinRow("رمز المُركِّب", site.installer_pin_set, site.installer_pin_set ? "● مضبوط" : "○ غير مضبوط",
+      async (pin) => { await post("api/site/pin", { role: "installer", pin }); loadSite(); refresh(); },
+      async () => { if (confirm("إزالة رمز المُركِّب؟ تصبح إعدادات الشاشات مفتوحة.")) { await post("api/site/pin", { role: "installer", pin: null }); loadSite(); refresh(); } },
+      "إزالة"),
+    pinRow("رمز المستخدم", site.user_pin_set, site.user_pin_set ? "● مضبوط" : "○ غير مضبوط",
+      async (pin) => { await post("api/site/pin", { role: "user", pin }); loadSite(); },
+      async () => { await post("api/site/pin", { role: "user", pin: null }); loadSite(); },
+      "إزالة"),
+  );
+  const grid = $("siteDefaults");
+  grid.replaceChildren();
+  const read = displayFields(grid, site.defaults || {}, BUILT_IN, "الافتراضي");
+  $("siteSave").onclick = async () => {
+    try {
+      await send("PUT", "api/site", { name: $("siteName").value.trim(), defaults: read() });
+      message($("siteMsg"), "ok", "حُفظ، ووصل لكل الشاشات المتصلة.");
+    } catch (e) { message($("siteMsg"), "error", "لم يُحفظ: " + e.message); }
+  };
+}
+
+// ---------- one panel's settings ----------
+
+let openPanel = null;
+
+async function showPanelSettings(p) {
+  openPanel = p.id;
+  const id = encodeURIComponent(p.id);
+  const [{ config, effective }, site] = await Promise.all([api(`api/panels/${id}/config`), api("api/site")]);
+  const box = $("panelBox");
+  box.hidden = false;
+  box.replaceChildren();
+  const msg = el("div", { class: "msg" });
+
+  // Inherited values shown as placeholders: the project's, else built-in.
+  const d = site.defaults || {};
+  const inherited = {
+    lang: d.lang || BUILT_IN.lang, theme: d.theme || BUILT_IN.theme,
+    screensaver: { ...BUILT_IN.screensaver, ...(d.screensaver || {}) },
+    app_return_seconds: d.app_return_seconds ?? BUILT_IN.app_return_seconds,
+  };
+  const grid = el("div", { class: "grid" });
+  const readDisplay = displayFields(grid, config.overrides || {}, inherited, "من المشروع");
+
+  // Access matrix. Control is always on.
+  const table = el("table", { class: "access" });
+  table.append(el("tr", {}, el("th", {}, ""), ...CAPS.map(([, label]) => el("th", {}, label))));
+  const boxes = {};
+  for (const [role, label] of ROLES) {
+    const tr = el("tr", {}, el("td", {}, label));
+    for (const [cap] of CAPS) {
+      const cb = el("input", { type: "checkbox", checked: effective.access[role].includes(cap), disabled: cap === "control" });
+      boxes[role + ":" + cap] = cb;
+      tr.append(el("td", {}, cb));
+    }
+    table.append(tr);
+  }
+
+  const reload = () => showPanelSettings(p);
+  box.append(
+    el("div", { class: "row" }, el("b", {}, `إعدادات الشاشة: ${p.name}`), el("button", { onclick: () => { box.hidden = true; openPanel = null; } }, "إغلاق")),
+    el("h3", {}, "العرض"),
+    el("p", { class: "muted" }, "الحقول الفارغة تأخذ قيمة المشروع."),
+    grid,
+    el("h3", {}, "الصلاحيات على الشاشة"),
+    el("p", { class: "muted" }, "إضافة أو حذف كيانات وصفحات وغرف يتم من هنا فقط، ولا يُسمح به من الشاشة أبداً."),
+    table,
+    el("h3", {}, "رمز خاص بهذه الشاشة (اختياري)"),
+    pinRow("رمز المُركِّب", config.installer_pin_set, config.installer_pin_set ? "● خاص بالشاشة" : "من المشروع",
+      async (pin) => { await post(`api/panels/${id}/pin`, { role: "installer", pin }); reload(); },
+      async () => { await post(`api/panels/${id}/pin`, { role: "installer", pin: null }); reload(); }, "استعمال رمز المشروع"),
+    pinRow("رمز المستخدم", config.user_pin_set, config.user_pin_set ? "● خاص بالشاشة" : "من المشروع",
+      async (pin) => { await post(`api/panels/${id}/pin`, { role: "user", pin }); reload(); },
+      async () => { await post(`api/panels/${id}/pin`, { role: "user", pin: null }); reload(); }, "استعمال رمز المشروع"),
+    el("p", { class: "row", style: "margin-top:14px" }, el("button", { class: "primary", onclick: async () => {
+      const access = {};
+      for (const [role] of ROLES) access[role] = CAPS.map(([c]) => c).filter((c) => boxes[role + ":" + c].checked);
+      try {
+        await send("PUT", `api/panels/${id}/config`, { overrides: readDisplay(), access });
+        message(msg, "ok", p.online ? "حُفظ، ووصل للشاشة." : "حُفظ. الشاشة غير متصلة، وستستلمه عند اتصالها.");
+      } catch (e) { message(msg, "error", "لم يُحفظ: " + e.message); }
+    } }, "حفظ")),
+    msg,
+  );
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+// ---------- overview ----------
 
 async function refresh() {
   let data;
   try { data = await api("api/overview"); } catch (e) { return; }
-  document.getElementById("version").textContent = "v" + data.version;
+  $("version").textContent = "v" + data.version;
+  $("pinWarning").hidden = data.installer_pin_set;
 
-  const pending = document.getElementById("pending");
-  pending.innerHTML = "";
-  if (!data.pending.length) pending.insertRow().insertCell().outerHTML = '<td class="empty" colspan="5">لا توجد طلبات. اضغط "ربط" على الشاشة.</td>';
+  const pending = $("pending");
+  pending.replaceChildren();
+  if (!data.pending.length) emptyRow(pending, 5, "لا توجد طلبات. شاشة جديدة في نفس الشبكة تطلب الربط وحدها عند تشغيلها.");
   for (const r of data.pending) {
     const row = pending.insertRow();
     cell(row, r.code, "code"); cell(row, r.name); cell(row, r.model, "muted"); cell(row, r.age + " ث", "muted");
@@ -78,9 +311,17 @@ async function refresh() {
     button(actions, "رفض", "", () => post(`api/pending/${encodeURIComponent(r.request_id)}/reject`));
   }
 
-  const panels = document.getElementById("panels");
-  panels.innerHTML = "";
-  if (!data.panels.length) panels.insertRow().insertCell().outerHTML = '<td class="empty" colspan="6">لا توجد شاشات مربوطة بعد.</td>';
+  $("discoveredBox").hidden = !data.discovered.length;
+  const disc = $("discovered");
+  disc.replaceChildren();
+  for (const d of data.discovered) {
+    const row = disc.insertRow();
+    cell(row, d.name); cell(row, d.model, "muted"); cell(row, d.address, "muted"); cell(row, d.version, "muted");
+  }
+
+  const panels = $("panels");
+  panels.replaceChildren();
+  if (!data.panels.length) emptyRow(panels, 6, "لا توجد شاشات مربوطة بعد.");
   for (const p of data.panels) {
     const row = panels.insertRow();
     cell(row, p.name);
@@ -90,6 +331,7 @@ async function refresh() {
     cell(row, p.online ? "الآن" : ago(p.last_seen), "muted");
     const actions = cell(row, "");
     const id = encodeURIComponent(p.id);
+    actions.append(el("button", { class: openPanel === p.id ? "primary" : "", onclick: () => showPanelSettings(p).catch((e) => alert(e.message)) }, "الإعدادات"));
     button(actions, "إعادة تسمية", "", () => {
       const name = prompt("اسم الشاشة", p.name);
       return name ? post(`api/panels/${id}/rename`, { name }) : null;

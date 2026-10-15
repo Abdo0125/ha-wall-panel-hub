@@ -12,8 +12,13 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 from . import config as panel_config
+from .access import check_panel_edit, role_caps
 from .cards import card_entities, check_card
 from .migrate import is_current, upgrade
+from .pins import verify_pin
+
+# Display settings that live in the panel configuration once a hub manages the panel.
+DISPLAY = ("lang", "theme", "screensaver")
 
 PAIRING_TTL_S = 600
 MAX_PENDING = 10
@@ -249,8 +254,11 @@ class Store:
         if not f.exists():
             return None
         draft = json.loads(f.read_text(encoding="utf-8"))
-        if not is_current(draft.get("layout") or {}):
-            draft["layout"] = upgrade(draft.get("layout") or {}, self.get_layout(panel_id))
+        layout = draft.get("layout") or {}
+        if not is_current(layout):
+            layout = upgrade(layout, self.get_layout(panel_id))
+        layout.pop("panel", None)
+        draft["layout"] = layout
         return draft
 
     def save_draft(self, panel_id: str, layout: dict, base_version: int | None) -> None:
@@ -279,19 +287,50 @@ class Store:
         if not f.exists():
             return None
         layout = json.loads(f.read_text(encoding="utf-8"))
-        if not is_current(layout):
-            # Stored before 0.5.0: upgraded once, same version (the content did not change).
-            layout = upgrade(layout)
+        if not is_current(layout) or "panel" in layout:
+            # Stored before 0.5.0 / 0.6.0: upgraded once, same version (what the panel
+            # shows did not change); display settings move to the panel configuration.
+            layout = self._move_display_settings(panel_id, upgrade(layout))
             self._write(f, layout)
+        return layout
+
+    def _move_display_settings(self, panel_id: str, layout: dict) -> dict:
+        """A layout's own display settings (lang, theme, screensaver) become the panel's
+        configuration the first time; after that the configuration is the only source."""
+        panel = layout.pop("panel", None) or {}
+        overrides = {k: panel[k] for k in DISPLAY if k in panel}
+        if overrides and not self._config_file(panel_id).exists():
+            self.save_panel_config(panel_id, {**panel_config.new_panel(), "overrides": overrides})
         return layout
 
     def save_layout(self, panel_id: str, layout: dict) -> dict:
         """Stores a new revision. Its version is above both the stored and the submitted one.
         A v1 layout (from an older app) is upgraded first, keeping the stored cards' settings."""
         current = self.get_layout(panel_id)
-        layout = upgrade(layout, current)
+        layout = self._move_display_settings(panel_id, upgrade(layout, current))
         validate_layout(layout)
         version = max(layout.get("version", 1), current["version"] if current else 0) + 1
         saved = {**layout, "version": version}
         self._write(self._layout_file(panel_id), saved)
         return saved
+
+    # ---- edits made on the panel ----
+
+    def role_for(self, panel_id: str, pin: str | None) -> str:
+        """Who is editing on the panel, from the PIN it sent. Until an installer PIN is set
+        the panel is in setup and counts as the installer."""
+        eff = self.effective_config(panel_id)
+        if eff["installer_pin"] is None or verify_pin(pin, eff["installer_pin"]):
+            return "installer"
+        if verify_pin(pin, eff["user_pin"]):
+            return "user"
+        return "guest"
+
+    def save_from_panel(self, panel_id: str, layout: dict, pin: str | None) -> dict:
+        """A layout edited on the panel: only changes the role may make (access.py).
+        A panel with no layout yet (just paired) uploads its own as the starting point."""
+        current = self.get_layout(panel_id)
+        if current is not None:
+            edited = {k: v for k, v in upgrade(layout, current).items() if k != "panel"}
+            check_panel_edit(current, edited, role_caps(self.effective_config(panel_id), self.role_for(panel_id, pin)))
+        return self.save_layout(panel_id, layout)

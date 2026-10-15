@@ -4,7 +4,7 @@
   "title": "Wall panel layout, version 2",
   "description": "What one panel shows: pages of cards. Shared by the Android app, the ESP32 firmware and the management add-on; it never carries credentials. Which cards exist, what entities, sizes and options each accepts, is defined in cards.json and checked by the add-on on save.",
   "type": "object",
-  "required": ["schema", "version", "panel", "pages"],
+  "required": ["schema", "version", "pages"],
   "additionalProperties": false,
   "properties": {
     "schema": {
@@ -25,7 +25,7 @@
   },
   "$defs": {
     "panel": {
-      "description": "Display settings. They move to the panel configuration (config.schema.json) in phase B; until then the panel reads them here.",
+      "description": "Display settings of a panel without a hub (direct link). With a hub they come from the panel configuration (config.schema.json): the hub moves them there and leaves this out.",
       "type": "object",
       "required": ["name"],
       "additionalProperties": false,

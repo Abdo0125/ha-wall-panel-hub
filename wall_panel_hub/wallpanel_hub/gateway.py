@@ -6,7 +6,7 @@ The hub opens its own connection to HA and forwards only what the panel may do:
 - commands only on entities in the panel's layout, with the entity's own domain;
 - state subscriptions limited to those entities;
 - read-only registry and state lists (for the layout editor on the panel);
-- wallpanel/* commands for the layout, answered by the hub itself.
+- wallpanel/* commands (layout, configuration, card registry), answered by the hub itself.
 
 Layouts are stored in format v2 (cards). A panel asks for it with "schema": 2 in
 wallpanel/layout/subscribe or /get; an older app, which does not, gets format v1.
@@ -19,6 +19,8 @@ import logging
 import aiohttp
 from aiohttp import WSMsgType, web
 
+from .access import EditRefused
+from .cards import REGISTRY
 from .migrate import SCHEMA, downgrade
 from .store import LayoutInvalid, Store, layout_entities
 
@@ -83,6 +85,7 @@ class PanelConnection:
         self.panel_id = panel_id
         self.ws = ws
         self.layout_subs: set[int] = set()
+        self.config_subs: set[int] = set()
         # Layout format the panel's app reads: 1 until it asks for 2.
         self.schema = 1
 
@@ -95,8 +98,19 @@ class PanelConnection:
             await self.ws.send_str(json.dumps(data, ensure_ascii=False))
 
     def layout_for_panel(self) -> dict | None:
-        layout = self.gateway.store.get_layout(self.panel_id)
-        return layout if layout is None or self.schema >= SCHEMA else downgrade(layout)
+        store = self.gateway.store
+        layout = store.get_layout(self.panel_id)
+        if layout is None or self.schema >= SCHEMA:
+            return layout
+        # An older app reads its display settings from the layout.
+        eff = store.effective_config(self.panel_id)
+        panel = {"name": eff["name"] or "Panel", **{k: eff[k] for k in ("lang", "theme", "screensaver")}}
+        return {**downgrade(layout), "panel": panel}
+
+    async def push_config(self) -> None:
+        config = self.gateway.store.effective_config(self.panel_id)
+        for sub in list(self.config_subs):
+            await self.send({"id": sub, "type": "event", "event": {"config": config}})
 
     async def push_layout(self) -> None:
         layout = self.layout_for_panel()
@@ -117,13 +131,24 @@ class PanelConnection:
             await self.send({"id": mid, "type": "result", "success": True, "result": None})
             await self.push_layout()
         elif kind == "wallpanel/layout/save":
+            # The PIN entered on the panel says who edits: installer, user or guest.
             try:
-                saved = store.save_layout(self.panel_id, msg.get("layout") or {})
+                saved = store.save_from_panel(self.panel_id, msg.get("layout") or {}, msg.get("pin"))
             except LayoutInvalid as e:
                 await self.send(_error(mid, "invalid_layout", str(e)))
                 return
+            except EditRefused as e:
+                log.warning("panel %s edit refused: %s", self.panel_id, e)
+                await self.send(_error(mid, "forbidden", str(e)))
+                return
             await self.send({"id": mid, "type": "result", "success": True, "result": {"version": saved["version"]}})
             await self.gateway.notify_layout(self.panel_id)
+        elif kind == "wallpanel/config/subscribe":
+            self.config_subs.add(mid)
+            await self.send({"id": mid, "type": "result", "success": True, "result": None})
+            await self.push_config()
+        elif kind == "wallpanel/registry/get":
+            await self.send({"id": mid, "type": "result", "success": True, "result": REGISTRY})
         else:
             await self.send(_error(mid, "unknown_command", f"{kind} is not known"))
 
@@ -145,6 +170,13 @@ class Gateway:
     async def notify_layout(self, panel_id: str) -> None:
         for conn in list(self.connections.get(panel_id, ())):
             await conn.push_layout()
+
+    async def notify_config(self, panel_id: str | None = None) -> None:
+        """New effective configuration for one panel, or for all (site change)."""
+        for pid, conns in list(self.connections.items()):
+            if panel_id in (None, pid):
+                for conn in list(conns):
+                    await conn.push_config()
 
     async def disconnect(self, panel_id: str) -> None:
         """Used when a panel is revoked: its open connections close at once."""

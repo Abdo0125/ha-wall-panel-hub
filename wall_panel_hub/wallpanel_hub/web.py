@@ -14,6 +14,8 @@ from aiohttp import web
 
 from .cards import REGISTRY
 from .catalog import CatalogCache
+from .config import ConfigInvalid
+from .pins import PinInvalid, hash_pin
 from .gateway import Gateway
 from .settings import VERSION
 from .store import LayoutConflict, LayoutInvalid, Store
@@ -57,8 +59,16 @@ def _allowed(remote: str | None, networks: list) -> bool:
     return any(ip in n for n in networks)
 
 
+def _without_pins(doc: dict) -> dict:
+    """PIN hashes stay in the hub (and on the panels); the page only learns whether one is set."""
+    out = {k: v for k, v in doc.items() if k not in ("installer_pin", "user_pin")}
+    out["installer_pin_set"] = bool(doc.get("installer_pin"))
+    out["user_pin_set"] = bool(doc.get("user_pin"))
+    return out
+
+
 def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
-                  catalog: CatalogCache | None = None) -> web.Application:
+                  catalog: CatalogCache | None = None, browser=None) -> web.Application:
     networks = [ipaddress.ip_network(n) for n in allowed]
 
     @web.middleware
@@ -136,8 +146,15 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
 
     async def overview(_):
         now = time.time()
+        requesting = {r.panel_id for r in store.pending.values() if not r.key and not r.rejected}
+        discovered = [
+            p for p in (browser.panels.values() if browser else [])
+            if p["id"] not in store.panels and p["id"] not in requesting
+        ]
         return web.json_response({
             "version": VERSION,
+            "installer_pin_set": bool(store.get_site().get("installer_pin")),
+            "discovered": sorted(discovered, key=lambda p: p["name"]),
             "panels": [
                 {
                     "id": p.id,
@@ -179,6 +196,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         if pid not in store.panels:
             raise web.HTTPNotFound()
         store.rename(pid, str((await request.json()).get("name", "")).strip() or "Panel")
+        await gateway.notify_config(pid)
         return web.json_response({"ok": True})
 
     async def place(request: web.Request):
@@ -186,6 +204,92 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         if pid not in store.panels:
             raise web.HTTPNotFound()
         store.place(pid, (await request.json()).get("area_id"))
+        return web.json_response({"ok": True})
+
+    # ---- configuration (project and panels) ----
+
+    async def _body(request: web.Request) -> dict:
+        try:
+            body = await request.json()
+        except Exception:
+            raise web.HTTPBadRequest(text="JSON body required")
+        if not isinstance(body, dict):
+            raise web.HTTPBadRequest(text="JSON object required")
+        return body
+
+    def _invalid(e: Exception):
+        return web.json_response({"error": str(e)}, status=422)
+
+    async def get_site(_):
+        return web.json_response(_without_pins(store.get_site()))
+
+    async def put_site(request: web.Request):
+        body = await _body(request)
+        site = store.get_site()
+        for key in ("name", "defaults"):
+            if key in body:
+                site[key] = body[key]
+        try:
+            saved = store.save_site(site)
+        except ConfigInvalid as e:
+            return _invalid(e)
+        await gateway.notify_config()
+        return web.json_response(_without_pins(saved))
+
+    def _pin_value(body: dict):
+        role = body.get("role")
+        if role not in ("installer", "user"):
+            raise web.HTTPBadRequest(text="role must be installer or user")
+        pin = body.get("pin")
+        return role, (hash_pin(str(pin)) if pin else None)
+
+    async def site_pin(request: web.Request):
+        try:
+            role, value = _pin_value(await _body(request))
+        except PinInvalid as e:
+            return _invalid(e)
+        store.save_site({**store.get_site(), f"{role}_pin": value})
+        await gateway.notify_config()
+        return web.json_response({"ok": True})
+
+    async def get_panel_config(request: web.Request):
+        pid = _panel(request)
+        return web.json_response({
+            "config": _without_pins(store.get_panel_config(pid)),
+            "effective": _without_pins(store.effective_config(pid)),
+        })
+
+    async def put_panel_config(request: web.Request):
+        pid = _panel(request)
+        body = await _body(request)
+        doc = store.get_panel_config(pid)
+        for key in ("overrides", "access", "apps"):
+            if key in body:
+                if body[key] is None:
+                    doc.pop(key, None)
+                else:
+                    doc[key] = body[key]
+        try:
+            store.save_panel_config(pid, doc)
+        except ConfigInvalid as e:
+            return _invalid(e)
+        await gateway.notify_config(pid)
+        return web.json_response({"effective": _without_pins(store.effective_config(pid))})
+
+    async def panel_pin(request: web.Request):
+        """A PIN for this panel only, or null to use the project's again."""
+        pid = _panel(request)
+        try:
+            role, value = _pin_value(await _body(request))
+        except PinInvalid as e:
+            return _invalid(e)
+        doc = store.get_panel_config(pid)
+        if value:
+            doc[f"{role}_pin"] = value
+        else:
+            doc.pop(f"{role}_pin", None)
+        store.save_panel_config(pid, doc)
+        await gateway.notify_config(pid)
         return web.json_response({"ok": True})
 
     async def get_layout(request: web.Request):
@@ -208,4 +312,10 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     app.router.add_post("/api/panels/{pid}/rename", rename)
     app.router.add_post("/api/panels/{pid}/area", place)
     app.router.add_get("/api/panels/{pid}/layout", get_layout)
+    app.router.add_get("/api/site", get_site)
+    app.router.add_put("/api/site", put_site)
+    app.router.add_post("/api/site/pin", site_pin)
+    app.router.add_get("/api/panels/{pid}/config", get_panel_config)
+    app.router.add_put("/api/panels/{pid}/config", put_panel_config)
+    app.router.add_post("/api/panels/{pid}/pin", panel_pin)
     return app

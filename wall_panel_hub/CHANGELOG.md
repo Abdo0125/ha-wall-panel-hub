@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.0
+
+- **Project** tab: project name, installer PIN, user PIN, default language, theme,
+  screensaver and return time for all panels. PINs are stored and sent as PBKDF2 hashes;
+  the panel checks them offline.
+- Per-panel **settings**: display overrides (blank = project's), a PIN for this panel
+  only, and access per role (no PIN / user PIN / installer PIN): control, apps, edit
+  cards, reorder, local settings.
+- The hub enforces it: an edit saved from a panel is checked against the PIN's role.
+  Adding or removing entities, cards, pages or rooms from a panel is always refused.
+- Panels receive their configuration live (`wallpanel/config/subscribe`); language,
+  theme and screensaver moved out of the layout into it (migrated automatically).
+- New panels on the LAN announce themselves and request pairing on their own; they
+  appear in the pairing list as soon as they are switched on.
+- A warning shows until an installer PIN is set.
+
 ## 0.5.0
 
 - Layout format v2: pages of **cards**. A card has a type from the card registry
