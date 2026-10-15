@@ -1,0 +1,24 @@
+name: Wall Panel Hub
+version: "0.1.0"
+slug: wall_panel_hub
+description: Unified management for wall panels (Android and ESP32) - pairing, layouts, secure gateway to Home Assistant
+url: https://github.com/Abdo0125/ha-wall-panel-hub
+arch:
+  - aarch64
+  - amd64
+  - armv7
+init: false
+startup: application
+boot: auto
+# Panels reach Home Assistant only through this add-on, with its own API access.
+homeassistant_api: true
+# Host network: panels on the LAN reach the panel API, and mDNS announces the hub.
+host_network: true
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:tablet-dashboard
+panel_title: Wall Panels
+options:
+  panel_port: 8765
+schema:
+  panel_port: port

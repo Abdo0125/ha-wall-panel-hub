@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wall Panels</title>
+<style>
+  :root { --bg: #111; --fg: #eee; --muted: #999; --line: #333; --accent: #e0a060; --danger: #e06060; }
+  @media (prefers-color-scheme: light) { :root { --bg: #fafafa; --fg: #111; --muted: #666; --line: #ddd; --accent: #8a5a2b; } }
+  body { background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; margin: 0; padding: 16px; }
+  h1 { font-size: 20px; } h2 { font-size: 16px; margin-top: 28px; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { padding: 8px; border-bottom: 1px solid var(--line); text-align: start; vertical-align: middle; }
+  th { color: var(--muted); font-weight: normal; font-size: 13px; }
+  .code { font-family: monospace; font-size: 22px; letter-spacing: 4px; color: var(--accent); }
+  .muted { color: var(--muted); font-size: 13px; }
+  .on { color: #6c6; } .off { color: var(--muted); }
+  button { background: none; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; margin-inline-end: 6px; }
+  button.primary { border-color: var(--accent); color: var(--accent); }
+  button.danger { border-color: var(--danger); color: var(--danger); }
+  .empty { color: var(--muted); padding: 8px; }
+</style>
+</head>
+<body>
+<h1>Wall Panel Hub <span class="muted" id="version"></span></h1>
+
+<h2>طلبات الربط</h2>
+<p class="muted">وافق فقط إذا كان الرمز هنا مطابقاً للرمز الظاهر على الشاشة.</p>
+<table><thead><tr><th>الرمز</th><th>الاسم</th><th>الموديل</th><th>منذ</th><th></th></tr></thead>
+<tbody id="pending"></tbody></table>
+
+<h2>الشاشات المربوطة</h2>
+<table><thead><tr><th>الاسم</th><th>الحالة</th><th>الموديل</th><th>التخطيط</th><th>آخر ظهور</th><th></th></tr></thead>
+<tbody id="panels"></tbody></table>
+
+<script>
+// Relative URLs: the page is served under Home Assistant's ingress path.
+async function api(path, options) {
+  const r = await fetch(path, options);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+const post = (path, body) => api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+
+function cell(row, text, cls) {
+  const td = row.insertCell();
+  td.textContent = text ?? "";   // textContent: panel names come from the panels, never render them as HTML
+  if (cls) td.className = cls;
+  return td;
+}
+function button(td, label, cls, onClick) {
+  const b = document.createElement("button");
+  b.textContent = label; b.className = cls || "";
+  b.onclick = async () => { try { await onClick(); } catch (e) { alert(e.message); } refresh(); };
+  td.appendChild(b);
+}
+function ago(ts) {
+  if (!ts) return "—";
+  const s = Math.round(Date.now() / 1000 - ts);
+  if (s < 60) return s + " ث"; if (s < 3600) return Math.round(s / 60) + " د";
+  if (s < 86400) return Math.round(s / 3600) + " س"; return Math.round(s / 86400) + " يوم";
+}
+
+async function refresh() {
+  let data;
+  try { data = await api("api/overview"); } catch (e) { return; }
+  document.getElementById("version").textContent = "v" + data.version;
+
+  const pending = document.getElementById("pending");
+  pending.innerHTML = "";
+  if (!data.pending.length) pending.insertRow().insertCell().outerHTML = '<td class="empty" colspan="5">لا توجد طلبات. اضغط "ربط" على الشاشة.</td>';
+  for (const r of data.pending) {
+    const row = pending.insertRow();
+    cell(row, r.code, "code"); cell(row, r.name); cell(row, r.model, "muted"); cell(row, r.age + " ث", "muted");
+    const actions = cell(row, "");
+    button(actions, "موافقة", "primary", () => post(`api/pending/${encodeURIComponent(r.request_id)}/approve`));
+    button(actions, "رفض", "", () => post(`api/pending/${encodeURIComponent(r.request_id)}/reject`));
+  }
+
+  const panels = document.getElementById("panels");
+  panels.innerHTML = "";
+  if (!data.panels.length) panels.insertRow().insertCell().outerHTML = '<td class="empty" colspan="6">لا توجد شاشات مربوطة بعد.</td>';
+  for (const p of data.panels) {
+    const row = panels.insertRow();
+    cell(row, p.name);
+    cell(row, p.online ? "● متصلة" : "○ غير متصلة", p.online ? "on" : "off");
+    cell(row, p.model, "muted");
+    cell(row, p.layout_version ? "v" + p.layout_version : "—", "muted");
+    cell(row, p.online ? "الآن" : ago(p.last_seen), "muted");
+    const actions = cell(row, "");
+    const id = encodeURIComponent(p.id);
+    button(actions, "إعادة تسمية", "", () => {
+      const name = prompt("اسم الشاشة", p.name);
+      return name ? post(`api/panels/${id}/rename`, { name }) : null;
+    });
+    button(actions, "إلغاء الربط", "danger", () =>
+      confirm(`إلغاء ربط "${p.name}"؟ ستنقطع عن Home Assistant فوراً.`) ? post(`api/panels/${id}/revoke`) : null);
+  }
+}
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>
