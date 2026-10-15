@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- Fix: the Wall Panels page was refused on installs where ingress requests come from
+  another address of Home Assistant's internal network.
+
 ## 0.1.0
 
 - Secure gateway between wall panels and Home Assistant: panels never hold an HA token,

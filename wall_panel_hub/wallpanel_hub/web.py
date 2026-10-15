@@ -5,6 +5,8 @@
   accepted only from the Supervisor's ingress proxy, so the LAN cannot reach it.
 """
 
+import ipaddress
+import logging
 import time
 from pathlib import Path
 
@@ -15,6 +17,7 @@ from .settings import VERSION
 from .store import Store
 
 STATIC = Path(__file__).parent / "static"
+log = logging.getLogger(__name__)
 
 
 def panel_api(store: Store, gateway: Gateway) -> web.Application:
@@ -42,11 +45,24 @@ def panel_api(store: Store, gateway: Gateway) -> web.Application:
     return app
 
 
-def management_ui(store: Store, gateway: Gateway, allowed: frozenset[str]) -> web.Application:
+def _allowed(remote: str | None, networks: list) -> bool:
+    try:
+        ip = ipaddress.ip_address(remote or "")
+    except ValueError:
+        return False
+    if ip.version == 6 and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return any(ip in n for n in networks)
+
+
+def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...]) -> web.Application:
+    networks = [ipaddress.ip_network(n) for n in allowed]
+
     @web.middleware
     async def ingress_only(request: web.Request, handler):
-        if request.remote not in allowed:
-            raise web.HTTPForbidden(text="Open Wall Panels from the Home Assistant sidebar.")
+        if not _allowed(request.remote, networks):
+            log.warning("management UI refused for %s", request.remote)
+            raise web.HTTPForbidden(text=f"Open Wall Panels from the Home Assistant sidebar. ({request.remote})")
         return await handler(request)
 
     app = web.Application(middlewares=[ingress_only])
