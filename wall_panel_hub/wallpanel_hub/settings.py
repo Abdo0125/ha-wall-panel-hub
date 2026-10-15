@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-VERSION = "0.1.2"
+VERSION = "0.2.0"
 
 # Home Assistant's internal network (hassio). Ingress requests come from the Supervisor
 # inside it; with host networking the exact source address in it varies by install.
@@ -22,6 +22,8 @@ class Settings:
     # Networks allowed to open the management UI.
     ui_allowed: tuple[str, ...]
     dev: bool
+    # Home Assistant's config folder, where the companion integration goes (add-on only).
+    ha_config: Path | None = None
 
 
 # HA's base images start the program through s6-overlay, which does not pass the
@@ -53,6 +55,7 @@ def load() -> Settings:
             ui_port=8099,
             ui_allowed=(HASSIO_NETWORK,),
             dev=False,
+            ha_config=Path("/homeassistant"),
         )
 
     # Developer mode: python -m wallpanel_hub with HA_URL and HA_TOKEN set.

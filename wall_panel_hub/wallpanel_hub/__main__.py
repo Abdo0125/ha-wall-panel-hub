@@ -4,7 +4,7 @@ import logging
 import aiohttp
 from aiohttp import web
 
-from . import discovery, settings
+from . import companion, discovery, settings
 from .gateway import Gateway
 from .store import Store
 from .web import management_ui, panel_api
@@ -30,6 +30,9 @@ async def main() -> None:
         log.info("panel API on :%s, management UI on :%s", cfg.panel_port, cfg.ui_port)
 
         zc = await discovery.announce(cfg.panel_port)
+        if not cfg.dev:
+            restart = companion.install(cfg.ha_config)
+            await companion.announce(session, cfg.ha_token, cfg.panel_port, restart)
         try:
             await asyncio.Event().wait()
         finally:

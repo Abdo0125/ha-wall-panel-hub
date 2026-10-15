@@ -26,6 +26,16 @@
 2. أضف `https://github.com/Abdo0125/ha-wall-panel-hub`.
 3. ابحث عن **Wall Panel Hub**، ثبّته وشغّله، وفعّل **Show in sidebar**.
 
+## الشاشات البعيدة (شبكة أخرى)
+
+عند أول تشغيل، يثبّت الـ add-on تكاملاً مرافقاً (`custom_components/wall_panel_hub`) يفتح المسار `/api/wall_panel_hub/` على عنوان HA نفسه، ويحوّله للـ add-on داخلياً. يعمل مع أي عنوان يصل لـ HA: محلي، Nabu Casa، Cloudflare Tunnel.
+
+1. أعد تشغيل Home Assistant بعد أول تشغيل للـ add-on (يظهر إشعار بذلك).
+2. الإعدادات ← الأجهزة والخدمات ← **Discovered** ← **Wall Panel Hub** ← تكوين.
+3. على الشاشة البعيدة: اكتب عنوان HA العام (مثال `my-home.example.com`) واضغط ربط.
+
+الشاشة تجرّب العنوان المحلي للـ add-on والمسار عبر HA، وتستعمل أول ما يجيب.
+
 ## التطوير
 
 الكود والاختبارات والـ schema المشترك في المشروع الرئيسي. مستودع `ha-wall-panel-hub` يُنشر منه بالأمر `python tools/publish_addon.py`.

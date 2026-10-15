@@ -1,5 +1,5 @@
 name: Wall Panel Hub
-version: "0.1.2"
+version: "0.2.0"
 slug: wall_panel_hub
 description: Unified management for wall panels (Android and ESP32) - pairing, layouts, secure gateway to Home Assistant
 url: https://github.com/Abdo0125/ha-wall-panel-hub
@@ -12,6 +12,13 @@ startup: application
 boot: auto
 # Panels reach Home Assistant only through this add-on, with its own API access.
 homeassistant_api: true
+hassio_api: true
+# Announces the add-on so Home Assistant offers to set up the companion integration.
+discovery:
+  - wall_panel_hub
+# Installs the companion integration into custom_components (remote panels).
+map:
+  - homeassistant_config:rw
 # Host network: panels on the LAN reach the panel API, and mDNS announces the hub.
 host_network: true
 ingress: true

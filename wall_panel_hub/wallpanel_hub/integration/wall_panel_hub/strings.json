@@ -1,0 +1,24 @@
+{
+  "config": {
+    "step": {
+      "hassio_confirm": {
+        "title": "Wall Panel Hub",
+        "description": "Let wall panels pair and connect through this Home Assistant's address (local, Nabu Casa or tunnel), not only on the add-on's local network."
+      },
+      "user": {
+        "title": "Wall Panel Hub",
+        "description": "Address of the Wall Panel Hub add-on as seen from Home Assistant.",
+        "data": {
+          "host": "Host",
+          "port": "Panel port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "The Wall Panel Hub add-on does not answer at this address."
+    },
+    "abort": {
+      "already_configured": "Wall Panel Hub is already set up."
+    }
+  }
+}

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+- Remote panels: the add-on installs a companion integration that opens
+  `/api/wall_panel_hub/` on Home Assistant's own address (local, Nabu Casa, Cloudflare
+  tunnel...). Panels on other networks pair and connect through it.
+- After the first start, restart Home Assistant and accept **Wall Panel Hub** under
+  Settings → Devices & services → Discovered.
+
 ## 0.1.2
 
 - Fix: the add-on started in developer mode inside Home Assistant (the Supervisor
