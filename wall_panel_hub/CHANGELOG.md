@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- Fix: the add-on started in developer mode inside Home Assistant (the Supervisor
+  token is now read where s6-overlay keeps it), so the page and the gateway were refused.
+
 ## 0.1.1
 
 - Fix: the Wall Panels page was refused on installs where ingress requests come from

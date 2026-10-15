@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 
 # Home Assistant's internal network (hassio). Ingress requests come from the Supervisor
 # inside it; with host networking the exact source address in it varies by install.
@@ -24,13 +24,27 @@ class Settings:
     dev: bool
 
 
-def load() -> Settings:
+# HA's base images start the program through s6-overlay, which does not pass the
+# container environment on; the Supervisor's variables are kept in this folder instead.
+S6_ENV = Path("/run/s6/container_environment")
+OPTIONS_FILE = Path("/data/options.json")
+
+
+def _supervisor_token() -> str | None:
     token = os.environ.get("SUPERVISOR_TOKEN")
     if token:
-        options = {}
-        options_file = Path("/data/options.json")
-        if options_file.exists():
-            options = json.loads(options_file.read_text())
+        return token
+    f = S6_ENV / "SUPERVISOR_TOKEN"
+    return f.read_text().strip() if f.exists() else None
+
+
+def load() -> Settings:
+    token = _supervisor_token()
+    # The Supervisor always writes options.json: it marks a real add-on install.
+    if OPTIONS_FILE.exists():
+        if not token:
+            raise RuntimeError("Running as an add-on but SUPERVISOR_TOKEN is missing (homeassistant_api: true?)")
+        options = json.loads(OPTIONS_FILE.read_text())
         return Settings(
             ha_ws_url="ws://supervisor/core/websocket",
             ha_token=token,
