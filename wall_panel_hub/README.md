@@ -30,5 +30,5 @@
 
 الكود والاختبارات والـ schema المشترك في المشروع الرئيسي. مستودع `ha-wall-panel-hub` يُنشر منه بالأمر `python tools/publish_addon.py`.
 
-- التشغيل على الحاسوب متصلاً بـ HA حقيقي: `toolsun-hub-dev.ps1`، وصفحة الإدارة على `http://localhost:8099`.
+- التشغيل على الحاسوب متصلاً بـ HA حقيقي: `tools\run-hub-dev.ps1`، وصفحة الإدارة على `http://localhost:8099`.
 - الاختبارات: `cd addon && python -m pytest -q` (تتطلب `pip install -r requirements.txt pytest pytest-aiohttp`).
