@@ -12,7 +12,7 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 from . import config as panel_config
-from .access import check_panel_edit, role_caps
+from .access import EditRefused, check_panel_edit, role_caps
 from .cards import card_entities, check_card
 from .migrate import is_current, upgrade
 from .pins import verify_pin
@@ -325,6 +325,21 @@ class Store:
         if verify_pin(pin, eff["user_pin"]):
             return "user"
         return "guest"
+
+    def save_display_from_panel(self, panel_id: str, display: dict, pin: str | None) -> dict:
+        """Theme, language and screensaver changed on the panel: stored as this panel's own
+        settings, so the add-on shows them too. Needs the display permission."""
+        caps = role_caps(self.effective_config(panel_id), self.role_for(panel_id, pin))
+        if "display" not in caps:
+            raise EditRefused("display settings are not allowed on this panel")
+        doc = self.get_panel_config(panel_id)
+        overrides = dict(doc.get("overrides") or {})
+        for key in ("lang", "theme"):
+            if key in display:
+                overrides[key] = display[key]
+        if "screensaver" in display:
+            overrides["screensaver"] = {**(overrides.get("screensaver") or {}), **display["screensaver"]}
+        return self.save_panel_config(panel_id, {**doc, "overrides": overrides})
 
     def save_from_panel(self, panel_id: str, layout: dict, pin: str | None) -> dict:
         """A layout edited on the panel: only changes the role may make (access.py).

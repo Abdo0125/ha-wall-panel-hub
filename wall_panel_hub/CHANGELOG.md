@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.1
+
+- Theme, language and screensaver can be changed on the panel itself (display
+  permission). They are stored as that panel's own settings and show here too.
+- Needs the panel app 0.6.1.
+
 ## 0.8.0
 
 - Permissions now choose which pages of the panel's settings each role sees:
