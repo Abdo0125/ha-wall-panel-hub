@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1
+
+- Light is the default theme for panels without their own setting (app 0.4.0 has the
+  new wall-keypad look: fixed grid of cells, line icons, dashboard and rooms in the sidebar).
+
 ## 0.6.0
 
 - **Project** tab: project name, installer PIN, user PIN, default language, theme,

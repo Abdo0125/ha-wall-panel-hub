@@ -32,7 +32,7 @@
       "properties": {
         "name": { "type": "string", "minLength": 1 },
         "lang": { "enum": ["ar", "fr", "en"], "default": "ar" },
-        "theme": { "enum": ["dark", "light"], "default": "dark" },
+        "theme": { "enum": ["dark", "light"], "default": "light" },
         "screensaver": {
           "type": "object",
           "additionalProperties": false,

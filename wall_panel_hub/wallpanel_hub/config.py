@@ -33,7 +33,7 @@ def validate(kind: str, doc: dict) -> None:
 
 DEFAULTS = {
     "lang": "ar",
-    "theme": "dark",
+    "theme": "light",
     "screensaver": {"idle_seconds": 60, "dim_brightness": 10},
     "app_return_seconds": 300,
 }
