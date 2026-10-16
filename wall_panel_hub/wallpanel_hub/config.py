@@ -83,6 +83,7 @@ def effective(site: dict, panel: dict, name: str) -> dict:
         "user_pin": panel.get("user_pin") or site.get("user_pin"),
         "access": access,
         "apps": list(panel.get("apps") or []),
+        "devices": dict(site.get("devices") or {}),
     }
     validate("effective", out)
     return out

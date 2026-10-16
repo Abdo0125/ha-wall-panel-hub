@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0
+
+- New main page, the panel designer: each panel is shown as it looks on the wall (rooms on
+  the side, the 5x4 grid, light or dark). Tap + to add a device, tap a card to change its
+  shape, size, name and icon in plain words, drag cards and rooms to move them.
+- Each panel has three tabs: Design, Settings, Permissions.
+- New panels are set up in three steps: approve the code, pick the name and rooms, send.
+- Project → Device types: set once what each device is (garage, curtain, window, outlet,
+  heater...), and its name and icon; every panel shows it that way (app 0.5.0).
+- Fix: the 2x2 size added in 0.6.3 went to the switch card instead of the button-only
+  shutter card.
+- The previous editor stays available as "Advanced editor".
+
 ## 0.6.3
 
 - A shutter card with buttons (cover.buttons) can also be 2x2: it shows the shutter dial (app 0.4.18).

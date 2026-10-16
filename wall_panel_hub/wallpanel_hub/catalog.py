@@ -37,6 +37,7 @@ def build(floors: list, areas: list, devices: list, registry: list, states: list
         if r and (r.get("hidden_by") or r.get("disabled_by") or r.get("entity_category")):
             continue
         area = (r or {}).get("area_id") or device_area.get((r or {}).get("device_id"))
+        attrs = s.get("attributes") or {}
         entities.append({
             "entity_id": eid,
             "name": (s.get("attributes") or {}).get("friendly_name") or (r or {}).get("name") or eid,
@@ -44,6 +45,10 @@ def build(floors: list, areas: list, devices: list, registry: list, states: list
             "type": kind,
             "controllable": KINDS[kind]["controllable"],
             "state": s.get("state"),
+            # What HA says the device is and shows it with; the project's device list
+            # (site.devices) can change both for every panel.
+            "device_class": attrs.get("device_class"),
+            "icon": attrs.get("icon") or (r or {}).get("icon"),
         })
     entities.sort(key=lambda e: (e["name"].lower(), e["entity_id"]))
 

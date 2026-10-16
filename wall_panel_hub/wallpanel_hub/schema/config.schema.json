@@ -14,7 +14,8 @@
         "name": { "type": "string" },
         "installer_pin": { "$ref": "#/$defs/pin_or_none" },
         "user_pin": { "$ref": "#/$defs/pin_or_none" },
-        "defaults": { "$ref": "#/$defs/settings" }
+        "defaults": { "$ref": "#/$defs/settings" },
+        "devices": { "$ref": "#/$defs/devices" }
       }
     },
     "panel": {
@@ -61,7 +62,8 @@
           "allOf": [{ "$ref": "#/$defs/access" }],
           "required": ["guest", "user", "installer"]
         },
-        "apps": { "$ref": "#/$defs/apps" }
+        "apps": { "$ref": "#/$defs/apps" },
+        "devices": { "$ref": "#/$defs/devices" }
       }
     },
 
@@ -80,6 +82,20 @@
           }
         },
         "app_return_seconds": { "$ref": "#/$defs/return_seconds" }
+      }
+    },
+    "devices": {
+      "description": "What each device is, set once for the project and used by every panel: its type (for a shutter: garage, curtain, window...; HA's device_class names), and the name and icon shown. Anything left out comes from Home Assistant.",
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z_]+[.][a-z0-9_]+$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": { "type": "string", "pattern": "^[a-z_]+$" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+          "icon": { "type": "string", "pattern": "^mdi:[a-z0-9-]+$" }
+        }
       }
     },
     "lang": { "enum": ["ar", "fr", "en"] },

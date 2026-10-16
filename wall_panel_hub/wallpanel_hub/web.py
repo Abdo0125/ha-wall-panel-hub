@@ -168,18 +168,18 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
                 for p in sorted(store.panels.values(), key=lambda p: p.name)
             ],
             "pending": [
-                {"request_id": r.request_id, "name": r.name, "model": r.model, "code": r.code,
-                 "age": int(now - r.created)}
+                {"request_id": r.request_id, "panel_id": r.panel_id, "name": r.name, "model": r.model,
+                 "code": r.code, "age": int(now - r.created)}
                 for r in store.pending.values() if not r.key and not r.rejected
             ],
         })
 
     async def approve(request: web.Request):
         try:
-            store.approve(request.match_info["rid"])
+            panel = store.approve(request.match_info["rid"])
         except KeyError:
             raise web.HTTPNotFound(text="request expired")
-        return web.json_response({"ok": True})
+        return web.json_response({"ok": True, "panel_id": panel.id})
 
     async def reject(request: web.Request):
         store.reject(request.match_info["rid"])
@@ -226,7 +226,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     async def put_site(request: web.Request):
         body = await _body(request)
         site = store.get_site()
-        for key in ("name", "defaults"):
+        for key in ("name", "defaults", "devices"):
             if key in body:
                 site[key] = body[key]
         try:
