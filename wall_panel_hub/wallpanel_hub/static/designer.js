@@ -1016,7 +1016,7 @@ function renderAccess(view, p) {
     el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
       const access = {};
       for (const [role] of ROLES) access[role] = CAPS.map(([c]) => c).filter((c) => boxes[role + ":" + c].checked);
-      const r = await put(`api/panels/${enc(pid)}/config`, { access });
+      const r = await put(`api/panels/${enc(pid)}/config`, { access, access_known: CAPS.map(([c]) => c) });
       if (!r.ok) { alert("لم يُحفظ: " + (r.body?.error || r.status)); return; }
       await loadConfig(pid);
       toast(p.online ? "حُفظ ووصل للشاشة." : "حُفظ. ستستلمه الشاشة عند اتصالها.");

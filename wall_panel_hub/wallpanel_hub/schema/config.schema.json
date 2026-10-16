@@ -61,6 +61,14 @@
         },
         "apps": {
           "$ref": "#/$defs/apps"
+        },
+        "access_known": {
+          "description": "The permissions the add-on offered when access was saved. A newer one is not in this list and takes its default, so saving an older panel's access never turns it off.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/capability"
+          },
+          "uniqueItems": true
         }
       }
     },

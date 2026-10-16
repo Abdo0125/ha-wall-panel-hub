@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.1
+
+- A new permission is on by default for panels whose permissions were saved before it
+  existed (my dashboard was missing on them). Saving the permissions now records which
+  ones the add-on offered, so what is switched off on purpose stays off.
+
 ## 0.11.0
 
 - My dashboard: first in the designer's sidebar, with free placement like the rooms.

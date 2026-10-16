@@ -46,6 +46,8 @@ DEFAULT_ACCESS = {
     "installer": ["control", "apps", "edit_cards", "reorder", "dashboard", "connection", "display", "brightness", "system"],
 }
 SETTINGS_PAGES = ["connection", "display", "brightness", "system"]
+# What the add-on offered before access_known was saved with the access (up to 0.11.0).
+KNOWN_BEFORE = ["control", "apps", "edit_cards", "reorder", "settings"] + SETTINGS_PAGES
 
 
 def _caps(caps: list) -> list:
@@ -79,7 +81,16 @@ def effective(site: dict, panel: dict, name: str) -> dict:
             (site.get("defaults") or {}).get("screensaver", {}).get(k, DEFAULTS["screensaver"][k]))
         for k in DEFAULTS["screensaver"]
     }
-    access = {role: _caps(list((panel.get("access") or {}).get(role, caps))) for role, caps in DEFAULT_ACCESS.items()}
+    saved = panel.get("access") or {}
+    known = set(panel.get("access_known") or KNOWN_BEFORE)
+    access = {}
+    for role, defaults in DEFAULT_ACCESS.items():
+        if role not in saved:
+            access[role] = _caps(list(defaults))
+            continue
+        # A permission newer than the saved access takes its default instead of "off".
+        caps = _caps(list(saved[role]))
+        access[role] = caps + [c for c in defaults if c not in known and c not in caps]
     # Control is never taken away: a panel that cannot be used is a support call.
     for caps in access.values():
         if "control" not in caps:
