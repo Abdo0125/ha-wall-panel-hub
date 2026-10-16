@@ -42,8 +42,8 @@ DEFAULTS = {
 # brightness and system are the pages of the panel's settings screen.
 DEFAULT_ACCESS = {
     "guest": ["control", "apps"],
-    "user": ["control", "apps", "edit_cards", "brightness"],
-    "installer": ["control", "apps", "edit_cards", "reorder", "connection", "display", "brightness", "system"],
+    "user": ["control", "apps", "edit_cards", "dashboard", "brightness"],
+    "installer": ["control", "apps", "edit_cards", "reorder", "dashboard", "connection", "display", "brightness", "system"],
 }
 SETTINGS_PAGES = ["connection", "display", "brightness", "system"]
 

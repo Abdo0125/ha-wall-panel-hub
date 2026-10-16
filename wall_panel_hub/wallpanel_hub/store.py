@@ -50,9 +50,12 @@ def validate_layout(layout: dict) -> None:
         where = "/".join(str(p) for p in first.path) or "(root)"
         raise LayoutInvalid(f"{where}: {first.message}")
     seen: set[str] = set()
-    for i, page in enumerate(layout["pages"]):
-        for j, card in enumerate(page["cards"]):
-            where = f"pages/{i}/cards/{j}"
+    groups = [(f"pages/{i}", page["cards"]) for i, page in enumerate(layout["pages"])]
+    if "dashboard" in layout:
+        groups.append(("dashboard", layout["dashboard"]["cards"]))
+    for at, cards in groups:
+        for j, card in enumerate(cards):
+            where = f"{at}/cards/{j}"
             if card["id"] in seen:
                 raise LayoutInvalid(f"{where}: card id {card['id']} is used twice")
             seen.add(card["id"])
@@ -64,7 +67,9 @@ def validate_layout(layout: dict) -> None:
 def layout_entities(layout: dict | None) -> set[str]:
     if not layout:
         return set()
-    return {e for p in layout.get("pages", []) for c in p.get("cards", []) for e in card_entities(c)}
+    cards = [c for p in layout.get("pages", []) for c in p.get("cards", [])]
+    cards += (layout.get("dashboard") or {}).get("cards", [])
+    return {e for c in cards for e in card_entities(c)}
 
 
 def _hash(key: str) -> str:
@@ -351,5 +356,7 @@ class Store:
         current = self.get_layout(panel_id)
         if current is not None:
             edited = {k: v for k, v in upgrade(layout, current).items() if k != "panel"}
-            check_panel_edit(current, edited, role_caps(self.effective_config(panel_id), self.role_for(panel_id, pin)))
+            eff = self.effective_config(panel_id)
+            allowed = {a["package"] for a in eff.get("apps", [])}
+            check_panel_edit(current, edited, role_caps(eff, self.role_for(panel_id, pin)), allowed)
         return self.save_layout(panel_id, layout)

@@ -29,6 +29,22 @@
       "items": {
         "$ref": "#/$defs/page"
       }
+    },
+    "dashboard": {
+      "description": "My dashboard, the first entry of the sidebar: favourites from the panel's rooms, scenes, apps and the panel's own cards (widget.*). Omitted: the clock, then the panel's scenes.",
+      "type": "object",
+      "required": [
+        "cards"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "cards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/card"
+          }
+        }
+      }
     }
   },
   "$defs": {

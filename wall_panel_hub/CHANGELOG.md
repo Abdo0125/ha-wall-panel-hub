@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.11.0
+
+- My dashboard: first in the designer's sidebar, with free placement like the rooms.
+  Until it is changed it shows the clock, then the panel's scenes.
+- The clock is a card of the panel itself (widget.clock): move it, remove it, add it
+  back with "+".
+- New permission "customize my dashboard" (user and installer by default): on the
+  panel the dashboard takes only devices already in its rooms, scenes and allowed apps.
+  Panel app 0.10.0.
+
 ## 0.10.1
 
 - Updates now show at once: the page is never kept by the browser and its scripts carry

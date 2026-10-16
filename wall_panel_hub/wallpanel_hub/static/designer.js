@@ -67,7 +67,7 @@ const SHAPES = {
   "climate.compact": "مختصرة", "climate.thermostat": "منظم حرارة",
   "fan.toggle": "مفتاح", "fan.speed": "سرعات", "lock.lock": "قفل",
   "scene.action": "زر", "scene.bar": "شريط مشاهد", "script.action": "زر", "button.action": "زر",
-  "sensor.value": "قيمة", "sensor.multi": "عدة قيم", "sensor.binary": "حالة", "app.launch": "تطبيق",
+  "sensor.value": "قيمة", "sensor.multi": "عدة قيم", "sensor.binary": "حالة", "app.launch": "تطبيق", "widget.clock": "الساعة",
 };
 const SIZES = { "1x1": "صغيرة", "2x1": "عريضة", "2x2": "كبيرة" };
 // Each kind of device pairs with its own app and has its own rules (docs/ui-plan.md, 5.3).
@@ -234,6 +234,7 @@ function cardIcon(c) {
   if (c.icon) return c.icon;
   const kind = kindOfCard(c.card);
   if (kind === "app") return "mdi:apps";
+  if (c.card === "widget.clock") return "mdi:clock-outline";
   const d = c.entities[0] ? device(c.entities[0]) : null;
   if (d?.icon && c.entities.length === 1) return d.icon;
   const t = d?.type;
@@ -378,7 +379,7 @@ async function discard(noAsk) {
 // ---------- building pages and cards ----------
 
 function nextCardId(layout, extra = []) {
-  const taken = new Set([...layout.pages.flatMap((p) => p.cards.map((c) => c.id)), ...extra.map((c) => c.id)]);
+  const taken = new Set([...layout.pages.flatMap((p) => p.cards.map((c) => c.id)), ...(layout.dashboard?.cards || []).map((c) => c.id), ...extra.map((c) => c.id)]);
   let n = 1;
   while (taken.has(`c${n}`)) n++;
   return `c${n}`;
@@ -502,14 +503,44 @@ function renderPanel(view) {
   else renderAccess(view, p);
 }
 
+// ---------- my dashboard (S.page === DASH) ----------
+
+const DASH = -1;
+
+// Until it is customized, as the panel shows it: the clock, then the rooms' scenes (copies).
+function defaultDashboard(l) {
+  const seen = new Set();
+  const scenes = l.pages.flatMap((p) => p.cards)
+    .filter((c) => kindOfCard(c.card) === "scene" && !seen.has(c.entities.join()) && seen.add(c.entities.join()))
+    .map((c) => { const copy = JSON.parse(JSON.stringify(c)); copy.id = "dash_" + c.id; delete copy.pos; return copy; });
+  return [{ id: "dash_clock", card: "widget.clock", entities: [], size: "2x2" }, ...scenes];
+}
+
+// The open room, or my dashboard as a page.
+function curPage(l) {
+  if (S.page !== DASH) return l.pages[S.page];
+  return { id: "__dashboard", title: "لوحتي", icon: "mdi:view-dashboard-outline", cards: l.dashboard ? l.dashboard.cards : defaultDashboard(l) };
+}
+
+// The cards a change edits: my dashboard is saved the first time it is changed.
+function pageCards(l) {
+  if (S.page !== DASH) return l.pages[S.page].cards;
+  if (!l.dashboard) l.dashboard = { cards: defaultDashboard(l) };
+  return l.dashboard.cards;
+}
+
+function ensureDashboard() {
+  if (S.page === DASH && !L().dashboard) change((l) => { l.dashboard = { cards: defaultDashboard(l) }; });
+}
+
 function renderDesign(view) {
   const layout = L();
   if (!layout) return;
   if (S.catalogError) view.append(el("p", { class: "msg error" }, "تعذّرت قراءة الأجهزة من Home Assistant: " + S.catalogError));
   const eff = S.configs[S.view.pid]?.effective || {};
   const rtl = (eff.lang || "ar") === "ar";
-  S.page = Math.min(S.page, Math.max(0, layout.pages.length - 1));
-  const page = layout.pages[S.page];
+  if (S.page !== DASH) S.page = Math.min(S.page, Math.max(0, layout.pages.length - 1));
+  const page = curPage(layout);
 
   // Sidebar: rooms, drag to reorder, pencil to rename.
   const rooms = el("ul", {});
@@ -523,7 +554,9 @@ function renderDesign(view) {
     animation: 120,
     onEnd: (evt) => { if (evt.oldIndex !== evt.newIndex) change((l) => { l.pages.splice(evt.newIndex, 0, l.pages.splice(evt.oldIndex, 1)[0]); S.page = evt.newIndex; }); },
   });
-  const side = el("div", { class: "dside" }, rooms, el("button", { class: "addroom", onclick: roomSheet }, "+ غرفة"));
+  const dash = el("ul", { style: { flex: "none", borderBottom: "1px solid var(--divider, #d7dade)" } }, el("li", { class: "room" + (S.page === DASH ? " active" : ""), onclick: () => { S.page = DASH; S.sel = null; render(); } },
+    icon("mdi:view-dashboard-outline"), el("span", { class: "grow" }, "لوحتي")));
+  const side = el("div", { class: "dside" }, dash, rooms, el("button", { class: "addroom", onclick: roomSheet }, "+ غرفة"));
 
   // Main: top bar and the page's screens.
   const now = new Date();
@@ -592,7 +625,7 @@ function cardCell(pl, page) {
       if (from === null || from === index) return;
       // Dropped on a card: the two swap places.
       change((l) => {
-        const cards = l.pages[S.page].cards;
+        const cards = pageCards(l);
         const moved = cards[from];
         if (placeCard(cards, from, pl.screen, pl.col, pl.row)) S.sel = cards.indexOf(moved);
       });
@@ -614,7 +647,7 @@ function emptyCell(screen, col, row, open) {
       const from = dragFrom;
       if (from === null) return;
       change((l) => {
-        const cards = l.pages[S.page].cards;
+        const cards = pageCards(l);
         const moved = cards[from];
         if (placeCard(cards, from, screen, col, row)) S.sel = cards.indexOf(moved);
       });
@@ -647,7 +680,8 @@ function iconInput(value, placeholder, onCommit) {
 
 // A card: shape, size, name, icon, confirmation, options, remove.
 function cardSheet(index) {
-  const page = L().pages[S.page];
+  ensureDashboard();
+  const page = curPage(L());
   const c = page.cards[index];
   if (!c) return;
   const spec = R.cards[c.card] || { sizes: [], options: {} };
@@ -689,13 +723,13 @@ function cardSheet(index) {
     el("div", { class: "actions" },
       el("button", { class: "primary", onclick: () => { closeSheet(); S.sel = null; render(); } }, "تم"),
       el("span", { class: "spacer" }),
-      el("button", { class: "danger", onclick: () => { change((l) => { l.pages[S.page].cards.splice(page.cards.indexOf(c), 1); S.sel = null; }); closeSheet(); } }, "حذف البطاقة")),
+      el("button", { class: "danger", onclick: () => { change((l) => { const cs = pageCards(l); cs.splice(cs.indexOf(c), 1); S.sel = null; }); closeSheet(); } }, "حذف البطاقة")),
   );
 }
 
 // Pick a device for an empty cell: this room's first, then the rest of the house.
 function entitySheet(screen, col, row) {
-  const page = L().pages[S.page];
+  const page = curPage(L());
   const onPage = new Set(page.cards.flatMap((c) => c.entities));
   const list = el("div", {});
   const search = el("input", { placeholder: "بحث باسم الجهاز", oninput: () => fill() });
@@ -713,7 +747,7 @@ function entitySheet(screen, col, row) {
         const probe = { card: R.kinds[kindOf(e.entity_id)].default, entities: [e.entity_id] };
         ul.append(el("li", { onclick: () => {
           change((l) => {
-            const cards = l.pages[S.page].cards;
+            const cards = pageCards(l);
             const card = newCard(l, e.entity_id);
             cards.push(card);
             // In the cell chosen when it fits there; otherwise in the first free spot.
@@ -725,6 +759,20 @@ function entitySheet(screen, col, row) {
       }
       list.append(el("h4", {}, title), ul);
     };
+    // My dashboard also takes the panel's own cards.
+    if (S.page === DASH && !q && !page.cards.some((c) => c.card === "widget.clock")) {
+      const ul = el("ul", { class: "picklist" }, el("li", { onclick: () => {
+        change((l) => {
+          const cards = pageCards(l);
+          const card = { id: nextCardId(l), card: "widget.clock", entities: [], size: "2x2" };
+          cards.push(card);
+          placeCard(cards, cards.length - 1, screen, col, row);
+          S.sel = cards.indexOf(card);
+        });
+        closeSheet();
+      } }, icon("mdi:clock-outline"), el("span", { class: "grow" }, "الساعة")));
+      list.append(el("h4", {}, "بطاقات الشاشة"), ul);
+    }
     group("في هذه الغرفة", here);
     group(q ? "في باقي المنزل" : "أجهزة التحكم في باقي المنزل", rest);
     if (!list.children.length) list.append(el("p", { class: "muted" }, q ? "لا نتائج." : "كل أجهزة هذه الغرفة على الشاشة. ابحث عن جهاز من غرفة أخرى."));
@@ -780,7 +828,7 @@ function pageSheet(i) {
 const LANGS = [["ar", "العربية"], ["fr", "Français"], ["en", "English"]];
 const THEMES = [["light", "فاتح"], ["dark", "داكن"]];
 const ROLES = [["guest", "بدون رمز"], ["user", "رمز المستخدم"], ["installer", "رمز المُركِّب"]];
-const CAPS = [["control", "التحكم"], ["apps", "التطبيقات"], ["edit_cards", "تعديل البطاقات"], ["reorder", "إعادة الترتيب"],
+const CAPS = [["control", "التحكم"], ["apps", "التطبيقات"], ["edit_cards", "تعديل البطاقات"], ["reorder", "إعادة الترتيب"], ["dashboard", "تخصيص لوحتي"],
   ["connection", "صفحة الاتصال"], ["display", "صفحة الشاشة"], ["brightness", "السطوع"], ["system", "أزرار النظام"]];
 // Pages of the panel's settings screen: the guest never opens it.
 const PAGE_CAPS = new Set(["connection", "display", "brightness", "system"]);

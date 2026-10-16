@@ -73,7 +73,7 @@ def downgrade(layout: dict) -> dict:
     """v2 -> v1 for an older app: one tile per entity. App cards and options are dropped."""
     if not is_current(layout):
         return layout
-    out = {k: copy.deepcopy(v) for k, v in layout.items() if k not in ("schema", "pages")}
+    out = {k: copy.deepcopy(v) for k, v in layout.items() if k not in ("schema", "pages", "dashboard")}
     pages = []
     for page in layout["pages"]:
         tiles = []

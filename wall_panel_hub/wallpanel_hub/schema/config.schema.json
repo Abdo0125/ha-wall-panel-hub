@@ -7,35 +7,78 @@
     "site": {
       "description": "Project-wide settings, edited in the add-on.",
       "type": "object",
-      "required": ["version"],
+      "required": [
+        "version"
+      ],
       "additionalProperties": false,
       "properties": {
-        "version": { "type": "integer", "minimum": 1 },
-        "name": { "type": "string" },
-        "installer_pin": { "$ref": "#/$defs/pin_or_none" },
-        "user_pin": { "$ref": "#/$defs/pin_or_none" },
-        "defaults": { "$ref": "#/$defs/settings" },
-        "devices": { "$ref": "#/$defs/devices" }
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "installer_pin": {
+          "$ref": "#/$defs/pin_or_none"
+        },
+        "user_pin": {
+          "$ref": "#/$defs/pin_or_none"
+        },
+        "defaults": {
+          "$ref": "#/$defs/settings"
+        },
+        "devices": {
+          "$ref": "#/$defs/devices"
+        }
       }
     },
     "panel": {
       "description": "One panel's own settings. Anything left out comes from the site.",
       "type": "object",
-      "required": ["version"],
+      "required": [
+        "version"
+      ],
       "additionalProperties": false,
       "properties": {
-        "version": { "type": "integer", "minimum": 1 },
-        "overrides": { "$ref": "#/$defs/settings" },
-        "installer_pin": { "$ref": "#/$defs/pin_hash", "description": "Replaces the site's installer PIN on this panel." },
-        "user_pin": { "$ref": "#/$defs/pin_hash", "description": "Replaces the site's user PIN on this panel." },
-        "access": { "$ref": "#/$defs/access" },
-        "apps": { "$ref": "#/$defs/apps" }
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "overrides": {
+          "$ref": "#/$defs/settings"
+        },
+        "installer_pin": {
+          "$ref": "#/$defs/pin_hash",
+          "description": "Replaces the site's installer PIN on this panel."
+        },
+        "user_pin": {
+          "$ref": "#/$defs/pin_hash",
+          "description": "Replaces the site's user PIN on this panel."
+        },
+        "access": {
+          "$ref": "#/$defs/access"
+        },
+        "apps": {
+          "$ref": "#/$defs/apps"
+        }
       }
     },
     "effective": {
       "description": "What the panel receives: site and panel merged, every field resolved.",
       "type": "object",
-      "required": ["version", "name", "lang", "theme", "screensaver", "app_return_seconds", "installer_pin", "user_pin", "access", "apps"],
+      "required": [
+        "version",
+        "name",
+        "lang",
+        "theme",
+        "screensaver",
+        "app_return_seconds",
+        "installer_pin",
+        "user_pin",
+        "access",
+        "apps"
+      ],
       "additionalProperties": false,
       "properties": {
         "version": {
@@ -43,63 +86,132 @@
           "type": "integer",
           "minimum": 2
         },
-        "name": { "type": "string" },
-        "lang": { "$ref": "#/$defs/lang" },
-        "theme": { "$ref": "#/$defs/theme" },
+        "name": {
+          "type": "string"
+        },
+        "lang": {
+          "$ref": "#/$defs/lang"
+        },
+        "theme": {
+          "$ref": "#/$defs/theme"
+        },
         "screensaver": {
           "type": "object",
-          "required": ["idle_seconds", "dim_brightness"],
+          "required": [
+            "idle_seconds",
+            "dim_brightness"
+          ],
           "additionalProperties": false,
           "properties": {
-            "idle_seconds": { "type": "integer", "minimum": 10 },
-            "dim_brightness": { "type": "integer", "minimum": 0, "maximum": 100 }
+            "idle_seconds": {
+              "type": "integer",
+              "minimum": 10
+            },
+            "dim_brightness": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
           }
         },
-        "app_return_seconds": { "$ref": "#/$defs/return_seconds" },
-        "installer_pin": { "$ref": "#/$defs/pin_or_none" },
-        "user_pin": { "$ref": "#/$defs/pin_or_none" },
-        "access": {
-          "allOf": [{ "$ref": "#/$defs/access" }],
-          "required": ["guest", "user", "installer"]
+        "app_return_seconds": {
+          "$ref": "#/$defs/return_seconds"
         },
-        "apps": { "$ref": "#/$defs/apps" },
-        "devices": { "$ref": "#/$defs/devices" }
+        "installer_pin": {
+          "$ref": "#/$defs/pin_or_none"
+        },
+        "user_pin": {
+          "$ref": "#/$defs/pin_or_none"
+        },
+        "access": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/access"
+            }
+          ],
+          "required": [
+            "guest",
+            "user",
+            "installer"
+          ]
+        },
+        "apps": {
+          "$ref": "#/$defs/apps"
+        },
+        "devices": {
+          "$ref": "#/$defs/devices"
+        }
       }
     },
-
     "settings": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "lang": { "$ref": "#/$defs/lang" },
-        "theme": { "$ref": "#/$defs/theme" },
+        "lang": {
+          "$ref": "#/$defs/lang"
+        },
+        "theme": {
+          "$ref": "#/$defs/theme"
+        },
         "screensaver": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "idle_seconds": { "type": "integer", "minimum": 10 },
-            "dim_brightness": { "type": "integer", "minimum": 0, "maximum": 100 }
+            "idle_seconds": {
+              "type": "integer",
+              "minimum": 10
+            },
+            "dim_brightness": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
           }
         },
-        "app_return_seconds": { "$ref": "#/$defs/return_seconds" }
+        "app_return_seconds": {
+          "$ref": "#/$defs/return_seconds"
+        }
       }
     },
     "devices": {
       "description": "What each device is, set once for the project and used by every panel: its type (for a shutter: garage, curtain, window...; HA's device_class names), and the name and icon shown. Anything left out comes from Home Assistant.",
       "type": "object",
-      "propertyNames": { "pattern": "^[a-z_]+[.][a-z0-9_]+$" },
+      "propertyNames": {
+        "pattern": "^[a-z_]+[.][a-z0-9_]+$"
+      },
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "type": { "type": "string", "pattern": "^[a-z_]+$" },
-          "name": { "type": "string", "minLength": 1, "maxLength": 60 },
-          "icon": { "type": "string", "pattern": "^mdi:[a-z0-9-]+$" }
+          "type": {
+            "type": "string",
+            "pattern": "^[a-z_]+$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "icon": {
+            "type": "string",
+            "pattern": "^mdi:[a-z0-9-]+$"
+          }
         }
       }
     },
-    "lang": { "enum": ["ar", "fr", "en"] },
-    "theme": { "enum": ["dark", "light"] },
+    "lang": {
+      "enum": [
+        "ar",
+        "fr",
+        "en"
+      ]
+    },
+    "theme": {
+      "enum": [
+        "dark",
+        "light"
+      ]
+    },
     "return_seconds": {
       "description": "Idle time in another app before the panel comes back to the front.",
       "type": "integer",
@@ -109,35 +221,79 @@
     "pin_hash": {
       "description": "PBKDF2-SHA256 of the PIN. The PIN itself is never stored or sent.",
       "type": "object",
-      "required": ["algo", "iterations", "salt", "hash"],
+      "required": [
+        "algo",
+        "iterations",
+        "salt",
+        "hash"
+      ],
       "additionalProperties": false,
       "properties": {
-        "algo": { "const": "pbkdf2_sha256" },
-        "iterations": { "type": "integer", "minimum": 10000 },
-        "salt": { "type": "string", "contentEncoding": "base64", "minLength": 16 },
-        "hash": { "type": "string", "contentEncoding": "base64", "minLength": 32 }
+        "algo": {
+          "const": "pbkdf2_sha256"
+        },
+        "iterations": {
+          "type": "integer",
+          "minimum": 10000
+        },
+        "salt": {
+          "type": "string",
+          "contentEncoding": "base64",
+          "minLength": 16
+        },
+        "hash": {
+          "type": "string",
+          "contentEncoding": "base64",
+          "minLength": 32
+        }
       }
     },
     "pin_or_none": {
-      "oneOf": [{ "$ref": "#/$defs/pin_hash" }, { "type": "null" }]
+      "oneOf": [
+        {
+          "$ref": "#/$defs/pin_hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "capability": {
       "description": "settings is the older name for connection + display + brightness + system.",
-      "enum": ["control", "apps", "edit_cards", "reorder", "connection", "display", "brightness", "system", "settings"]
+      "enum": [
+        "control",
+        "apps",
+        "edit_cards",
+        "reorder",
+        "dashboard",
+        "connection",
+        "display",
+        "brightness",
+        "system",
+        "settings"
+      ]
     },
     "access": {
       "description": "What can be done on the panel: without a PIN (guest), with the user PIN, with the installer PIN. Adding or removing entities, pages or rooms is never possible on the panel.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "guest": { "$ref": "#/$defs/capabilities" },
-        "user": { "$ref": "#/$defs/capabilities" },
-        "installer": { "$ref": "#/$defs/capabilities" }
+        "guest": {
+          "$ref": "#/$defs/capabilities"
+        },
+        "user": {
+          "$ref": "#/$defs/capabilities"
+        },
+        "installer": {
+          "$ref": "#/$defs/capabilities"
+        }
       }
     },
     "capabilities": {
       "type": "array",
-      "items": { "$ref": "#/$defs/capability" },
+      "items": {
+        "$ref": "#/$defs/capability"
+      },
       "uniqueItems": true
     },
     "apps": {
@@ -145,12 +301,21 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["package"],
+        "required": [
+          "package"
+        ],
         "additionalProperties": false,
         "properties": {
-          "package": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+$" },
-          "label": { "type": "string" },
-          "return_seconds": { "$ref": "#/$defs/return_seconds" }
+          "package": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+$"
+          },
+          "label": {
+            "type": "string"
+          },
+          "return_seconds": {
+            "$ref": "#/$defs/return_seconds"
+          }
         }
       }
     }

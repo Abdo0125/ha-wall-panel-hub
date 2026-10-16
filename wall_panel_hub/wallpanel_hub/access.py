@@ -21,8 +21,9 @@ def role_caps(effective: dict, role: str) -> set[str]:
     return set(effective["access"].get(role, []))
 
 
-def check_panel_edit(old: dict, new: dict, caps: set[str]) -> None:
+def check_panel_edit(old: dict, new: dict, caps: set[str], allowed_apps: set[str] | None = None) -> None:
     """Raises EditRefused with the first change the capabilities do not allow."""
+    _check_dashboard(old, new, caps, allowed_apps or set())
     old_pages = {p["id"]: p for p in old["pages"]}
     new_pages = {p["id"]: p for p in new["pages"]}
     if set(old_pages) != set(new_pages):
@@ -56,6 +57,24 @@ def check_panel_edit(old: dict, new: dict, caps: set[str]) -> None:
             changed = any(card.get(k) != before.get(k) for k in CARD_FIELDS)
             if changed and "edit_cards" not in caps:
                 raise EditRefused("editing cards is not allowed on this panel")
+
+
+def _check_dashboard(old: dict, new: dict, caps: set[str], allowed_apps: set[str]) -> None:
+    """My dashboard, changed on the panel: with the dashboard permission, and only from what
+    the panel already has (its rooms' entities, allowed apps, the panel's own cards)."""
+    before = (old.get("dashboard") or {}).get("cards")
+    after = (new.get("dashboard") or {}).get("cards")
+    if before == after or after is None:
+        return
+    if "dashboard" not in caps:
+        raise EditRefused("changing my dashboard is not allowed on this panel")
+    known = {e for p in new["pages"] for c in p["cards"] for e in c.get("entities", [])}
+    known |= {e for c in before or [] for e in c.get("entities", [])}
+    for card in after:
+        if not set(card.get("entities", [])) <= known:
+            raise EditRefused(f"card {card['id']}: my dashboard only takes devices already on this panel")
+        if kind_of_card(card["card"]) == "app" and (card.get("options") or {}).get("package") not in allowed_apps:
+            raise EditRefused(f"card {card['id']}: this app is not allowed on this panel")
 
 
 def _entity_options(card: dict) -> dict:
