@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2
+
+- An on/off light card (light.toggle) can also be 2x2: it shows the light dial (app 0.4.8).
+
 ## 0.6.1
 
 - Light is the default theme for panels without their own setting (app 0.4.0 has the
