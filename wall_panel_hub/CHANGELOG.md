@@ -1,12 +1,9 @@
 # Changelog
 
-## 0.7.1
+## 0.7.2
 
-- The designer draws the panel as the app does: the 11" screen's real proportions, the
-  sidebar with Dashboard and Settings, the top bar, and each card at its size: side
-  buttons on 1x1 shutters, icon and name side by side with the slim bar on 2x1 lights and
-  shutters, the dial on 2x2 lights, shutters and thermostats. Icons light up for devices
-  that are on. One screen at a time, with dots, as on the panel.
+- Back to the 0.7.0 designer (0.7.1 is withdrawn). A higher version number so Home
+  Assistant offers the update.
 
 ## 0.7.0
 

@@ -443,7 +443,7 @@ function renderNav() {
 
 async function openPanel(pid, tab = "design") {
   S.view = { kind: "panel", pid, tab };
-  S.page = 0; S.sel = null; S.screen = 0;
+  S.page = 0; S.sel = null;
   if (!S.configs[pid]) await loadConfig(pid);
   render();
 }
@@ -490,149 +490,87 @@ function renderPanel(view) {
   else renderAccess(view, p);
 }
 
-// ---------- the panel, drawn as the app draws it ----------
-
-// The 11" panel in dp (1280x800): sidebar 210 + line, top bar 56 + line, 5x4 cells.
-const DP = { w: 1280, h: 800, side: 211, top: 57 };
-const CELL_W = (DP.w - DP.side) / COLS;
-const CELL_H = (DP.h - DP.top) / ROWS;
-const HVAC = { heat: "#FF6F22", cool: "#2196F3", heat_cool: "#FFC107", auto: "#4CAF50", dry: "#FF9800", fan_only: "#00BCD4" };
-const DASHBOARD = -1;
-
-// HA's state at the last catalog read, so the copy shows what is on now.
-const stateOf = (id) => entities()[id]?.state;
-const isOn = (id) => ["on", "open", "opening", "closing", "unlocked", "playing", "home"].includes(stateOf(id));
-
-function iconColorClass(c) {
-  const id = c.entities[0];
-  if (!id) return "";
-  const kind = kindOfCard(c.card);
-  if (kind === "cover") return isOn(id) ? "cov" : "";
-  if (kind === "climate") return "";
-  return c.entities.some(isOn) ? "on" : "";
-}
-function cardIconEl(c, size) {
-  const i = icon(cardIcon(c), { class: iconColorClass(c), style: { fontSize: size + "px" } });
-  if (kindOfCard(c.card) === "climate") { const st = stateOf(c.entities[0]); if (HVAC[st]) i.style.color = HVAC[st]; }
-  return i;
-}
-const rbtn = (name, size) => el("span", { class: "rbtn", style: { width: size + "px", height: size + "px" } }, icon(name, { style: { fontSize: size * 0.6 + "px" } }));
-
 function renderDesign(view) {
   const layout = L();
   if (!layout) return;
   if (S.catalogError) view.append(el("p", { class: "msg error" }, "تعذّرت قراءة الأجهزة من Home Assistant: " + S.catalogError));
   const eff = S.configs[S.view.pid]?.effective || {};
   const rtl = (eff.lang || "ar") === "ar";
-  if (S.page !== DASHBOARD) S.page = Math.min(S.page, Math.max(0, layout.pages.length - 1));
-  if (S.page !== DASHBOARD && !layout.pages.length) S.page = 0;
-  const dash = S.page === DASHBOARD;
-  const page = dash ? null : layout.pages[S.page];
+  S.page = Math.min(S.page, Math.max(0, layout.pages.length - 1));
+  const page = layout.pages[S.page];
 
-  // Sidebar: dashboard, rooms (drag to reorder, pencil to edit), settings.
-  const item = (iconName, text, active, onclick, extra) => el("div", { class: "sitem" + (active ? " active" : "") + (onclick ? "" : " fixed"), onclick },
-    el("span", { class: "mark" }), icon(iconName), el("span", { class: "grow" }, text), extra);
+  // Sidebar: rooms, drag to reorder, pencil to rename.
   const rooms = el("ul", {});
   layout.pages.forEach((pg, i) => {
-    rooms.append(el("li", { dataset: { index: i } }, item(pg.icon || "mdi:floor-plan", pg.title, i === S.page,
-      () => { S.page = i; S.sel = null; S.screen = 0; render(); },
-      icon("mdi:pencil-outline", { class: "edit" }))));
-    const pencil = rooms.lastChild.querySelector(".edit");
-    pencil.onclick = (ev) => { ev.stopPropagation(); pageSheet(i); };
+    rooms.append(el("li", { class: "room" + (i === S.page ? " active" : ""), dataset: { index: i }, onclick: () => { S.page = i; S.sel = null; render(); } },
+      icon(pg.icon || "mdi:floor-plan"),
+      el("span", { class: "grow" }, pg.title),
+      el("span", { class: "edit mdi", title: "تعديل الغرفة", onclick: (ev) => { ev.stopPropagation(); pageSheet(i); } }, String.fromCodePoint(CODEPOINTS["pencil"] || 63))));
   });
   Sortable.create(rooms, {
     animation: 120,
     onEnd: (evt) => { if (evt.oldIndex !== evt.newIndex) change((l) => { l.pages.splice(evt.newIndex, 0, l.pages.splice(evt.oldIndex, 1)[0]); S.page = evt.newIndex; }); },
   });
-  const side = el("div", { class: "dside" },
-    item("mdi:view-dashboard-outline", "لوحتي", dash, () => { S.page = DASHBOARD; S.sel = null; S.screen = 0; render(); }),
-    el("div", { class: "line" }),
-    rooms,
-    el("button", { class: "addroom", onclick: roomSheet }, "+ غرفة"),
-    el("div", { class: "line" }),
-    item("mdi:cog-outline", "الإعدادات", false, null));
+  const side = el("div", { class: "dside" }, rooms, el("button", { class: "addroom", onclick: roomSheet }, "+ غرفة"));
 
+  // Main: top bar and the page's screens.
   const now = new Date();
-  const top = el("div", { class: "dtop" }, icon("mdi:home-outline", { class: "home" }),
-    el("div", { class: "title" }, dash ? "لوحتي" : page?.title || ""),
-    el("div", { class: "clock" }, el("span", { dir: "ltr" }, `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`)));
-
-  // The page's screens, one shown at a time, with dots as on the panel.
+  const top = el("div", { class: "dtop" }, icon(page?.icon || "mdi:home-outline", { style: { fontSize: "20px" } }), el("span", {}, page?.title || ""),
+    el("span", { class: "clock" }, `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`));
   const screensBox = el("div", { class: "screens" });
-  const cards = dash ? dashboardCards(layout) : page?.cards || [];
-  const { placed, screens, grids } = pack(cards);
-  const editable = !dash && !!page;
-  const reachable = editable ? reachableCells(cards) : new Set();
-  // A full last screen gets an empty one after it, to add more.
-  const lastFull = grids[screens - 1].every((row) => row.every(Boolean));
-  const total = screens + (editable && lastFull && cards.length ? 1 : 0);
-  S.screen = Math.min(S.screen || 0, total - 1);
-  const s = S.screen;
-  const grid = el("div", { class: "screen" });
-  if (!page && !dash) {
-    grid.append(el("div", { class: "cell", style: { gridColumn: "1 / -1", gridRow: "1 / -1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px", fontSize: "20px", color: "var(--dmuted)" } },
-      "لا توجد غرف بعد.", el("button", { class: "addroom", onclick: roomSheet }, "+ أضف غرفة من Home Assistant")));
+  if (!page) {
+    screensBox.append(el("div", { class: "screen" }, el("div", { class: "cell", style: { gridColumn: "1 / -1", gridRow: "1 / -1", flexDirection: "column", gap: "8px", color: "var(--dmuted)" } },
+      "لا توجد غرف بعد.", el("button", { onclick: roomSheet }, "+ أضف غرفة من Home Assistant"))));
   } else {
-    for (const pl of placed.filter((x) => x.screen === s)) grid.append(cardCell(pl, cards, editable));
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-      if (s < screens && grids[s][r][c]) continue;
-      grid.append(emptyCell(s, c, r, editable && reachable.has(`${s}:${c}:${r}`)));
+    const { placed, screens, grids } = pack(page.cards);
+    const reachable = reachableCells(page.cards);
+    for (let s = 0; s < screens; s++) {
+      const grid = el("div", { class: "screen" });
+      grid.style.height = "100%";
+      if (screens > 1) grid.append(el("span", { class: "screenlabel" }, `الشاشة ${s + 1} من ${screens} (سحب أفقي)`));
+      for (const pl of placed.filter((x) => x.screen === s)) grid.append(cardCell(pl, page));
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        if (grids[s][r][c]) continue;
+        grid.append(emptyCell(s, c, r, reachable.has(`${s}:${c}:${r}`)));
+      }
+      screensBox.append(grid);
+    }
+    // Room for one more screen when the last is full.
+    const last = grids[screens - 1];
+    if (last.every((row) => row.every(Boolean))) {
+      const grid = el("div", { class: "screen" });
+      grid.append(el("span", { class: "screenlabel" }, `الشاشة ${screens + 1}`));
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) grid.append(emptyCell(screens, c, r, reachable.has(`${screens}:${c}:${r}`)));
+      screensBox.append(grid);
     }
   }
-  screensBox.append(grid);
-  if (total > 1) {
-    screensBox.append(el("div", { class: "pagedots" }, Array.from({ length: total }, (_, i) =>
-      el("span", { class: i === s ? "on" : "", title: `الشاشة ${i + 1}`, onclick: () => { S.screen = i; render(); } }))));
-  }
-
-  const device = el("div", { class: "device" + (eff.theme === "dark" ? " dark" : ""), dir: rtl ? "rtl" : "ltr" },
-    side, el("div", { class: "dmain" }, top, screensBox));
-  const bezel = el("div", { class: "bezel" }, device);
-  const wrap = el("div", { class: "devicewrap" }, bezel);
-  view.append(wrap);
-  // Scale the 1280x800 canvas to the page width.
-  const fit = () => {
-    const k = bezel.clientWidth / DP.w;
-    device.style.transform = `scale(${k})`;
-    bezel.style.height = DP.h * k + "px";
-  };
-  new ResizeObserver(fit).observe(bezel);
-  requestAnimationFrame(fit);
-
-  view.append(el("p", { class: "muted" }, dash
-    ? "لوحتي تعرض الساعة ومشاهد الشاشة. تخصيصها يأتي مع التحرير من الشاشة (U3)."
-    : "اضغط + لإضافة جهاز، واضغط بطاقة لتغيير شكلها وحجمها واسمها. اسحب البطاقة إلى بطاقة أخرى أو إلى + لنقلها، واسحب الغرف لترتيبها. البطاقات تملأ الفراغات بالترتيب، تماماً كما على الشاشة."));
+  const main = el("div", { class: "dmain" }, top, screensBox);
+  const device = el("div", { class: "device" + (eff.theme === "dark" ? " dark" : ""), dir: rtl ? "rtl" : "ltr" }, side, main);
+  view.append(device);
+  view.append(el("p", { class: "muted" },
+    "اضغط + لإضافة جهاز، واضغط بطاقة لتغيير شكلها وحجمها واسمها. اسحب البطاقة إلى بطاقة أخرى أو إلى + لنقلها، واسحب الغرف لترتيبها. ",
+    "البطاقات تملأ الفراغات بالترتيب، تماماً كما على الشاشة."));
   const issues = problems(layout).filter((x) => x !== "لا توجد غرف.");
   for (const m of issues) view.append(el("div", { class: "msg error" }, m));
 }
 
-// Same as the app until the dashboard can be customised: the clock, then every scene.
-function dashboardCards(layout) {
-  const seen = new Set();
-  const scenes = layout.pages.flatMap((p) => p.cards).filter((c) => {
-    if (kindOfCard(c.card) !== "scene") return false;
-    const key = c.entities.join(",");
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  return [{ id: "_clock", card: "widget.clock", entities: [], size: "2x2" }, ...scenes];
-}
-
 let dragFrom = null;
 
-function cardCell(pl, cards, editable) {
+function cardCell(pl, page) {
   const c = pl.card;
-  const index = cards.indexOf(c);
+  const index = page.cards.indexOf(c);
   const known = !S.catalog.entities.length || c.entities.every((id) => entities()[id]);
+  const size = `${pl.w}x${pl.h}`;
+  const cls = ["cell", "card", size === "2x1" ? "wide" : "", size === "2x2" ? "big" : "", S.sel === index ? "selected" : "", known ? "" : "missing"].join(" ");
+  const body = size === "2x2"
+    ? [el("div", { class: "ring" }, icon(cardIcon(c)), el("span", { class: "lbl" }, cardLabel(c)))]
+    : size === "2x1"
+      ? [icon(cardIcon(c), { style: { fontSize: "32px" } }), el("span", { class: "lbl" }, cardLabel(c)),
+         ["light.dimmer", "cover.position", "cover.tilt"].includes(c.card) ? el("span", { class: "bar" }) : null]
+      : [icon(cardIcon(c)), el("span", { class: "lbl" }, cardLabel(c))];
   const node = el("div", {
-    class: ["cell", "card", S.sel === index && editable ? "selected" : "", known ? "" : "missing"].join(" "),
-    title: known ? "" : "جهاز غير موجود في Home Assistant",
+    class: cls, draggable: "true", title: known ? "" : "جهاز غير موجود في Home Assistant",
     style: { gridColumn: `${pl.col + 1} / span ${pl.w}`, gridRow: `${pl.row + 1} / span ${pl.h}` },
-  }, ...cardBody(c, pl.w, pl.h), el("span", { class: "kindtag" }, SHAPES[c.card] || ""));
-  if (!editable) return node;
-  node.draggable = true;
-  Object.assign(node, {
     onclick: () => { S.sel = index; render(); cardSheet(index); },
     ondragstart: (ev) => { dragFrom = index; ev.dataTransfer.effectAllowed = "move"; ev.dataTransfer.setData("text/plain", c.id); node.classList.add("dragging"); },
     ondragend: () => { dragFrom = null; node.classList.remove("dragging"); },
@@ -644,184 +582,21 @@ function cardCell(pl, cards, editable) {
       if (from === null || from === index) return;
       // Dropped on a card: take its place in the order.
       change((l) => {
-        const list = l.pages[S.page].cards;
-        const [moved] = list.splice(from, 1);
-        list.splice(index, 0, moved);
+        const cards = l.pages[S.page].cards;
+        const [moved] = cards.splice(from, 1);
+        cards.splice(index, 0, moved);
         S.sel = index;
       });
     },
-  });
+  }, el("span", { class: "kind" }, SHAPES[c.card] || ""), ...body);
   return node;
-}
-
-// What the app's CardCell shows for this card at this size.
-function cardBody(c, w, h) {
-  const kind = kindOfCard(c.card);
-  const single = c.entities.length === 1;
-  if (c.card === "widget.clock") {
-    const d = new Date();
-    return [el("div", { class: "clockcell" }, el("b", {}, `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`),
-      el("span", {}, d.toLocaleDateString("ar", { weekday: "long", day: "numeric", month: "long" })))];
-  }
-  if (w >= 2 && h >= 2 && (c.card === "climate.thermostat" || (single && (kind === "light" || kind === "cover")))) return [dialCell(c, w, h)];
-  if (w >= 2 && h === 1 && single && kind === "light") return [lightBar(c)];
-  if (w >= 2 && h === 1 && single && kind === "cover") return [coverBar(c)];
-  if (c.card === "scene.bar") {
-    return [el("div", { class: "scenes" }, c.label ? el("div", { class: "muted", style: { fontSize: "14px" } }, c.label) : null,
-      el("div", { class: "row2" }, c.entities.map((id) => el("div", { class: "one" }, icon(device(id).icon || "mdi:palette-outline"), el("span", {}, device(id).name)))))];
-  }
-  if (c.card === "sensor.multi") {
-    return [el("div", { class: "multi" }, c.entities.map((id) => el("div", {}, icon(cardIcon({ card: "sensor.value", entities: [id] })), el("span", {}, stateOf(id) ?? "—"))))];
-  }
-  // Standard cell: icon in the middle, name under it; shutters and fan speeds get ˄ ˅ on the side.
-  const sideButtons = (kind === "cover" && c.entities.length >= 1) || c.card === "fan.speed";
-  const value = c.entities.length > 1 ? `${c.entities.filter(isOn).length}/${c.entities.length}` : "";
-  return [el("div", { class: "std" + (sideButtons ? " side" : "") },
-    el("span", { class: "val" + (sideButtons ? " bottom" : "") }, value),
-    el("div", { class: "mid" }, cardIconEl(c, 46), el("span", { class: "lbl" }, cardLabel(c)))),
-    sideButtons ? el("div", { class: "steps" }, rbtn("mdi:chevron-up", 46), rbtn("mdi:chevron-down", 46)) : null];
-}
-
-function levelBar(fraction, color) {
-  const on = fraction > 0;
-  return el("div", { class: "bar", style: { background: on ? `color-mix(in srgb, ${color} 22%, transparent)` : "color-mix(in srgb, var(--dmuted) 25%, transparent)" } },
-    on ? el("i", { style: { width: `${Math.max(fraction * 100, 10)}%`, background: color } }) : null,
-    on ? el("b", { style: { insetInlineStart: `calc(${Math.max(fraction * 100, 10)}% - 18px)` } }) : null);
-}
-
-function lightBar(c) {
-  const id = c.entities[0];
-  const dimmer = c.card !== "light.toggle";
-  return el("div", { class: "wide" },
-    el("div", { class: "head" }, cardIconEl(c, 40), el("div", { class: "names" }, el("div", { class: "name" }, cardLabel(c)))),
-    dimmer ? levelBar(isOn(id) ? 0.6 : 0, "var(--active)") : null);
-}
-
-function coverBar(c) {
-  const id = c.entities[0];
-  const bar = c.card === "cover.position" || c.card === "cover.tilt";
-  const stateText = { open: "مفتوح", closed: "مغلق", opening: "يُفتح…", closing: "يُغلق…" }[stateOf(id)] || "";
-  return el("div", { class: "wide" },
-    el("div", { class: "head" }, cardIconEl(c, 40),
-      el("div", { class: "names" }, el("div", { class: "name" }, cardLabel(c)), el("div", { class: "sub" }, stateText)),
-      el("div", { class: "btns" }, rbtn("mdi:chevron-up", 40), rbtn("mdi:stop", 40), rbtn("mdi:chevron-down", 40))),
-    bar ? levelBar(isOn(id) ? 0.5 : 0, "var(--cover)") : null);
-}
-
-// ---- 2x2 dial (DialPanel): title, 270° arc, choices on a ring, centre, − and + ----
-
-const SVGNS = "http://www.w3.org/2000/svg";
-function svg(tag, attrs) {
-  const e = document.createElementNS(SVGNS, tag);
-  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
-  return e;
-}
-function arcPath(cx, cy, r, start, sweep) {
-  const rad = (d) => (d * Math.PI) / 180;
-  const x1 = cx + r * Math.cos(rad(start)), y1 = cy + r * Math.sin(rad(start));
-  const x2 = cx + r * Math.cos(rad(start + sweep)), y2 = cy + r * Math.sin(rad(start + sweep));
-  return `M ${x1} ${y1} A ${r} ${r} 0 ${sweep > 180 ? 1 : 0} 1 ${x2} ${y2}`;
-}
-
-function dialCell(c, w, h) {
-  const kind = kindOfCard(c.card);
-  const id = c.entities[0];
-  const st = stateOf(id);
-  const on = isOn(id);
-  const boxW = w * CELL_W - 28, boxH = h * CELL_H - 28;
-  const side = Math.min(boxW, boxH - 44);
-  const stroke = 14, arcR = side / 2 - stroke, ringOuter = arcR - stroke * 1.2;
-  let fraction = null, color = "var(--active)", segments = [], center = null, frac = 0.22, power = null;
-
-  if (kind === "light") {
-    power = on;
-    fraction = c.card === "light.toggle" ? null : on ? 0.6 : 0;
-    frac = c.card === "light.color" ? 0.31 : 0.27;
-    center = c.card === "light.color" ? "wheel" : "halves";
-  } else if (kind === "cover") {
-    color = "var(--cover)";
-    if (c.card === "cover.buttons") { center = "coverhalves"; frac = 0.27; }
-    else {
-      fraction = on ? 0.5 : 0;
-      segments = [["mdi:arrow-up", st === "opening"], ["mdi:stop", false], ["mdi:arrow-down", st === "closing"]];
-      center = "number";
-    }
-  } else {
-    power = st && st !== "off";
-    color = HVAC[st] || "var(--active)";
-    fraction = power ? 0.45 : null;
-    segments = [["mdi:power", st === "off"], ["mdi:fire", st === "heat"], ["mdi:snowflake", st === "cool"], ["mdi:water-percent", st === "dry"], ["mdi:fan", st === "fan_only"]];
-    center = "temp";
-  }
-  const centerR = side * frac;
-  const g = svg("svg", { width: side, height: side, viewBox: `0 0 ${side} ${side}` });
-  const cx = side / 2;
-  if (fraction !== null) {
-    g.append(svg("path", { d: arcPath(cx, cx, arcR, 135, 270), fill: "none", stroke: "var(--control)", "stroke-width": stroke, "stroke-linecap": "round" }));
-    if (fraction > 0) {
-      g.append(svg("path", { d: arcPath(cx, cx, arcR, 135, 270 * fraction), fill: "none", stroke: color, "stroke-width": stroke, "stroke-linecap": "round" }));
-      const a = ((135 + 270 * fraction) * Math.PI) / 180;
-      g.append(svg("circle", { cx: cx + arcR * Math.cos(a), cy: cx + arcR * Math.sin(a), r: stroke * 0.9, fill: "#fff", stroke: "rgba(0,0,0,.25)", "stroke-width": 1 }));
-    }
-  }
-  if (segments.length) {
-    const each = 360 / segments.length, r = (centerR + ringOuter) / 2, width = ringOuter - centerR;
-    segments.forEach(([, selected], i) => {
-      g.append(svg("path", { d: arcPath(cx, cx, r, -90 + i * each + 1.5, each - 3), fill: "none", "stroke-width": width,
-        stroke: selected ? `color-mix(in srgb, ${color} 22%, transparent)` : "var(--control)" }));
-    });
-  }
-  if (center === "number" || center === "temp") g.append(svg("circle", { cx, cy: cx, r: centerR, fill: "var(--cell)", stroke: "var(--divider)", "stroke-width": 2 }));
-
-  const box = el("div", { class: "dial" }, el("div", { class: "dtitle" }, cardLabel(c)));
-  if (power !== null) box.append(el("span", { class: "switch", style: { background: power ? "var(--active)" : "var(--control)", justifyContent: power ? "flex-end" : "flex-start" } }, el("i")));
-  const stage = el("div", { style: { position: "absolute", left: 0, right: 0, top: "36px", bottom: "8px", display: "flex", alignItems: "center", justifyContent: "center", direction: "ltr" } });
-  const holder = el("div", { style: { position: "relative", width: side + "px", height: side + "px" } }, g);
-  // Segment icons and the centre, laid over the drawing.
-  if (segments.length) {
-    const r = (centerR + ringOuter) / 2, each = 360 / segments.length;
-    segments.forEach(([name], i) => {
-      const a = ((-90 + (i + 0.5) * each) * Math.PI) / 180;
-      const size = Math.min(30, (ringOuter - centerR) * 0.45);
-      holder.append(icon(name, { style: { position: "absolute", fontSize: size + "px", left: cx + r * Math.cos(a) - size / 2 + "px", top: cx + r * Math.sin(a) - size / 2 + "px" } }));
-    });
-  }
-  const mid = el("div", { style: { position: "absolute", left: cx - centerR + "px", top: cx - centerR + "px", width: centerR * 2 + "px", height: centerR * 2 + "px",
-    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", overflow: "hidden", borderRadius: "50%" } });
-  if (center === "halves" || center === "coverhalves") {
-    const accent = center === "coverhalves" ? "var(--cover)" : "var(--active)";
-    const lit = center === "coverhalves" ? st !== "closed" : on;
-    const label = (t, strong) => el("span", { style: { fontSize: centerR * 2 * 0.15 + "px", color: strong ? "var(--text)" : "var(--dmuted)" } }, t);
-    mid.style.border = "2px solid var(--divider)";
-    mid.append(
-      el("div", { style: { flex: 1, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", paddingBottom: centerR * 0.24 + "px",
-        background: lit ? `color-mix(in srgb, ${accent} 30%, var(--cell))` : "var(--cell)" } }, label(center === "coverhalves" ? "فتح" : "تشغيل", lit)),
-      el("div", { style: { height: "1px", width: "100%", background: "var(--divider)" } }),
-      el("div", { style: { flex: 1, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", paddingTop: centerR * 0.24 + "px",
-        background: lit ? "var(--cell)" : "var(--control)" } }, label(center === "coverhalves" ? "إغلاق" : "إطفاء", !lit)),
-      el("span", { style: { position: "absolute", width: centerR * 0.52 + "px", height: centerR * 0.52 + "px", borderRadius: "50%", background: "var(--cell)",
-        border: "1px solid var(--divider)", display: "flex", alignItems: "center", justifyContent: "center" } },
-        icon(cardIcon(c), { style: { fontSize: centerR * 0.3 + "px", color: lit ? accent : "var(--icon)" } })));
-  } else if (center === "wheel") {
-    mid.style.background = "radial-gradient(circle, #fff 0%, rgba(255,255,255,0) 70%), conic-gradient(from 90deg, red, yellow, lime, cyan, blue, magenta, red)";
-  } else if (center === "number") {
-    mid.append(el("span", { style: { fontSize: "40px", fontWeight: 300 } }, on ? "50" : "0", el("small", { style: { fontSize: "18px" } }, "%")),
-      el("span", { style: { fontSize: "14px", color: "var(--dmuted)" } }, { open: "مفتوح", closed: "مغلق" }[st] || ""));
-  } else if (center === "temp") {
-    mid.append(el("span", { style: { fontSize: "40px", fontWeight: 300 } }, "22", el("small", { style: { fontSize: "18px" } }, ".0°C")));
-  }
-  holder.append(mid);
-  stage.append(holder);
-  box.append(stage);
-  if (fraction !== null) box.append(el("span", { class: "minus" }, rbtn("mdi:minus", 48)), el("span", { class: "plus" }, rbtn("mdi:plus", 48)));
-  return box;
 }
 
 // Only cells a card can reach take a new one; the others stay blank (the panel fills
 // gaps in order, so a card there would land elsewhere).
 function emptyCell(screen, col, row, open) {
   const node = el("div", {
-    class: "cell empty" + (open ? " open" : ""), title: open ? "إضافة جهاز" : "",
+    class: "cell" + (open ? " empty" : ""), title: open ? "إضافة جهاز" : "",
     style: { gridColumn: `${col + 1}`, gridRow: `${row + 1}` },
     onclick: () => { if (open) entitySheet(screen, col, row); },
     ondragover: (ev) => { if (dragFrom !== null && open) { ev.preventDefault(); node.classList.add("over"); } },
@@ -1229,7 +1004,7 @@ function renderDevices(view) {
 
 function wizard(req) {
   const st = { step: 1, pid: req.panel_id, name: req.name || "شاشة", area: "", rooms: new Set() };
-  const bar = () => el("div", { class: "wsteps" }, [1, 2, 3].map((n) => el("span", { class: n <= st.step ? "done" : "" })));
+  const bar = () => el("div", { class: "steps" }, [1, 2, 3].map((n) => el("span", { class: n <= st.step ? "done" : "" })));
   function show() {
     if (st.step === 1) {
       sheet(bar(), el("h3", {}, "1. الموافقة"),
