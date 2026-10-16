@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.0
+
+- Allowed apps per panel (panel → settings): picked from the apps installed on the
+  panel, which it reports when it connects, or typed by package name, each with its
+  own return time. Panel app 0.7.0 shows them in an "Apps" page.
+
 ## 0.8.2
 
 - Display settings changed on the panel no longer wait for the hub: the panel applies

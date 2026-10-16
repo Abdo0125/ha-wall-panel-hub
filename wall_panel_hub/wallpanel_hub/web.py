@@ -257,6 +257,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         return web.json_response({
             "config": _without_pins(store.get_panel_config(pid)),
             "effective": _without_pins(store.effective_config(pid)),
+            "installed_apps": gateway.installed_apps.get(pid, []),
         })
 
     async def put_panel_config(request: web.Request):

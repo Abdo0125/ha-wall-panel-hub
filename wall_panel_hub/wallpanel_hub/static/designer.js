@@ -868,6 +868,7 @@ function renderSettings(view, p) {
         toast(p.online ? "حُفظ ووصل للشاشة." : "حُفظ. ستستلمه الشاشة عند اتصالها.");
         render();
       } }, "حفظ")), msg),
+    appsBox(pid, p, cfg),
     el("div", { class: "box" }, el("h3", {}, "رمز خاص بهذه الشاشة (اختياري)"),
       el("p", { class: "muted" }, "بدونه تستعمل الشاشة رموز المشروع."),
       pinRow("رمز المُركِّب", cfg.config.installer_pin_set, cfg.config.installer_pin_set ? "● خاص بالشاشة" : "من المشروع",
@@ -885,6 +886,52 @@ function renderSettings(view, p) {
         await refresh();
       } }, "إلغاء ربط الشاشة")),
   );
+}
+
+// Apps the panel may open: picked from those installed on it (it reports them when it
+// connects), or typed by package name.
+function appsBox(pid, p, cfg) {
+  const apps = (cfg.config.apps || []).map((a) => ({ ...a }));
+  const installed = cfg.installed_apps || [];
+  const nameOf = (pkg) => installed.find((a) => a.package === pkg)?.label || pkg;
+  const list = el("div");
+  const draw = () => {
+    list.replaceChildren(...(apps.length ? apps.map((a, i) => el("div", { class: "row", style: { margin: "6px 0" } },
+      el("input", { value: a.label || "", placeholder: nameOf(a.package), style: { width: "180px" },
+                    oninput: (e) => { a.label = e.target.value.trim() || undefined; } }),
+      el("span", { class: "muted", style: { minWidth: "220px", direction: "ltr", fontSize: "13px" } }, a.package),
+      el("input", { type: "number", min: 30, max: 3600, value: a.return_seconds ?? "", placeholder: `${cfg.effective.app_return_seconds} ث`,
+                    style: { width: "110px" }, title: "العودة للوحة بعد (ثانية)",
+                    oninput: (e) => { a.return_seconds = e.target.value === "" ? undefined : Number(e.target.value); } }),
+      el("button", { class: "danger", onclick: () => { apps.splice(i, 1); draw(); } }, "حذف"),
+    )) : [el("p", { class: "muted" }, "لا توجد تطبيقات مسموحة.")]));
+  };
+  draw();
+  const free = () => installed.filter((a) => !apps.some((x) => x.package === a.package));
+  const pick = selectEl([["", installed.length ? "— اختر تطبيقاً مثبتاً —" : "— الشاشة لم ترسل تطبيقاتها بعد —"], ...free().map((a) => [a.package, a.label])], "");
+  const typed = el("input", { placeholder: "أو اسم الحزمة: com.example.app", style: { width: "240px", direction: "ltr" } });
+  const add = () => {
+    const pkg = pick.value || typed.value.trim();
+    if (!pkg) return;
+    if (!/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/.test(pkg)) { alert("اسم الحزمة غير صالح."); return; }
+    if (!apps.some((a) => a.package === pkg)) apps.push({ package: pkg });
+    typed.value = "";
+    pick.replaceChildren(...[["", "— اختر تطبيقاً مثبتاً —"], ...free().map((a) => [a.package, a.label])]
+      .map(([v, l]) => el("option", { value: v }, l)));
+    draw();
+  };
+  return el("div", { class: "box" }, el("h3", {}, "التطبيقات المسموحة"),
+    el("p", { class: "muted" }, "تظهر في صفحة التطبيقات على الشاشة. الوقت الفارغ يأخذ مدة العودة العامة."),
+    list,
+    el("div", { class: "row", style: { marginTop: "10px" } }, pick, typed, el("button", { onclick: add }, "إضافة")),
+    el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
+      const clean = apps.map((a) => Object.fromEntries(Object.entries(a).filter(([, v]) => v !== undefined && v !== "")));
+      const r = await put(`api/panels/${enc(pid)}/config`, { apps: clean });
+      if (!r.ok) { alert("لم يُحفظ: " + (r.body?.error || r.status)); return; }
+      await loadConfig(pid);
+      toast(p.online ? "حُفظ ووصل للشاشة." : "حُفظ. ستستلمه الشاشة عند اتصالها.");
+      render();
+    } }, "حفظ التطبيقات")));
 }
 
 function renderAccess(view, p) {

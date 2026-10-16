@@ -15,6 +15,7 @@ wallpanel/layout/subscribe or /get; an older app, which does not, gets format v1
 import asyncio
 import json
 import logging
+import re
 
 import aiohttp
 from aiohttp import WSMsgType, web
@@ -25,6 +26,7 @@ from .config import ConfigInvalid
 from .migrate import SCHEMA, downgrade
 from .store import LayoutInvalid, Store, layout_entities
 
+PACKAGE = re.compile(r"[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+")
 log = logging.getLogger(__name__)
 
 READ_ONLY = {
@@ -152,6 +154,15 @@ class PanelConnection:
                 return
             await self.send({"id": mid, "type": "result", "success": True, "result": None})
             await self.gateway.notify_config(self.panel_id)
+        elif kind == "wallpanel/apps/report":
+            # The apps installed on the panel, so the add-on can offer them by name.
+            apps = [
+                {"package": a["package"], "label": str(a.get("label") or a["package"])[:80]}
+                for a in (msg.get("apps") or [])[:300]
+                if isinstance(a, dict) and isinstance(a.get("package"), str) and PACKAGE.fullmatch(a["package"])
+            ]
+            self.gateway.installed_apps[self.panel_id] = sorted(apps, key=lambda a: a["label"].lower())
+            await self.send({"id": mid, "type": "result", "success": True, "result": None})
         elif kind == "wallpanel/config/subscribe":
             self.config_subs.add(mid)
             await self.send({"id": mid, "type": "result", "success": True, "result": None})
@@ -172,6 +183,8 @@ class Gateway:
         self.store = store
         self.session = session
         self.connections: dict[str, set[PanelConnection]] = {}
+        # Reported by each panel when it connects; kept in memory only.
+        self.installed_apps: dict[str, list[dict]] = {}
 
     def online(self, panel_id: str) -> bool:
         return bool(self.connections.get(panel_id))
