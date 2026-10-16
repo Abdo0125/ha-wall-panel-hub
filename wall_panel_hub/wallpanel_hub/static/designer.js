@@ -70,6 +70,8 @@ const SHAPES = {
   "sensor.value": "قيمة", "sensor.multi": "عدة قيم", "sensor.binary": "حالة", "app.launch": "تطبيق",
 };
 const SIZES = { "1x1": "صغيرة", "2x1": "عريضة", "2x2": "كبيرة" };
+// Each kind of device pairs with its own app and has its own rules (docs/ui-plan.md, 5.3).
+const PLATFORMS = { android: "شاشة أندرويد", esp32: "شاشة ESP32", phone: "هاتف" };
 const OPTION_NAMES = {
   min_brightness: "أدنى سطوع (%)", show_percent: "إظهار النسبة", dimmer: "تعتيم المجموعة",
   power_entity: "حساس الاستهلاك", step: "خطوة الحرارة", package: "التطبيق (اسم الحزمة)", return_seconds: "العودة بعد (ثانية)",
@@ -131,57 +133,67 @@ function spanOf(size) {
   return [Math.min(Math.max(w || 1, 1), COLS), Math.min(Math.max(h || 1, 1), ROWS)];
 }
 
-// First free spot that fits, in card order; a card that fits nowhere starts the next screen.
+// Cards with a place of their own (pos, free placement on Android panels) go there first
+// if they fit; the others take the first free spot that fits, in card order. A card that
+// fits nowhere starts the next screen.
 function pack(cards) {
   const screens = [];
-  const newScreen = () => { screens.push(Array.from({ length: ROWS }, () => Array(COLS).fill(false))); };
-  newScreen();
-  const out = [];
+  const screen = (s) => { while (screens.length <= s) screens.push(Array.from({ length: ROWS }, () => Array(COLS).fill(false))); return screens[s]; };
+  const free = (s, c, r, w, h) => {
+    if (c < 0 || r < 0 || c + w > COLS || r + h > ROWS) return false;
+    const g = screen(s);
+    for (let rr = r; rr < r + h; rr++) for (let cc = c; cc < c + w; cc++) if (g[rr][cc]) return false;
+    return true;
+  };
+  const take = (card, s, c, r, w, h) => {
+    const g = screen(s);
+    for (let rr = r; rr < r + h; rr++) for (let cc = c; cc < c + w; cc++) g[rr][cc] = true;
+    return { card, screen: s, col: c, row: r, w, h };
+  };
+  screen(0);
+  const at = new Map();
+  for (const card of cards) {
+    const pos = card.pos;
+    if (!pos) continue;
+    const [w, h] = spanOf(sizeOf(card));
+    if (free(pos.screen, pos.col, pos.row, w, h)) at.set(card, take(card, pos.screen, pos.col, pos.row, w, h));
+  }
   let first = 0;
   for (const card of cards) {
+    if (at.has(card)) continue;
     const [w, h] = spanOf(sizeOf(card));
     let placed = null;
     for (let s = first; !placed; s++) {
-      if (s === screens.length) newScreen();
-      const g = screens[s];
       search: for (let r = 0; r <= ROWS - h; r++) for (let c = 0; c <= COLS - w; c++) {
-        let free = true;
-        for (let rr = r; rr < r + h && free; rr++) for (let cc = c; cc < c + w; cc++) if (g[rr][cc]) { free = false; break; }
-        if (free) {
-          for (let rr = r; rr < r + h; rr++) for (let cc = c; cc < c + w; cc++) g[rr][cc] = true;
-          placed = { card, screen: s, col: c, row: r, w, h };
-          break search;
-        }
+        if (free(s, c, r, w, h)) { placed = take(card, s, c, r, w, h); break search; }
       }
     }
-    out.push(placed);
+    at.set(card, placed);
     first = placed.screen;
   }
-  return { placed: out, screens: screens.length, grids: screens };
+  return { placed: cards.map((c) => at.get(c)), screens: screens.length, grids: screens };
 }
 
-// Where in the order a card must go to land on (screen, col, row); nearest if it cannot.
-function indexForCell(cards, card, screen, col, row) {
-  let best = cards.length, bestCost = Infinity;
-  for (let i = 0; i <= cards.length; i++) {
-    const trial = [...cards.slice(0, i), card, ...cards.slice(i)];
-    const p = pack(trial).placed[i];
-    const cost = Math.abs(p.screen - screen) * 100 + Math.abs(p.row - row) * 10 + Math.abs(p.col - col);
-    if (cost < bestCost) { best = i; bestCost = cost; }
-    if (cost === 0) break;
+// Free placement, as the panel does it (GridPacking.place): every card keeps the place it
+// shows now; onto another card the two swap, onto empty cells the card goes there if it
+// fits. Then the cards are listed in reading order. False when it cannot go there.
+function placeCard(cards, index, screen, col, row) {
+  const { placed } = pack(cards);
+  const moving = placed[index];
+  const hit = placed.find((p) => p.screen === screen && col >= p.col && col < p.col + p.w && row >= p.row && row < p.row + p.h);
+  if (hit === moving) return false;
+  const target = hit ? { screen: hit.screen, col: hit.col, row: hit.row } : { screen, col, row };
+  if (!hit) {
+    if (col + moving.w > COLS || row + moving.h > ROWS) return false;
+    const blocked = placed.some((p) => p !== moving && p.screen === screen &&
+      p.col < col + moving.w && col < p.col + p.w && p.row < row + moving.h && row < p.row + p.h);
+    if (blocked) return false;
   }
-  return best;
-}
-
-// Cells a new 1x1 card can land on exactly (the packing fills earlier gaps first).
-function reachableCells(cards) {
-  const probe = { card: "light.toggle", size: "1x1", entities: [] };
-  const out = new Set();
-  for (let i = 0; i <= cards.length; i++) {
-    const p = pack([...cards.slice(0, i), probe, ...cards.slice(i)]).placed[i];
-    out.add(`${p.screen}:${p.col}:${p.row}`);
-  }
-  return out;
+  placed.forEach((p) => { p.card.pos = { screen: p.screen, col: p.col, row: p.row }; });
+  if (hit) hit.card.pos = { screen: moving.screen, col: moving.col, row: moving.row };
+  moving.card.pos = target;
+  cards.sort((a, b) => (a.pos.screen - b.pos.screen) || (a.pos.row - b.pos.row) || (a.pos.col - b.pos.col));
+  return true;
 }
 
 // ---------- state ----------
@@ -523,7 +535,6 @@ function renderDesign(view) {
       "لا توجد غرف بعد.", el("button", { onclick: roomSheet }, "+ أضف غرفة من Home Assistant"))));
   } else {
     const { placed, screens, grids } = pack(page.cards);
-    const reachable = reachableCells(page.cards);
     for (let s = 0; s < screens; s++) {
       const grid = el("div", { class: "screen" });
       grid.style.height = "100%";
@@ -531,7 +542,7 @@ function renderDesign(view) {
       for (const pl of placed.filter((x) => x.screen === s)) grid.append(cardCell(pl, page));
       for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
         if (grids[s][r][c]) continue;
-        grid.append(emptyCell(s, c, r, reachable.has(`${s}:${c}:${r}`)));
+        grid.append(emptyCell(s, c, r, true));
       }
       screensBox.append(grid);
     }
@@ -540,7 +551,7 @@ function renderDesign(view) {
     if (last.every((row) => row.every(Boolean))) {
       const grid = el("div", { class: "screen" });
       grid.append(el("span", { class: "screenlabel" }, `الشاشة ${screens + 1}`));
-      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) grid.append(emptyCell(screens, c, r, reachable.has(`${screens}:${c}:${r}`)));
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) grid.append(emptyCell(screens, c, r, true));
       screensBox.append(grid);
     }
   }
@@ -548,8 +559,7 @@ function renderDesign(view) {
   const device = el("div", { class: "device" + (eff.theme === "dark" ? " dark" : ""), dir: rtl ? "rtl" : "ltr" }, side, main);
   view.append(device);
   view.append(el("p", { class: "muted" },
-    "اضغط + لإضافة جهاز، واضغط بطاقة لتغيير شكلها وحجمها واسمها. اسحب البطاقة إلى بطاقة أخرى أو إلى + لنقلها، واسحب الغرف لترتيبها. ",
-    "البطاقات تملأ الفراغات بالترتيب، تماماً كما على الشاشة."));
+    "اضغط + لإضافة جهاز، واضغط بطاقة لتغيير شكلها وحجمها واسمها. اسحب البطاقة إلى أي خلية فارغة لتضعها هناك، أو فوق بطاقة أخرى لتبديل مكانيهما، واسحب الغرف لترتيبها."));
   const issues = problems(layout).filter((x) => x !== "لا توجد غرف.");
   for (const m of issues) view.append(el("div", { class: "msg error" }, m));
 }
@@ -580,20 +590,18 @@ function cardCell(pl, page) {
       ev.preventDefault();
       const from = dragFrom;
       if (from === null || from === index) return;
-      // Dropped on a card: take its place in the order.
+      // Dropped on a card: the two swap places.
       change((l) => {
         const cards = l.pages[S.page].cards;
-        const [moved] = cards.splice(from, 1);
-        cards.splice(index, 0, moved);
-        S.sel = index;
+        const moved = cards[from];
+        if (placeCard(cards, from, pl.screen, pl.col, pl.row)) S.sel = cards.indexOf(moved);
       });
     },
   }, el("span", { class: "kind" }, SHAPES[c.card] || ""), ...body);
   return node;
 }
 
-// Only cells a card can reach take a new one; the others stay blank (the panel fills
-// gaps in order, so a card there would land elsewhere).
+// Any empty cell takes a new card, or a dragged one (free placement).
 function emptyCell(screen, col, row, open) {
   const node = el("div", {
     class: "cell" + (open ? " empty" : ""), title: open ? "إضافة جهاز" : "",
@@ -607,10 +615,8 @@ function emptyCell(screen, col, row, open) {
       if (from === null) return;
       change((l) => {
         const cards = l.pages[S.page].cards;
-        const [moved] = cards.splice(from, 1);
-        const at = indexForCell(cards, moved, screen, col, row);
-        cards.splice(at, 0, moved);
-        S.sel = at;
+        const moved = cards[from];
+        if (placeCard(cards, from, screen, col, row)) S.sel = cards.indexOf(moved);
       });
     },
   }, open ? "+" : "");
@@ -709,9 +715,10 @@ function entitySheet(screen, col, row) {
           change((l) => {
             const cards = l.pages[S.page].cards;
             const card = newCard(l, e.entity_id);
-            const at = indexForCell(cards, card, screen, col, row);
-            cards.splice(at, 0, card);
-            S.sel = at;
+            cards.push(card);
+            // In the cell chosen when it fits there; otherwise in the first free spot.
+            placeCard(cards, cards.length - 1, screen, col, row);
+            S.sel = cards.indexOf(card);
           });
           closeSheet();
         } }, icon(cardIcon(probe)), el("span", { class: "grow" }, device(e.entity_id).name), el("span", { class: "muted" }, e.area_id && e.area_id !== page.id ? areaName[e.area_id] || "" : "")));
@@ -848,7 +855,8 @@ function renderSettings(view, p) {
 
   const name = el("input", { value: p.name });
   const place = selectEl([["", "— بدون —"], ...S.catalog.areas.map((a) => [a.id, a.name])], S.editor[pid]?.area_id || "");
-  const general = el("div", { class: "form" }, el("label", {}, "اسم الشاشة"), name, el("label", {}, "مكان تركيبها"), place);
+  const general = el("div", { class: "form" }, el("label", {}, "اسم الشاشة"), name, el("label", {}, "مكان تركيبها"), place,
+    el("label", {}, "نوع الجهاز"), el("div", { class: "muted" }, `${PLATFORMS[p.platform || "android"] || p.platform}${p.model ? " · " + p.model : ""}`));
   const display = el("div", { class: "form" });
   const readDisplay = displayFields(display, cfg.config.overrides || {}, inheritedDisplay(), "من المشروع");
 

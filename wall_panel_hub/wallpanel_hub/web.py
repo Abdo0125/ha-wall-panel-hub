@@ -36,7 +36,8 @@ def panel_api(store: Store, gateway: Gateway) -> web.Application:
             panel_id = str(body["panel_id"])[:64]
         except Exception:
             raise web.HTTPBadRequest(text="panel_id required")
-        req = store.request_pairing(panel_id, str(body.get("name", "")), str(body.get("model", "")))
+        req = store.request_pairing(panel_id, str(body.get("name", "")), str(body.get("model", "")),
+                                    str(body.get("platform", "android")))
         return web.json_response({"request_id": req.request_id, "code": req.code})
 
     async def pair_status(request: web.Request):
@@ -106,6 +107,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
                 "id": p.id,
                 "name": p.name,
                 "model": p.model,
+                "platform": p.platform,
                 "area_id": p.area_id,
                 "online": gateway.online(p.id),
                 "sent": store.get_layout(p.id),
@@ -160,6 +162,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
                     "id": p.id,
                     "name": p.name,
                     "model": p.model,
+                    "platform": p.platform,
                     "paired_at": p.paired_at,
                     "last_seen": p.last_seen,
                     "online": gateway.online(p.id),
@@ -168,7 +171,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
                 for p in sorted(store.panels.values(), key=lambda p: p.name)
             ],
             "pending": [
-                {"request_id": r.request_id, "panel_id": r.panel_id, "name": r.name, "model": r.model,
+                {"request_id": r.request_id, "panel_id": r.panel_id, "name": r.name, "model": r.model, "platform": r.platform,
                  "code": r.code, "age": int(now - r.created)}
                 for r in store.pending.values() if not r.key and not r.rejected
             ],

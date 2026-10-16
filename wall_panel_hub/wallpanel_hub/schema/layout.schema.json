@@ -4,7 +4,11 @@
   "title": "Wall panel layout, version 2",
   "description": "What one panel shows: pages of cards. Shared by the Android app, the ESP32 firmware and the management add-on; it never carries credentials. Which cards exist, what entities, sizes and options each accepts, is defined in cards.json and checked by the add-on on save.",
   "type": "object",
-  "required": ["schema", "version", "pages"],
+  "required": [
+    "schema",
+    "version",
+    "pages"
+  ],
   "additionalProperties": false,
   "properties": {
     "schema": {
@@ -16,50 +20,99 @@
       "type": "integer",
       "minimum": 1
     },
-    "panel": { "$ref": "#/$defs/panel" },
+    "panel": {
+      "$ref": "#/$defs/panel"
+    },
     "pages": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/page" }
+      "items": {
+        "$ref": "#/$defs/page"
+      }
     }
   },
   "$defs": {
     "panel": {
       "description": "Display settings of a panel without a hub (direct link). With a hub they come from the panel configuration (config.schema.json): the hub moves them there and leaves this out.",
       "type": "object",
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "additionalProperties": false,
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "lang": { "enum": ["ar", "fr", "en"], "default": "ar" },
-        "theme": { "enum": ["dark", "light"], "default": "light" },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lang": {
+          "enum": [
+            "ar",
+            "fr",
+            "en"
+          ],
+          "default": "ar"
+        },
+        "theme": {
+          "enum": [
+            "dark",
+            "light"
+          ],
+          "default": "light"
+        },
         "screensaver": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "idle_seconds": { "type": "integer", "minimum": 10, "default": 60 },
-            "dim_brightness": { "type": "integer", "minimum": 0, "maximum": 100, "default": 10 }
+            "idle_seconds": {
+              "type": "integer",
+              "minimum": 10,
+              "default": 60
+            },
+            "dim_brightness": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100,
+              "default": 10
+            }
           }
         }
       }
     },
     "page": {
       "type": "object",
-      "required": ["id", "title", "cards"],
+      "required": [
+        "id",
+        "title",
+        "cards"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
-        "title": { "type": "string", "minLength": 1 },
-        "icon": { "$ref": "#/$defs/icon" },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "icon": {
+          "$ref": "#/$defs/icon"
+        },
         "cards": {
           "type": "array",
-          "items": { "$ref": "#/$defs/card" }
+          "items": {
+            "$ref": "#/$defs/card"
+          }
         }
       }
     },
     "card": {
       "type": "object",
-      "required": ["id", "card", "entities"],
+      "required": [
+        "id",
+        "card",
+        "entities"
+      ],
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -75,15 +128,25 @@
         "entities": {
           "description": "Home Assistant entity ids. How many, and of which domains, depends on the card type.",
           "type": "array",
-          "items": { "$ref": "#/$defs/entity" },
+          "items": {
+            "$ref": "#/$defs/entity"
+          },
           "uniqueItems": true
         },
         "size": {
           "description": "Grid cells, columns x rows. Omitted: the card type's default size.",
-          "enum": ["1x1", "2x1", "2x2"]
+          "enum": [
+            "1x1",
+            "2x1",
+            "2x2"
+          ]
         },
-        "label": { "type": "string" },
-        "icon": { "$ref": "#/$defs/icon" },
+        "label": {
+          "type": "string"
+        },
+        "icon": {
+          "$ref": "#/$defs/icon"
+        },
         "confirm": {
           "description": "Ask before sending the command. Defaults to true for lock cards.",
           "type": "boolean"
@@ -91,6 +154,33 @@
         "options": {
           "description": "Card type options, as defined in cards.json.",
           "type": "object"
+        },
+        "pos": {
+          "description": "Fixed place on the grid of a panel with free placement (Android): screen, column and row of the top-left cell, counted from the reading side. Omitted: laid out in order after the placed cards.",
+          "type": "object",
+          "required": [
+            "screen",
+            "col",
+            "row"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "screen": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20
+            },
+            "col": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 11
+            },
+            "row": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 11
+            }
+          }
         }
       }
     },

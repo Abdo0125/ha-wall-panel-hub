@@ -19,6 +19,8 @@ from .pins import verify_pin
 
 # Display settings that live in the panel configuration once a hub manages the panel.
 DISPLAY = ("lang", "theme", "screensaver")
+# The apps that pair with the hub, one per kind of device.
+PLATFORMS = ("android", "esp32", "phone")
 
 PAIRING_TTL_S = 600
 MAX_PENDING = 10
@@ -79,6 +81,8 @@ class Panel:
     last_seen: float = 0.0
     # Room the panel is mounted in (an HA area id). Management data, not part of the layout.
     area_id: str | None = None
+    # Which app the device runs: each has its own grid and card rules (docs/ui-plan.md, 5.3).
+    platform: str = "android"
 
 
 @dataclass
@@ -88,6 +92,7 @@ class PairRequest:
     name: str
     model: str
     code: str
+    platform: str = "android"
     created: float = field(default_factory=time.time)
     # Set once approved; handed to the panel a single time.
     key: str | None = None
@@ -131,7 +136,7 @@ class Store:
         for rid in [r for r, p in self.pending.items() if now - p.created > PAIRING_TTL_S]:
             del self.pending[rid]
 
-    def request_pairing(self, panel_id: str, name: str, model: str) -> PairRequest:
+    def request_pairing(self, panel_id: str, name: str, model: str, platform: str = "android") -> PairRequest:
         self._expire()
         # One open request per panel: a retry replaces the previous one.
         for rid in [r for r, p in self.pending.items() if p.panel_id == panel_id]:
@@ -144,6 +149,7 @@ class Store:
             name=name[:60] or "Panel",
             model=model[:60],
             code=f"{secrets.randbelow(1_000_000):06d}",
+            platform=platform if platform in PLATFORMS else "android",
         )
         self.pending[req.request_id] = req
         return req
@@ -152,7 +158,7 @@ class Store:
         self._expire()
         req = self.pending[request_id]
         key = secrets.token_urlsafe(32)
-        panel = Panel(req.panel_id, req.name, req.model, _hash(key), time.time())
+        panel = Panel(req.panel_id, req.name, req.model, _hash(key), time.time(), platform=req.platform)
         self.panels[panel.id] = panel
         self._save_panels()
         req.key = key

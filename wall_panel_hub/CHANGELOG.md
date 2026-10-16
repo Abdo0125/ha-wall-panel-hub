@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.0
+
+- Free placement on Android panels: a card can sit in any cell, with gaps. Drag it to
+  an empty cell to put it there, or onto another card to swap them; "+" works in every
+  empty cell. Cards keep their place (new "pos" field); cards without one fill in order.
+- Each panel knows its type (Android panel, ESP32, phone), sent by its own app when it
+  pairs; shown in the panel's settings. Existing panels are Android panels.
+- Moving a card on the panel needs the reorder permission. Panel app 0.9.0.
+
 ## 0.9.1
 
 - The installer may reorder cards and rooms on the panel by default (edit mode, panel

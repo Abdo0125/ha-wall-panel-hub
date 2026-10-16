@@ -41,6 +41,9 @@ def check_panel_edit(old: dict, new: dict, caps: set[str]) -> None:
             raise EditRefused("cards can only be added, removed or moved to another page in the add-on")
         if [c["id"] for c in old_page["cards"]] != [c["id"] for c in new_page["cards"]] and "reorder" not in caps:
             raise EditRefused("reordering cards is not allowed on this panel")
+        moved = any(card.get("pos") != old_cards[cid].get("pos") for cid, card in new_cards.items())
+        if moved and "reorder" not in caps:
+            raise EditRefused("moving cards is not allowed on this panel")
 
         for cid, card in new_cards.items():
             before = old_cards[cid]
