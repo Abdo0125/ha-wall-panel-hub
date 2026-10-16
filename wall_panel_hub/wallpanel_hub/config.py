@@ -38,12 +38,24 @@ DEFAULTS = {
     "app_return_seconds": 300,
 }
 
-# Reordering is off unless the installer turns it on for a panel.
+# Reordering is off unless the installer turns it on for a panel. connection, display,
+# brightness and system are the pages of the panel's settings screen.
 DEFAULT_ACCESS = {
     "guest": ["control", "apps"],
-    "user": ["control", "apps", "edit_cards"],
-    "installer": ["control", "apps", "edit_cards", "settings"],
+    "user": ["control", "apps", "edit_cards", "brightness"],
+    "installer": ["control", "apps", "edit_cards", "connection", "display", "brightness", "system"],
 }
+SETTINGS_PAGES = ["connection", "display", "brightness", "system"]
+
+
+def _caps(caps: list) -> list:
+    """The older "settings" becomes the settings pages; apps up to 0.5.0 still read "settings"."""
+    out = [c for c in caps if c != "settings"]
+    if "settings" in caps:
+        out += [c for c in SETTINGS_PAGES if c not in out]
+    if "connection" in out:
+        out.append("settings")
+    return out
 
 
 def new_site() -> dict:
@@ -67,7 +79,7 @@ def effective(site: dict, panel: dict, name: str) -> dict:
             (site.get("defaults") or {}).get("screensaver", {}).get(k, DEFAULTS["screensaver"][k]))
         for k in DEFAULTS["screensaver"]
     }
-    access = {role: list((panel.get("access") or {}).get(role, caps)) for role, caps in DEFAULT_ACCESS.items()}
+    access = {role: _caps(list((panel.get("access") or {}).get(role, caps))) for role, caps in DEFAULT_ACCESS.items()}
     # Control is never taken away: a panel that cannot be used is a support call.
     for caps in access.values():
         if "control" not in caps:

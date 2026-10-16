@@ -773,7 +773,10 @@ function pageSheet(i) {
 const LANGS = [["ar", "العربية"], ["fr", "Français"], ["en", "English"]];
 const THEMES = [["light", "فاتح"], ["dark", "داكن"]];
 const ROLES = [["guest", "بدون رمز"], ["user", "رمز المستخدم"], ["installer", "رمز المُركِّب"]];
-const CAPS = [["control", "التحكم"], ["apps", "فتح التطبيقات"], ["edit_cards", "تعديل البطاقات"], ["reorder", "إعادة الترتيب"], ["settings", "الإعدادات المحلية"]];
+const CAPS = [["control", "التحكم"], ["apps", "التطبيقات"], ["edit_cards", "تعديل البطاقات"], ["reorder", "إعادة الترتيب"],
+  ["connection", "صفحة الاتصال"], ["display", "صفحة الشاشة"], ["brightness", "السطوع"], ["system", "أزرار النظام"]];
+// Pages of the panel's settings screen: the guest never opens it.
+const PAGE_CAPS = new Set(["connection", "display", "brightness", "system"]);
 const BUILT_IN = { lang: "ar", theme: "light", screensaver: { idle_seconds: 60, dim_brightness: 10 }, app_return_seconds: 300 };
 
 function selectEl(options, value) {
@@ -894,7 +897,9 @@ function renderAccess(view, p) {
   for (const [role, label] of ROLES) {
     const tr = el("tr", {}, el("td", {}, label));
     for (const [cap] of CAPS) {
-      const cb = el("input", { type: "checkbox", checked: cfg.effective.access[role].includes(cap), disabled: cap === "control" });
+      const guestPage = role === "guest" && PAGE_CAPS.has(cap);
+      const cb = el("input", { type: "checkbox", checked: !guestPage && cfg.effective.access[role].includes(cap),
+                               disabled: cap === "control" || guestPage });
       boxes[role + ":" + cap] = cb;
       tr.append(el("td", {}, cb));
     }
@@ -903,6 +908,7 @@ function renderAccess(view, p) {
   view.append(el("div", { class: "box" },
     el("h3", {}, "ما يُسمح به على هذه الشاشة"),
     el("p", { class: "muted" }, "التحكم مسموح دائماً. إضافة أو حذف أجهزة وغرف يتم من هنا فقط، ولا يُسمح به من الشاشة."),
+    el("p", { class: "muted" }, "الصفحات في إعدادات الشاشة تظهر حسب هذه الصلاحيات، وصفحة الأمان تظهر دائماً. بدون رمز لا تُفتح الإعدادات."),
     table,
     el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
       const access = {};

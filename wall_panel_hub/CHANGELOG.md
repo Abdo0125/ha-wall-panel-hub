@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0
+
+- Permissions now choose which pages of the panel's settings each role sees:
+  connection, display (or brightness only), system buttons. Cards and apps follow
+  their existing permissions. The older "local settings" permission means all four.
+- Needs the panel app 0.6.0 for the new settings pages.
+
 ## 0.7.2
 
 - Back to the 0.7.0 designer (0.7.1 is withdrawn). A higher version number so Home

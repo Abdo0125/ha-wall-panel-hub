@@ -122,7 +122,8 @@
       "oneOf": [{ "$ref": "#/$defs/pin_hash" }, { "type": "null" }]
     },
     "capability": {
-      "enum": ["control", "apps", "edit_cards", "reorder", "settings"]
+      "description": "settings is the older name for connection + display + brightness + system.",
+      "enum": ["control", "apps", "edit_cards", "reorder", "connection", "display", "brightness", "system", "settings"]
     },
     "access": {
       "description": "What can be done on the panel: without a PIN (guest), with the user PIN, with the installer PIN. Adding or removing entities, pages or rooms is never possible on the panel.",
