@@ -146,13 +146,9 @@ class PanelConnection:
             await self.gateway.notify_layout(self.panel_id)
         elif kind == "wallpanel/config/display":
             try:
-                store.save_display_from_panel(self.panel_id, msg.get("display") or {}, msg.get("pin"))
+                store.save_display_from_panel(self.panel_id, msg.get("display") or {})
             except ConfigInvalid as e:
                 await self.send(_error(mid, "invalid_config", str(e)))
-                return
-            except EditRefused as e:
-                log.warning("panel %s display change refused: %s", self.panel_id, e)
-                await self.send(_error(mid, "forbidden", str(e)))
                 return
             await self.send({"id": mid, "type": "result", "success": True, "result": None})
             await self.gateway.notify_config(self.panel_id)

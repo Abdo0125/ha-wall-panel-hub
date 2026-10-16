@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.2
+
+- Display settings changed on the panel no longer wait for the hub: the panel applies
+  them at once, even offline, and sends them when connected. The hub stores them
+  without a second check (the panel already checked the PIN). Panel app 0.6.2.
+
 ## 0.8.1
 
 - Theme, language and screensaver can be changed on the panel itself (display
