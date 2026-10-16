@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.3
+
+- A shutter card with buttons (cover.buttons) can also be 2x2: it shows the shutter dial (app 0.4.18).
+
 ## 0.6.2
 
 - An on/off light card (light.toggle) can also be 2x2: it shows the light dial (app 0.4.8).
