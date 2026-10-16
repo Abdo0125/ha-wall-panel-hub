@@ -68,6 +68,7 @@ const SHAPES = {
   "fan.toggle": "مفتاح", "fan.speed": "سرعات", "lock.lock": "قفل",
   "scene.action": "زر", "scene.bar": "شريط مشاهد", "script.action": "زر", "button.action": "زر",
   "sensor.value": "قيمة", "sensor.multi": "عدة قيم", "sensor.binary": "حالة", "app.launch": "تطبيق", "widget.clock": "الساعة",
+  "widget.weather": "الطقس", "widget.temperature": "الحرارة الخارجية", "widget.power": "الاستهلاك الآن",
 };
 const SIZES = { "1x1": "صغيرة", "2x1": "عريضة", "2x2": "كبيرة" };
 // Each kind of device pairs with its own app and has its own rules (docs/ui-plan.md, 5.3).
@@ -214,6 +215,15 @@ const W = () => S.work[S.view.pid];
 const L = () => W()?.layout;
 const entities = () => Object.fromEntries(S.catalog.entities.map((e) => [e.entity_id, e]));
 const devices = () => S.site?.devices || {};
+const sources = () => S.site?.sources || {};
+
+// The panel's own cards; all but the clock read one of the project's sources.
+const WIDGETS = [
+  { card: "widget.clock", icon: "mdi:clock-outline", size: "2x2" },
+  { card: "widget.weather", icon: "mdi:weather-partly-cloudy", size: "2x2", source: "weather", domain: "weather" },
+  { card: "widget.temperature", icon: "mdi:thermometer", size: "1x1", source: "outdoor_temperature", domain: "sensor", deviceClass: "temperature" },
+  { card: "widget.power", icon: "mdi:flash", size: "1x1", source: "power", domain: "sensor", deviceClass: "power" },
+];
 
 // A device as the panels show it: the project's name, type and icon over HA's.
 function device(id) {
@@ -234,7 +244,8 @@ function cardIcon(c) {
   if (c.icon) return c.icon;
   const kind = kindOfCard(c.card);
   if (kind === "app") return "mdi:apps";
-  if (c.card === "widget.clock") return "mdi:clock-outline";
+  const widget = WIDGETS.find((w) => w.card === c.card);
+  if (widget) return widget.icon;
   const d = c.entities[0] ? device(c.entities[0]) : null;
   if (d?.icon && c.entities.length === 1) return d.icon;
   const t = d?.type;
@@ -255,6 +266,7 @@ function cardIcon(c) {
 
 function cardLabel(c) {
   if (c.label) return c.label;
+  if (kindOfCard(c.card) === "widget") return SHAPES[c.card] || c.card;
   if (c.entities.length > 1) return `${c.entities.length} × ${KIND_NAMES[kindOfCard(c.card)] || ""}`;
   if (c.entities[0]) return device(c.entities[0]).name;
   return SHAPES[c.card] || c.card;
@@ -759,18 +771,22 @@ function entitySheet(screen, col, row) {
       }
       list.append(el("h4", {}, title), ul);
     };
-    // My dashboard also takes the panel's own cards.
-    if (S.page === DASH && !q && !page.cards.some((c) => c.card === "widget.clock")) {
-      const ul = el("ul", { class: "picklist" }, el("li", { onclick: () => {
-        change((l) => {
-          const cards = pageCards(l);
-          const card = { id: nextCardId(l), card: "widget.clock", entities: [], size: "2x2" };
-          cards.push(card);
-          placeCard(cards, cards.length - 1, screen, col, row);
-          S.sel = cards.indexOf(card);
-        });
-        closeSheet();
-      } }, icon("mdi:clock-outline"), el("span", { class: "grow" }, "الساعة")));
+    // The panel's own cards: the clock, and the widgets whose source the project sets.
+    const widgets = q ? [] : WIDGETS.filter((w) => (!w.source || sources()[w.source]) && !page.cards.some((c) => c.card === w.card));
+    if (widgets.length) {
+      const ul = el("ul", { class: "picklist" });
+      for (const w of widgets) {
+        ul.append(el("li", { onclick: () => {
+          change((l) => {
+            const cards = pageCards(l);
+            const card = { id: nextCardId(l), card: w.card, entities: w.source ? [sources()[w.source]] : [], size: w.size };
+            cards.push(card);
+            placeCard(cards, cards.length - 1, screen, col, row);
+            S.sel = cards.indexOf(card);
+          });
+          closeSheet();
+        } }, icon(w.icon), el("span", { class: "grow" }, SHAPES[w.card]), el("span", { class: "muted" }, w.source ? device(sources()[w.source]).name : "")));
+      }
       list.append(el("h4", {}, "بطاقات الشاشة"), ul);
     }
     group("في هذه الغرفة", here);
@@ -828,7 +844,7 @@ function pageSheet(i) {
 const LANGS = [["ar", "العربية"], ["fr", "Français"], ["en", "English"]];
 const THEMES = [["light", "فاتح"], ["dark", "داكن"]];
 const ROLES = [["guest", "بدون رمز"], ["user", "رمز المستخدم"], ["installer", "رمز المُركِّب"]];
-const CAPS = [["control", "التحكم"], ["apps", "التطبيقات"], ["edit_cards", "تعديل البطاقات"], ["reorder", "إعادة الترتيب"], ["dashboard", "تخصيص لوحتي"],
+const CAPS = [["control", "التحكم"], ["apps", "التطبيقات"], ["edit_cards", "تعديل البطاقات"], ["reorder", "إعادة الترتيب"], ["dashboard", "تخصيص لوحتي"], ["add_widgets", "إضافة تطبيقات وودجات"],
   ["connection", "صفحة الاتصال"], ["display", "صفحة الشاشة"], ["brightness", "السطوع"], ["system", "أزرار النظام"]];
 // Pages of the panel's settings screen: the guest never opens it.
 const PAGE_CAPS = new Set(["connection", "display", "brightness", "system"]);
@@ -1026,13 +1042,14 @@ function renderAccess(view, p) {
 // ---------- project ----------
 
 function renderProject(view) {
-  const tabs = [["general", "عام"], ["devices", "أنواع الأجهزة"]];
+  const tabs = [["general", "عام"], ["devices", "أنواع الأجهزة"], ["widgets", "الودجات"]];
   view.append(el("div", { class: "titlebar" },
     el("h2", {}, S.site?.name || "المشروع"),
     el("div", { class: "tabs" }, tabs.map(([id, label]) =>
       el("button", { class: S.view.tab === id ? "active" : "", onclick: () => { S.view.tab = id; render(); } }, label)))));
   if (!S.site) { loadSite().then(render); return; }
   if (S.view.tab === "devices") return renderDevices(view);
+  if (S.view.tab === "widgets") return renderSources(view);
 
   const site = S.site;
   const name = el("input", { value: site.name || "" });
@@ -1057,6 +1074,29 @@ function renderProject(view) {
         async (pin) => { await post("api/site/pin", { role: "user", pin }); reload(); },
         async () => { await post("api/site/pin", { role: "user", pin: null }); reload(); }, "إزالة")),
   );
+}
+
+// Where the built-in widgets read from: set once, every panel's widgets use it.
+function renderSources(view) {
+  if (!S.catalog) { view.append(el("p", { class: "muted" }, "جارٍ تحميل أجهزة Home Assistant…")); loadCatalog().then(render); return; }
+  const chosen = { ...sources() };
+  const rows = WIDGETS.filter((w) => w.source).map((w) => {
+    const options = S.catalog.entities
+      .filter((e) => domainOf(e.entity_id) === w.domain)
+      // The matching sensors first (temperature, power), then the others.
+      .sort((a, b) => (b.device_class === w.deviceClass) - (a.device_class === w.deviceClass) || device(a.entity_id).name.localeCompare(device(b.entity_id).name));
+    const sel = selectEl([["", "— بدون —"], ...options.map((e) => [e.entity_id, `${device(e.entity_id).name} (${e.entity_id})`])], chosen[w.source] || "");
+    sel.onchange = () => { if (sel.value) chosen[w.source] = sel.value; else delete chosen[w.source]; };
+    return [el("label", {}, icon(w.icon), " ", SHAPES[w.card]), sel];
+  });
+  view.append(el("div", { class: "box" }, el("h3", {}, "مصادر الودجات"),
+    el("p", { class: "muted" }, "تُحدَّد مرة واحدة للمشروع. الودجة المضافة من الشاشة أو من المصمم تقرأ من هنا، فلا تضيف جهازاً جديداً للشاشة. الودجة التي لا مصدر لها لا تظهر في قائمة +."),
+    el("div", { class: "form" }, rows.flat()),
+    el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
+      const r = await put("api/site", { sources: chosen });
+      if (!r.ok) { alert("لم يُحفظ: " + (r.body?.error || r.status)); return; }
+      S.site = r.body; toast("حُفظ، ووصل لكل الشاشات المتصلة."); render();
+    } }, "حفظ"))));
 }
 
 // Device types: set once, used by every panel (icons, names; special cards later).

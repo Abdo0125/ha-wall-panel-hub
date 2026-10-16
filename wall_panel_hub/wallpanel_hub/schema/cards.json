@@ -92,8 +92,10 @@
       "controllable": false
     },
     "widget": {
-      "domains": [],
-      "default": "widget.clock",
+      "domains": [
+        "weather"
+      ],
+      "default": "widget.weather",
       "controllable": false
     }
   },
@@ -531,6 +533,60 @@
       "default_size": "2x2",
       "targets": [
         "android"
+      ]
+    },
+    "widget.weather": {
+      "entities": {
+        "min": 1,
+        "max": 1,
+        "domains": [
+          "weather"
+        ]
+      },
+      "sizes": [
+        "2x2",
+        "2x1"
+      ],
+      "default_size": "2x2",
+      "targets": [
+        "android",
+        "phone"
+      ]
+    },
+    "widget.temperature": {
+      "entities": {
+        "min": 1,
+        "max": 1,
+        "domains": [
+          "sensor"
+        ]
+      },
+      "sizes": [
+        "1x1",
+        "2x1"
+      ],
+      "default_size": "1x1",
+      "targets": [
+        "android",
+        "phone"
+      ]
+    },
+    "widget.power": {
+      "entities": {
+        "min": 1,
+        "max": 1,
+        "domains": [
+          "sensor"
+        ]
+      },
+      "sizes": [
+        "1x1",
+        "2x1"
+      ],
+      "default_size": "1x1",
+      "targets": [
+        "android",
+        "phone"
       ]
     }
   }

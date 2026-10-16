@@ -30,6 +30,9 @@
         },
         "devices": {
           "$ref": "#/$defs/devices"
+        },
+        "sources": {
+          "$ref": "#/$defs/sources"
         }
       }
     },
@@ -148,6 +151,9 @@
         },
         "devices": {
           "$ref": "#/$defs/devices"
+        },
+        "sources": {
+          "$ref": "#/$defs/sources"
         }
       }
     },
@@ -274,6 +280,7 @@
         "edit_cards",
         "reorder",
         "dashboard",
+        "add_widgets",
         "connection",
         "display",
         "brightness",
@@ -324,6 +331,25 @@
           "return_seconds": {
             "$ref": "#/$defs/return_seconds"
           }
+        }
+      }
+    },
+    "sources": {
+      "description": "Where the built-in widgets read from, set once for the project. A widget added on a panel takes its entity from here.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "weather": {
+          "type": "string",
+          "pattern": "^weather\\.[a-z0-9_]+$"
+        },
+        "outdoor_temperature": {
+          "type": "string",
+          "pattern": "^sensor\\.[a-z0-9_]+$"
+        },
+        "power": {
+          "type": "string",
+          "pattern": "^sensor\\.[a-z0-9_]+$"
         }
       }
     }

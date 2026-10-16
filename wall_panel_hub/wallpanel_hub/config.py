@@ -42,8 +42,8 @@ DEFAULTS = {
 # brightness and system are the pages of the panel's settings screen.
 DEFAULT_ACCESS = {
     "guest": ["control", "apps"],
-    "user": ["control", "apps", "edit_cards", "dashboard", "brightness"],
-    "installer": ["control", "apps", "edit_cards", "reorder", "dashboard", "connection", "display", "brightness", "system"],
+    "user": ["control", "apps", "edit_cards", "dashboard", "add_widgets", "brightness"],
+    "installer": ["control", "apps", "edit_cards", "reorder", "dashboard", "add_widgets", "connection", "display", "brightness", "system"],
 }
 SETTINGS_PAGES = ["connection", "display", "brightness", "system"]
 # What the add-on offered before access_known was saved with the access (up to 0.11.0).
@@ -107,6 +107,7 @@ def effective(site: dict, panel: dict, name: str) -> dict:
         "access": access,
         "apps": list(panel.get("apps") or []),
         "devices": dict(site.get("devices") or {}),
+        "sources": dict(site.get("sources") or {}),
     }
     validate("effective", out)
     return out

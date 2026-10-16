@@ -79,7 +79,7 @@ def downgrade(layout: dict) -> dict:
         tiles = []
         for card in page.get("cards", []):
             kind = kind_of_card(card["card"])
-            if kind == "app" or card["card"] not in CARDS:
+            if kind in ("app", "widget") or card["card"] not in CARDS:
                 continue
             ents = card.get("entities", [])
             for entity in ents:

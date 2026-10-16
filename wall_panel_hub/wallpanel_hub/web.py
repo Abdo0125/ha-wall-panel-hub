@@ -247,7 +247,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     async def put_site(request: web.Request):
         body = await _body(request)
         site = store.get_site()
-        for key in ("name", "defaults", "devices"):
+        for key in ("name", "defaults", "devices", "sources"):
             if key in body:
                 site[key] = body[key]
         try:

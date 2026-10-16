@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.0
+
+- Built-in widgets: weather, outdoor temperature and power now. Their sources are set
+  once in Project > Widgets; a widget added from the panel or the designer reads from
+  there and adds no new device.
+- New permission "add apps and widgets" (user and installer by default): on the panel,
+  + in an empty cell of a room adds an allowed app or a widget, and the card's sheet
+  removes it. Devices are still added in the add-on only.
+- Widgets are left out for older panel apps. Panel app 0.11.0.
+
 ## 0.11.1
 
 - A new permission is on by default for panels whose permissions were saved before it
