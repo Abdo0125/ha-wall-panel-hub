@@ -7,6 +7,7 @@
 
 import ipaddress
 import logging
+import re
 import time
 from pathlib import Path
 
@@ -60,6 +61,23 @@ def _allowed(remote: str | None, networks: list) -> bool:
     return any(ip in n for n in networks)
 
 
+def _page(name: str) -> web.Response:
+    """A page that is never kept by the browser, whose files carry the add-on version: after
+    an update the browser loads the new scripts instead of the ones it cached."""
+    html = (STATIC / name).read_text(encoding="utf-8")
+    html = re.sub(r'(src|href)="(static/[^"?#]+)"', lambda m: f'{m[1]}="{m[2]}?v={VERSION}"', html)
+    return web.Response(text=html, content_type="text/html", headers={"Cache-Control": "no-store"})
+
+
+@web.middleware
+async def _revalidate_static(request: web.Request, handler):
+    """Static files are checked with the add-on on every load (cheap: 304 when unchanged)."""
+    response = await handler(request)
+    if request.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 def _without_pins(doc: dict) -> dict:
     """PIN hashes stay in the hub (and on the panels); the page only learns whether one is set."""
     out = {k: v for k, v in doc.items() if k not in ("installer_pin", "user_pin")}
@@ -79,13 +97,13 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
             raise web.HTTPForbidden(text=f"Open Wall Panels from the Home Assistant sidebar. ({request.remote})")
         return await handler(request)
 
-    app = web.Application(middlewares=[ingress_only])
+    app = web.Application(middlewares=[ingress_only, _revalidate_static])
 
     async def index(_):
-        return web.FileResponse(STATIC / "index.html")
+        return _page("index.html")
 
     async def editor(_):
-        return web.FileResponse(STATIC / "editor.html")
+        return _page("editor.html")
 
     # ---- layout editor ----
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.1
+
+- Updates now show at once: the page is never kept by the browser and its scripts carry
+  the add-on version, so an update no longer needs the add-on removed and added again.
+
 ## 0.10.0
 
 - Free placement on Android panels: a card can sit in any cell, with gaps. Drag it to
