@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.1
+
+- The installer may reorder cards and rooms on the panel by default (edit mode, panel
+  app 0.8.2). The user still may not unless the installer allows it. Panels whose
+  permissions were saved in the add-on keep what was saved.
+
 ## 0.9.0
 
 - Allowed apps per panel (panel → settings): picked from the apps installed on the

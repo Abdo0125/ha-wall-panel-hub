@@ -38,12 +38,12 @@ DEFAULTS = {
     "app_return_seconds": 300,
 }
 
-# Reordering is off unless the installer turns it on for a panel. connection, display,
+# The user may not reorder unless the installer allows it for a panel. connection, display,
 # brightness and system are the pages of the panel's settings screen.
 DEFAULT_ACCESS = {
     "guest": ["control", "apps"],
     "user": ["control", "apps", "edit_cards", "brightness"],
-    "installer": ["control", "apps", "edit_cards", "connection", "display", "brightness", "system"],
+    "installer": ["control", "apps", "edit_cards", "reorder", "connection", "display", "brightness", "system"],
 }
 SETTINGS_PAGES = ["connection", "display", "brightness", "system"]
 
