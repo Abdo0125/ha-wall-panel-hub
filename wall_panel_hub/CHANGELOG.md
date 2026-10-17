@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.1
+
+- My dashboard: an app card already there no longer blocks saving when its app has
+  since been taken off the allowed list; only apps added now must be allowed.
+- Widget sources list only matching sensors (a temperature; a power in W or kW), with
+  their current reading.
+
 ## 0.12.0
 
 - Built-in widgets: weather, outdoor temperature and power now. Their sources are set

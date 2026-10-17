@@ -114,10 +114,14 @@ def _check_dashboard(old: dict, new: dict, caps: set[str], allowed_apps: set[str
     known = {e for p in new["pages"] for c in p["cards"] for e in c.get("entities", [])}
     known |= {e for c in before or [] for e in c.get("entities", [])}
     known |= sources
+    had = {c["id"]: (c.get("options") or {}).get("package") for c in before or []}
     for card in after:
         if not set(card.get("entities", [])) <= known:
             raise EditRefused(f"card {card['id']}: my dashboard only takes devices already on this panel")
-        if kind_of_card(card["card"]) == "app" and (card.get("options") or {}).get("package") not in allowed_apps:
+        # An app added now must be allowed; one already there stays, even if no longer allowed.
+        package = (card.get("options") or {}).get("package")
+        was = had.get(card["id"])
+        if kind_of_card(card["card"]) == "app" and package not in allowed_apps and (was is None or was != package):
             raise EditRefused(f"card {card['id']}: this app is not allowed on this panel")
 
 

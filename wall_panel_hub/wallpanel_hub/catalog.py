@@ -48,6 +48,7 @@ def build(floors: list, areas: list, devices: list, registry: list, states: list
             # What HA says the device is and shows it with; the project's device list
             # (site.devices) can change both for every panel.
             "device_class": attrs.get("device_class"),
+            "unit": attrs.get("unit_of_measurement"),
             "icon": attrs.get("icon") or (r or {}).get("icon"),
         })
     entities.sort(key=lambda e: (e["name"].lower(), e["entity_id"]))

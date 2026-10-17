@@ -221,8 +221,8 @@ const sources = () => S.site?.sources || {};
 const WIDGETS = [
   { card: "widget.clock", icon: "mdi:clock-outline", size: "2x2" },
   { card: "widget.weather", icon: "mdi:weather-partly-cloudy", size: "2x2", source: "weather", domain: "weather" },
-  { card: "widget.temperature", icon: "mdi:thermometer", size: "1x1", source: "outdoor_temperature", domain: "sensor", deviceClass: "temperature" },
-  { card: "widget.power", icon: "mdi:flash", size: "1x1", source: "power", domain: "sensor", deviceClass: "power" },
+  { card: "widget.temperature", icon: "mdi:thermometer", size: "1x1", source: "outdoor_temperature", domain: "sensor", deviceClass: "temperature", units: ["°C", "°F"] },
+  { card: "widget.power", icon: "mdi:flash", size: "1x1", source: "power", domain: "sensor", deviceClass: "power", units: ["W", "kW"] },
 ];
 
 // A device as the panels show it: the project's name, type and icon over HA's.
@@ -1081,11 +1081,13 @@ function renderSources(view) {
   if (!S.catalog) { view.append(el("p", { class: "muted" }, "جارٍ تحميل أجهزة Home Assistant…")); loadCatalog().then(render); return; }
   const chosen = { ...sources() };
   const rows = WIDGETS.filter((w) => w.source).map((w) => {
+    // Only sensors of the right kind (a temperature, a power in W or kW); the one chosen stays listed.
+    const fits = (e) => !w.units || e.device_class === w.deviceClass || w.units.includes(e.unit);
     const options = S.catalog.entities
-      .filter((e) => domainOf(e.entity_id) === w.domain)
-      // The matching sensors first (temperature, power), then the others.
-      .sort((a, b) => (b.device_class === w.deviceClass) - (a.device_class === w.deviceClass) || device(a.entity_id).name.localeCompare(device(b.entity_id).name));
-    const sel = selectEl([["", "— بدون —"], ...options.map((e) => [e.entity_id, `${device(e.entity_id).name} (${e.entity_id})`])], chosen[w.source] || "");
+      .filter((e) => domainOf(e.entity_id) === w.domain && (fits(e) || e.entity_id === chosen[w.source]))
+      .sort((a, b) => device(a.entity_id).name.localeCompare(device(b.entity_id).name));
+    const reading = (e) => e.unit ? ` · ${e.state} ${e.unit}` : "";
+    const sel = selectEl([["", "— بدون —"], ...options.map((e) => [e.entity_id, `${device(e.entity_id).name} (${e.entity_id})${reading(e)}`])], chosen[w.source] || "");
     sel.onchange = () => { if (sel.value) chosen[w.source] = sel.value; else delete chosen[w.source]; };
     return [el("label", {}, icon(w.icon), " ", SHAPES[w.card]), sel];
   });
