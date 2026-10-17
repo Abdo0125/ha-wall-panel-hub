@@ -30,9 +30,9 @@ ADDABLE = ("app", "widget")
 
 
 def check_panel_edit(old: dict, new: dict, caps: set[str], allowed_apps: set[str] | None = None,
-                     sources: set[str] | None = None, android_widgets: set[str] | None = None) -> None:
+                     sources: set[str] | None = None) -> None:
     """Raises EditRefused with the first change the capabilities do not allow."""
-    allowed = Allowed(allowed_apps or set(), sources or set(), android_widgets or set())
+    allowed = Allowed(allowed_apps or set(), sources or set())
     _check_dashboard(old, new, caps, allowed)
     old_pages = {p["id"]: p for p in old["pages"]}
     new_pages = {p["id"]: p for p in new["pages"]}
@@ -94,10 +94,10 @@ def _moved(old_cards: list[dict], new_cards: list[dict], pinning: bool) -> bool:
 
 
 class Allowed:
-    """What the panel may add: its allowed apps, the project's sources, its allowed Android widgets."""
+    """What the panel may add: its allowed apps (and their widgets), the project's sources."""
 
-    def __init__(self, apps: set[str], sources: set[str], android_widgets: set[str]):
-        self.apps, self.sources, self.android_widgets = apps, sources, android_widgets
+    def __init__(self, apps: set[str], sources: set[str]):
+        self.apps, self.sources = apps, sources
 
 
 def _target(card: dict) -> str | None:
@@ -110,8 +110,8 @@ def _check_new(card: dict, allowed: Allowed) -> None:
     kind = kind_of_card(card["card"])
     if kind == "app" and _target(card) not in allowed.apps:
         raise EditRefused(f"card {card['id']}: this app is not allowed on this panel")
-    if card["card"] == "widget.android" and _target(card) not in allowed.android_widgets:
-        raise EditRefused(f"card {card['id']}: this Android widget is not allowed on this panel")
+    if card["card"] == "widget.android" and (_target(card) or "").split("/")[0] not in allowed.apps:
+        raise EditRefused(f"card {card['id']}: this widget's app is not allowed on this panel")
     if kind == "widget" and not set(card.get("entities", [])) <= allowed.sources:
         raise EditRefused(f"card {card['id']}: a widget shows the project's sources only")
 

@@ -286,7 +286,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         pid = _panel(request)
         body = await _body(request)
         doc = store.get_panel_config(pid)
-        for key in ("overrides", "access", "access_known", "apps", "widgets"):
+        for key in ("overrides", "access", "access_known", "apps"):
             if key in body:
                 if body[key] is None:
                     doc.pop(key, None)

@@ -359,6 +359,5 @@ class Store:
             eff = self.effective_config(panel_id)
             allowed = {a["package"] for a in eff.get("apps", [])}
             sources = set(eff.get("sources", {}).values())
-            widgets = {w["provider"] for w in eff.get("widgets", [])}
-            check_panel_edit(current, edited, role_caps(eff, self.role_for(panel_id, pin)), allowed, sources, widgets)
+            check_panel_edit(current, edited, role_caps(eff, self.role_for(panel_id, pin)), allowed, sources)
         return self.save_layout(panel_id, layout)

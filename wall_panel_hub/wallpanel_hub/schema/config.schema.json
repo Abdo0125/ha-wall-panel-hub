@@ -74,7 +74,8 @@
           "uniqueItems": true
         },
         "widgets": {
-          "$ref": "#/$defs/android_widgets"
+          "$ref": "#/$defs/android_widgets",
+          "description": "Unused since 0.13.1: an allowed app's widgets are allowed."
         }
       }
     },
@@ -157,9 +158,6 @@
         },
         "sources": {
           "$ref": "#/$defs/sources"
-        },
-        "widgets": {
-          "$ref": "#/$defs/android_widgets"
         }
       }
     },

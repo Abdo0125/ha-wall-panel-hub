@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.13.1
+
+- Simpler: allowing an app allows its widgets. The separate list of allowed Android
+  widgets is gone; + offers the widgets of the panel's allowed apps.
+- Panel app 0.12.2: Android widgets fill their card with square corners, whatever the app
+  drew.
+
 ## 0.13.0
 
 - Android widgets: the panel reports the widgets its installed apps offer (music,
