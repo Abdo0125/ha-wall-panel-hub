@@ -118,6 +118,44 @@
   .picklist li .mdi { font-size: 22px; color: var(--muted); }
   .picklist li .grow { flex: 1; }
   .picklist h4 { margin: 10px 0 2px; font-size: 12px; color: var(--muted); font-weight: 600; }
+  .picklist li.off { opacity: .45; cursor: default; }
+  .picklist li.off:hover { background: none; }
+  /* ---- the add window: a list per kind beside the results (as ETS's settings) ---- */
+  .sheet.wide { width: min(980px, 96vw); height: min(680px, 90vh); display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+  .addwin { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  .addtop { display: flex; align-items: center; gap: 16px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .addtop h3 { margin: 0; white-space: nowrap; }
+  .addtop input { flex: 1; }
+  .addmain { flex: 1; display: flex; min-height: 0; }
+  .addnav { list-style: none; margin: 0; padding: 8px; width: 190px; flex: none; border-inline-end: 1px solid var(--line); overflow: auto; }
+  .addnav li { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; cursor: pointer; margin-bottom: 2px; }
+  .addnav li:hover { background: var(--accent-bg); }
+  .addnav li.on { background: var(--accent-bg); color: var(--accent); }
+  .addnav li .mdi { font-size: 20px; }
+  .addnav li .grow { flex: 1; }
+  .addnav li .n { font-size: 12px; color: var(--muted); }
+  .addpane { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 12px 16px; gap: 10px; }
+  .addfilters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  .addfilters select { width: auto; }
+  .addfilters:empty { display: none; }
+  .addbody { flex: 1; min-height: 0; overflow: auto; }
+  .addbody > .picklist { max-height: none; margin: 0; }
+  .addsplit { display: grid; grid-template-columns: 220px 1fr; gap: 14px; height: 100%; min-height: 0; }
+  .addsplit > * { min-height: 0; overflow: auto; }
+  .addsplit .picklist { max-height: none; margin: 0; }
+  .picklist.rooms { border-inline-end: 1px solid var(--line); padding-inline-end: 8px; }
+  .picklist.rooms li.on { background: var(--accent-bg); color: var(--accent); }
+  .addhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+  .addhead h4 { margin: 4px 0; }
+  .sheet.wide .actions { margin: 0; padding: 10px 18px; border-top: 1px solid var(--line); }
+  .muted.small { font-size: 12px; margin: 8px 0 0; }
+  @media (max-width: 700px) {
+    .addmain { flex-direction: column; }
+    .addnav { width: auto; display: flex; overflow-x: auto; border-inline-end: none; border-bottom: 1px solid var(--line); }
+    .addnav li { flex: none; margin: 0; }
+    .addsplit { grid-template-columns: 1fr; }
+    .picklist.rooms { border-inline-end: none; max-height: 30vh; }
+  }
   .steps { display: flex; gap: 6px; margin: 6px 0 14px; }
   .steps span { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
   .steps span.done { background: var(--accent); }
@@ -131,6 +169,35 @@
   .devtable td { padding: 5px 6px; }
   .toast { position: fixed; bottom: 18px; inset-inline-start: 50%; transform: translateX(50%); background: var(--pane); border: 1px solid var(--line);
            border-radius: 10px; padding: 10px 16px; z-index: 20; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+
+  /* ---- ETS look: square corners, flat buttons, lists in ruled rows, a bar on the chosen one.
+     Colours stay; the panel preview (.device) keeps the panel's own look. ---- */
+  button, input, select, .chip, .box, .sheet, .navitem, .request, .picklist li, .addnav li, .tabs button { border-radius: 0; }
+  button { padding: 6px 16px; transition: background .1s; }
+  button:hover:not(:disabled) { background: var(--accent-bg); }
+  button.solid:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 85%, #000); }
+  input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+  .chip { padding: 4px 12px; }
+  .chip.on { box-shadow: inset 0 -2px 0 var(--accent); }
+  /* Side lists: ruled rows, the chosen one marked by a bar on its inner edge. */
+  nav { padding: 0; }
+  nav h2 { margin: 16px 12px 6px; }
+  .navitem { padding: 10px 14px; border-bottom: 1px solid var(--line); border-inline-start: 3px solid transparent; }
+  .navitem.active { background: var(--bg); border-inline-start-color: var(--accent); }
+  .tabs { gap: 0; border-bottom: 1px solid var(--line); }
+  .tabs button { border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 8px 16px; }
+  .tabs button.active { background: none; border-bottom-color: var(--accent); }
+  .box { box-shadow: none; }
+  .sheet { box-shadow: 0 10px 40px rgba(0,0,0,.35); }
+  .picklist li { border-bottom: 1px solid var(--line); padding: 9px 10px; }
+  .picklist li:last-child { border-bottom: none; }
+  .picklist h4 { margin: 14px 0 4px; text-transform: none; }
+  .addnav { padding: 0; background: var(--bg); }
+  .addnav li { margin: 0; padding: 12px 14px; border-bottom: 1px solid var(--line); border-inline-start: 3px solid transparent; }
+  .addnav li.on { background: var(--pane); border-inline-start-color: var(--accent); color: var(--accent); }
+  .picklist.rooms li { border-inline-start: 3px solid transparent; }
+  .picklist.rooms li.on { border-inline-start-color: var(--accent); }
+  .addtop, .sheet.wide .actions { background: var(--pane); }
 </style>
 </head>
 <body>

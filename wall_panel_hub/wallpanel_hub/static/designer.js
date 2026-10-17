@@ -275,6 +275,7 @@ function cardIcon(c) {
 function cardLabel(c) {
   if (c.label) return c.label;
   if (c.card === "widget.android") return androidWidgetName(c.options?.provider);
+  if (c.card === "app.launch") return appName(c.options?.package);
   if (kindOfCard(c.card) === "widget") return SHAPES[c.card] || c.card;
   if (c.entities.length > 1) return `${c.entities.length} × ${KIND_NAMES[kindOfCard(c.card)] || ""}`;
   if (c.entities[0]) return device(c.entities[0]).name;
@@ -613,7 +614,7 @@ function renderDesign(view) {
   const device = el("div", { class: "device" + (eff.theme === "dark" ? " dark" : ""), dir: rtl ? "rtl" : "ltr" }, side, main);
   view.append(device);
   view.append(el("p", { class: "muted" },
-    "اضغط + لإضافة جهاز، واضغط بطاقة لتغيير شكلها وحجمها واسمها. اسحب البطاقة إلى أي خلية فارغة لتضعها هناك، أو فوق بطاقة أخرى لتبديل مكانيهما، واسحب الغرف لترتيبها."));
+    "اضغط + لإضافة غرفة أو جهاز أو تطبيق أو ودجة، واضغط بطاقة لتغيير شكلها وحجمها واسمها. اسحب البطاقة إلى أي خلية فارغة لتضعها هناك، أو فوق بطاقة أخرى لتبديل مكانيهما، واسحب الغرف لترتيبها."));
   const issues = problems(layout).filter((x) => x !== "لا توجد غرف.");
   for (const m of issues) view.append(el("div", { class: "msg error" }, m));
 }
@@ -659,9 +660,9 @@ function cardCell(pl, page) {
 // Any empty cell takes a new card, or a dragged one (free placement).
 function emptyCell(screen, col, row, open) {
   const node = el("div", {
-    class: "cell" + (open ? " empty" : ""), title: open ? "إضافة جهاز" : "",
+    class: "cell" + (open ? " empty" : ""), title: open ? "إضافة بطاقة" : "",
     style: { gridColumn: `${col + 1}`, gridRow: `${row + 1}` },
-    onclick: () => { if (open) entitySheet(screen, col, row); },
+    onclick: () => { if (open) addSheet(screen, col, row); },
     ondragover: (ev) => { if (dragFrom !== null && open) { ev.preventDefault(); node.classList.add("over"); } },
     ondragleave: () => node.classList.remove("over"),
     ondrop: (ev) => {
@@ -750,84 +751,163 @@ function cardSheet(index) {
   );
 }
 
-// Pick a device for an empty cell: this room's first, then the rest of the house.
-function entitySheet(screen, col, row) {
+// ---------- adding a card: one window, a list per kind (rooms, devices, apps, widgets) ----------
+
+const ADD_TABS = [
+  ["rooms", "الغرف", "mdi:floor-plan"],
+  ["devices", "الأجهزة", "mdi:lightbulb-group-outline"],
+  ["apps", "التطبيقات", "mdi:apps"],
+  ["widgets", "الودجات", "mdi:widgets-outline"],
+];
+// The window remembers where it was between openings.
+const addState = { tab: "rooms", room: null, kind: "", area: "", control: true, wkind: "" };
+
+// An allowed app's name: as set in the add-on, else as the panel reported it.
+function appName(pkg) {
+  const cfg = S.configs[S.view.pid];
+  return (cfg?.effective.apps || []).find((a) => a.package === pkg)?.label
+    || (cfg?.installed_apps || []).find((a) => a.package === pkg)?.label || pkg;
+}
+
+function addSheet(screen, col, row) {
   const page = curPage(L());
-  const onPage = new Set(page.cards.flatMap((c) => c.entities));
-  const list = el("div", {});
-  const search = el("input", { placeholder: "بحث باسم الجهاز", oninput: () => fill() });
+  const cfg = S.configs[S.view.pid];
+  if (!cfg) loadConfig(S.view.pid).then(() => { if (!$("veil").hidden) draw(); });
   const areaName = Object.fromEntries(S.catalog.areas.map((a) => [a.id, a.name]));
-  function fill() {
-    const q = search.value.trim().toLowerCase();
-    const match = (e) => !onPage.has(e.entity_id) && kindOf(e.entity_id) && (!q || device(e.entity_id).name.toLowerCase().includes(q) || e.entity_id.includes(q));
-    const here = S.catalog.entities.filter((e) => e.area_id === page.id && match(e));
-    const rest = S.catalog.entities.filter((e) => e.area_id !== page.id && match(e) && (q || e.controllable));
-    list.replaceChildren();
-    const group = (title, items) => {
-      if (!items.length) return;
-      const ul = el("ul", { class: "picklist" });
-      for (const e of items.slice(0, 200)) {
-        const probe = { card: R.kinds[kindOf(e.entity_id)].default, entities: [e.entity_id] };
-        ul.append(el("li", { onclick: () => {
-          change((l) => {
-            const cards = pageCards(l);
-            const card = newCard(l, e.entity_id);
-            cards.push(card);
-            // In the cell chosen when it fits there; otherwise in the first free spot.
-            placeCard(cards, cards.length - 1, screen, col, row);
-            S.sel = cards.indexOf(card);
-          });
-          closeSheet();
-        } }, icon(cardIcon(probe)), el("span", { class: "grow" }, device(e.entity_id).name), el("span", { class: "muted" }, e.area_id && e.area_id !== page.id ? areaName[e.area_id] || "" : "")));
+  if (addState.room === null || !areaName[addState.room]) addState.room = areaName[page.id] ? page.id : (S.catalog.areas[0]?.id || "");
+  const search = el("input", { placeholder: "", oninput: () => fillList() });
+  const nav = el("ul", { class: "addnav" });
+  const filters = el("div", { class: "addfilters" });
+  const body = el("div", { class: "addbody" });
+
+  // Puts new cards in the chosen cell, the next ones in the first free spots.
+  const add = (make) => {
+    change((l) => {
+      const cards = pageCards(l);
+      let last = null;
+      for (const m of [].concat(make(l, cards))) {
+        cards.push(m);
+        placeCard(cards, cards.length - 1, screen, col, row);
+        last = m;
       }
-      list.append(el("h4", {}, title), ul);
-    };
-    // The panel's own cards: the clock, and the widgets whose source the project sets.
-    const widgets = q ? [] : WIDGETS.filter((w) => (!w.source || sources()[w.source]) && !page.cards.some((c) => c.card === w.card));
-    const cfg = S.configs[S.view.pid];
-    if (!cfg) loadConfig(S.view.pid).then(() => fill());
-    // The widgets of the panel's allowed apps, as the panel reported them.
-    const allowedApps = new Set((cfg?.effective.apps || []).map((a) => a.package));
-    const androids = q ? [] : (cfg?.installed_widgets || [])
-      .filter((w) => allowedApps.has(w.provider.split("/")[0]) && !page.cards.some((c) => c.options?.provider === w.provider));
-    if (androids.length) {
-      const ul = el("ul", { class: "picklist" });
-      for (const w of androids) {
-        ul.append(el("li", { onclick: () => {
-          change((l) => {
-            const cards = pageCards(l);
-            const card = { id: nextCardId(l), card: "widget.android", entities: [], size: "2x2", options: { provider: w.provider } };
-            cards.push(card);
-            placeCard(cards, cards.length - 1, screen, col, row);
-            S.sel = cards.indexOf(card);
-          });
-          closeSheet();
-        } }, icon("mdi:widgets-outline"), el("span", { class: "grow" }, w.label || w.provider), el("span", { class: "muted" }, "تُربط على الشاشة")));
-      }
-      list.append(el("h4", {}, "ودجات أندرويد"), ul);
-    }
-    if (widgets.length) {
-      const ul = el("ul", { class: "picklist" });
-      for (const w of widgets) {
-        ul.append(el("li", { onclick: () => {
-          change((l) => {
-            const cards = pageCards(l);
-            const card = { id: nextCardId(l), card: w.card, entities: w.source ? [sources()[w.source]] : [], size: w.size };
-            cards.push(card);
-            placeCard(cards, cards.length - 1, screen, col, row);
-            S.sel = cards.indexOf(card);
-          });
-          closeSheet();
-        } }, icon(w.icon), el("span", { class: "grow" }, SHAPES[w.card]), el("span", { class: "muted" }, w.source ? device(sources()[w.source]).name : "")));
-      }
-      list.append(el("h4", {}, "بطاقات الشاشة"), ul);
-    }
-    group("في هذه الغرفة", here);
-    group(q ? "في باقي المنزل" : "أجهزة التحكم في باقي المنزل", rest);
-    if (!list.children.length) list.append(el("p", { class: "muted" }, q ? "لا نتائج." : "كل أجهزة هذه الغرفة على الشاشة. ابحث عن جهاز من غرفة أخرى."));
+      S.sel = last ? cards.indexOf(last) : null;
+    });
+    closeSheet();
+  };
+  const entityCard = (e) => (l, cards) => newCard(l, e.entity_id, cards);
+  const onPage = () => new Set(page.cards.flatMap((c) => c.entities));
+  const q = () => search.value.trim().toLowerCase();
+  const hits = (...texts) => !q() || texts.some((t) => (t || "").toLowerCase().includes(q()));
+
+  const row_ = (iconName, name, note, onPick, off) => el("li", { class: off ? "off" : "", onclick: off ? null : onPick },
+    icon(iconName), el("span", { class: "grow" }, name), el("span", { class: "muted" }, note || ""));
+  const listOf = (items, empty) => items.length ? el("ul", { class: "picklist" }, items) : el("p", { class: "muted" }, q() ? "لا نتائج." : empty);
+  const entityRow = (e, note) => row_(cardIcon({ card: R.kinds[kindOf(e.entity_id)].default, entities: [e.entity_id] }),
+    device(e.entity_id).name, note, () => add(entityCard(e)));
+  const kinds = (list) => {
+    const n = {};
+    for (const e of list) { const k = kindOf(e.entity_id); n[k] = (n[k] || 0) + 1; }
+    return Object.keys(KIND_NAMES).filter((k) => n[k]).map((k) => [k, `${KIND_NAMES[k]} ${n[k]}`]);
+  };
+  const kindChips = (list, onPick) => chips([["", `الكل ${list.length}`], ...kinds(list)], addState.kind, (v) => { addState.kind = v; onPick(); });
+
+  // The entities that can still go on this page.
+  const free = () => { const have = onPage(); return S.catalog.entities.filter((e) => kindOf(e.entity_id) && kindOf(e.entity_id) !== "widget" && !have.has(e.entity_id)); };
+  const androids = () => {
+    const c = S.configs[S.view.pid];
+    const allowed = new Set((c?.effective.apps || []).map((a) => a.package));
+    return (c?.installed_widgets || []).filter((w) => allowed.has(w.provider.split("/")[0]) && !page.cards.some((x) => x.options?.provider === w.provider));
+  };
+  const apps = () => (S.configs[S.view.pid]?.effective.apps || []);
+  const builtins = () => WIDGETS.filter((w) => !page.cards.some((c) => c.card === w.card));
+  const counts = {
+    rooms: () => S.catalog.areas.length,
+    devices: () => free().filter((e) => !addState.control || e.controllable).length,
+    apps: () => apps().filter((a) => !page.cards.some((c) => c.options?.package === a.package)).length,
+    widgets: () => builtins().length + androids().length,
+  };
+
+  function draw() {
+    nav.replaceChildren(...ADD_TABS.map(([id, label, ic]) => el("li", { class: addState.tab === id ? "on" : "", onclick: () => { addState.tab = id; search.value = ""; draw(); } },
+      icon(ic), el("span", { class: "grow" }, label), el("span", { class: "n" }, String(counts[id]())))));
+    search.placeholder = { rooms: "بحث باسم الغرفة أو الجهاز", devices: "بحث باسم الجهاز", apps: "بحث باسم التطبيق", widgets: "بحث باسم الودجة" }[addState.tab];
+    fillList();
   }
-  fill();
-  sheet(el("h3", {}, "إضافة جهاز"), search, list, el("div", { class: "actions" }, el("button", { onclick: closeSheet }, "إغلاق")));
+
+  function fillList() {
+    const t = addState.tab;
+    filters.replaceChildren();
+    if (t === "rooms") {
+      // Rooms on one side, the chosen room's devices on the other.
+      const ents = free();
+      const inRoom = (id) => ents.filter((e) => e.area_id === id);
+      const rooms = S.catalog.areas.filter((a) => hits(a.name) || inRoom(a.id).some((e) => hits(device(e.entity_id).name)));
+      if (rooms.length && !rooms.some((a) => a.id === addState.room)) addState.room = rooms[0].id;
+      const roomList = el("ul", { class: "picklist rooms" }, rooms.map((a) => el("li", { class: a.id === addState.room ? "on" : "", onclick: () => { addState.room = a.id; addState.kind = ""; fillList(); } },
+        icon(/^mdi:[a-z0-9-]+$/.test(a.icon || "") ? a.icon : "mdi:floor-plan"), el("span", { class: "grow" }, a.name),
+        el("span", { class: "muted" }, a.id === page.id ? "هذه الغرفة" : String(inRoom(a.id).filter((e) => !addState.control || e.controllable).length)))));
+      const all = inRoom(addState.room).filter((e) => !addState.control || e.controllable);
+      const shown = all.filter((e) => (!addState.kind || kindOf(e.entity_id) === addState.kind) && (hits(device(e.entity_id).name, e.entity_id) || hits(areaName[addState.room])));
+      filters.append(kindChips(all, fillList), controlToggle());
+      const addAll = shown.length > 1 ? el("button", { onclick: () => add((l, cards) => {
+        const out = [];
+        for (const e of shown) out.push(newCard(l, e.entity_id, [...cards, ...out]));
+        return out;
+      }) }, `إضافة الكل (${shown.length})`) : null;
+      body.replaceChildren(el("div", { class: "addsplit" },
+        rooms.length ? roomList : el("p", { class: "muted" }, "لا غرف."),
+        el("div", {}, el("div", { class: "addhead" }, el("h4", {}, areaName[addState.room] || ""), addAll),
+          listOf(shown.map((e) => entityRow(e)), "كل أجهزة هذه الغرفة على الصفحة."))));
+    } else if (t === "devices") {
+      const sel = el("select", { onchange: (ev) => { addState.area = ev.target.value; fillList(); } },
+        [["", "كل الغرف"], ["-", "بدون غرفة"], ...S.catalog.areas.map((a) => [a.id, a.name])].map(([v, l]) => el("option", { value: v, selected: v === addState.area }, l)));
+      const inArea = free().filter((e) => (!addState.control || e.controllable) &&
+        (!addState.area || (addState.area === "-" ? !e.area_id : e.area_id === addState.area)));
+      const shown = inArea.filter((e) => (!addState.kind || kindOf(e.entity_id) === addState.kind) && hits(device(e.entity_id).name, e.entity_id, areaName[e.area_id]))
+        // This room's first.
+        .sort((x, y) => (y.area_id === page.id) - (x.area_id === page.id));
+      filters.append(kindChips(inArea, fillList), el("div", { class: "row" }, sel, controlToggle()));
+      body.replaceChildren(listOf(shown.slice(0, 300).map((e) => entityRow(e, areaName[e.area_id] || "بدون غرفة")), "لا أجهزة أخرى."));
+    } else if (t === "apps") {
+      const list = apps().filter((a) => hits(appName(a.package), a.package));
+      body.replaceChildren(
+        listOf(list.map((a) => {
+          const there = page.cards.some((c) => c.options?.package === a.package);
+          return row_("mdi:apps", appName(a.package), there ? "على الصفحة" : "", () => add((l) => (
+            { id: nextCardId(l), card: "app.launch", entities: [], size: "1x1", options: { package: a.package } })), there);
+        }), "لا تطبيقات مسموحة لهذه الشاشة."),
+        el("p", { class: "muted small" }, "التطبيقات المسموحة تُضبط في إعدادات الشاشة."));
+    } else {
+      filters.append(chips([["", "الكل"], ["builtin", "ودجات الشاشة"], ["android", "ودجات أندرويد"]], addState.wkind, (v) => { addState.wkind = v; fillList(); }));
+      const items = [];
+      if (addState.wkind !== "android") {
+        for (const w of builtins().filter((w) => hits(SHAPES[w.card]))) {
+          const src = w.source ? sources()[w.source] : null;
+          const missing = w.source && !src;
+          items.push(row_(w.icon, SHAPES[w.card], missing ? "حدّد مصدرها في المشروع ← الودجات" : src ? device(src).name : "",
+            () => add((l) => ({ id: nextCardId(l), card: w.card, entities: src ? [src] : [], size: w.size })), missing));
+        }
+      }
+      if (addState.wkind !== "builtin") {
+        for (const w of androids().filter((w) => hits(w.label, w.provider))) {
+          items.push(row_("mdi:widgets-outline", w.label || w.provider, "تُربط على الشاشة",
+            () => add((l) => ({ id: nextCardId(l), card: "widget.android", entities: [], size: "2x2", options: { provider: w.provider } }))));
+        }
+      }
+      body.replaceChildren(listOf(items, "لا ودجات متاحة. ودجات أندرويد تأتي من التطبيقات المسموحة."));
+    }
+  }
+
+  function controlToggle() {
+    return chips([["1", "أجهزة التحكم"], ["0", "مع الحساسات"]], addState.control ? "1" : "0", (v) => { addState.control = v === "1"; addState.kind = ""; draw(); });
+  }
+
+  draw();
+  sheet(el("div", { class: "addwin" },
+    el("div", { class: "addtop" }, el("h3", {}, "إضافة بطاقة"), search),
+    el("div", { class: "addmain" }, nav, el("div", { class: "addpane" }, filters, body)),
+    el("div", { class: "actions" }, el("span", { class: "spacer" }), el("button", { onclick: closeSheet }, "إغلاق"))));
+  $("veil").firstChild.classList.add("wide");
   search.focus();
 }
 

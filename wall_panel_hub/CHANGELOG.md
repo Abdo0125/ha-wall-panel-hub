@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.14.0
+
+- One add window for +, as in ETS: a list per kind (rooms, devices, apps, widgets) beside
+  the results, with a search and filters fitting each list (device kind, room, controls
+  or with sensors, built-in or Android widgets). Rooms show their devices side by side,
+  with "add all". Apps can now be added from the designer.
+- The add-on's look follows ETS: square corners, flat buttons, lists in ruled rows with a
+  bar on the chosen item. Colours and the panel preview are unchanged.
+- Panel app 0.13.0: the same add window on the panel.
+
 ## 0.13.1
 
 - Simpler: allowing an app allows its widgets. The separate list of allowed Android
