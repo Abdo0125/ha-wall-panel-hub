@@ -175,21 +175,33 @@ function pack(cards) {
   return { placed: cards.map((c) => at.get(c)), screens: screens.length, grids: screens };
 }
 
+// Where a card dropped on an empty cell lands, as the panel does it (GridPacking.landing):
+// starting there if it fits; else shifted, still covering that cell, as near as can be to
+// where it is now (a wide card dragged one cell aside slides over). Its own cells are free.
+function landing(placed, moving, screen, col, row) {
+  const fits = (c, r) => c >= 0 && r >= 0 && c + moving.w <= COLS && r + moving.h <= ROWS && !placed.some((p) =>
+    p !== moving && p.screen === screen && p.col < c + moving.w && c < p.col + p.w && p.row < r + moving.h && r < p.row + p.h);
+  let best = null, bestScore = Infinity;
+  for (let dy = 0; dy < moving.h; dy++) for (let dx = 0; dx < moving.w; dx++) {
+    const c = col - dx, r = row - dy;
+    if (!fits(c, r)) continue;
+    const score = c === col && r === row ? -1
+      : moving.screen === screen ? Math.abs(c - moving.col) + Math.abs(r - moving.row) : c + r;
+    if (score < bestScore) { best = { screen, col: c, row: r }; bestScore = score; }
+  }
+  return best;
+}
+
 // Free placement, as the panel does it (GridPacking.place): every card keeps the place it
-// shows now; onto another card the two swap, onto empty cells the card goes there if it
-// fits. Then the cards are listed in reading order. False when it cannot go there.
+// shows now; onto another card the two swap, onto empty cells the card goes where landing()
+// says. Then the cards are listed in reading order. False when it cannot go there.
 function placeCard(cards, index, screen, col, row) {
   const { placed } = pack(cards);
   const moving = placed[index];
   const hit = placed.find((p) => p.screen === screen && col >= p.col && col < p.col + p.w && row >= p.row && row < p.row + p.h);
   if (hit === moving) return false;
-  const target = hit ? { screen: hit.screen, col: hit.col, row: hit.row } : { screen, col, row };
-  if (!hit) {
-    if (col + moving.w > COLS || row + moving.h > ROWS) return false;
-    const blocked = placed.some((p) => p !== moving && p.screen === screen &&
-      p.col < col + moving.w && col < p.col + p.w && p.row < row + moving.h && row < p.row + p.h);
-    if (blocked) return false;
-  }
+  const target = hit ? { screen: hit.screen, col: hit.col, row: hit.row } : landing(placed, moving, screen, col, row);
+  if (!target) return false;
   placed.forEach((p) => { p.card.pos = { screen: p.screen, col: p.col, row: p.row }; });
   if (hit) hit.card.pos = { screen: moving.screen, col: moving.col, row: moving.row };
   moving.card.pos = target;

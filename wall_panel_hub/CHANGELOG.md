@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.1
+
+- Dragging a wide card onto the empty cell beside it slides it over (it still covers that
+  cell) instead of refusing; a card dropped near the edge slides back to fit. Panel app
+  0.13.2 does the same.
+
 ## 0.14.0
 
 - One add window for +, as in ETS: a list per kind (rooms, devices, apps, widgets) beside
