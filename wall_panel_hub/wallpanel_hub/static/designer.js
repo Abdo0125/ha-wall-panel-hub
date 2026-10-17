@@ -68,9 +68,9 @@ const SHAPES = {
   "fan.toggle": "مفتاح", "fan.speed": "سرعات", "lock.lock": "قفل",
   "scene.action": "زر", "scene.bar": "شريط مشاهد", "script.action": "زر", "button.action": "زر",
   "sensor.value": "قيمة", "sensor.multi": "عدة قيم", "sensor.binary": "حالة", "app.launch": "تطبيق", "widget.clock": "الساعة",
-  "widget.weather": "الطقس", "widget.temperature": "الحرارة الخارجية", "widget.power": "الاستهلاك الآن",
+  "widget.weather": "الطقس", "widget.android": "ودجة أندرويد", "widget.temperature": "الحرارة الخارجية", "widget.power": "الاستهلاك الآن",
 };
-const SIZES = { "1x1": "صغيرة", "2x1": "عريضة", "2x2": "كبيرة" };
+const SIZES = { "1x1": "صغيرة", "2x1": "عريضة", "2x2": "كبيرة", "3x2": "كبيرة عريضة", "4x2": "كبيرة جداً" };
 // Each kind of device pairs with its own app and has its own rules (docs/ui-plan.md, 5.3).
 const PLATFORMS = { android: "شاشة أندرويد", esp32: "شاشة ESP32", phone: "هاتف" };
 const OPTION_NAMES = {
@@ -217,6 +217,14 @@ const entities = () => Object.fromEntries(S.catalog.entities.map((e) => [e.entit
 const devices = () => S.site?.devices || {};
 const sources = () => S.site?.sources || {};
 
+// An Android widget's name: as allowed on the open panel, else as the panel reported it.
+function androidWidgetName(provider) {
+  const cfg = S.configs[S.view.pid];
+  const w = (cfg?.effective.widgets || []).find((x) => x.provider === provider)
+    || (cfg?.installed_widgets || []).find((x) => x.provider === provider);
+  return w?.label || (provider || "").split("/")[0];
+}
+
 // The panel's own cards; all but the clock read one of the project's sources.
 const WIDGETS = [
   { card: "widget.clock", icon: "mdi:clock-outline", size: "2x2" },
@@ -244,6 +252,7 @@ function cardIcon(c) {
   if (c.icon) return c.icon;
   const kind = kindOfCard(c.card);
   if (kind === "app") return "mdi:apps";
+  if (c.card === "widget.android") return "mdi:widgets-outline";
   const widget = WIDGETS.find((w) => w.card === c.card);
   if (widget) return widget.icon;
   const d = c.entities[0] ? device(c.entities[0]) : null;
@@ -266,6 +275,7 @@ function cardIcon(c) {
 
 function cardLabel(c) {
   if (c.label) return c.label;
+  if (c.card === "widget.android") return androidWidgetName(c.options?.provider);
   if (kindOfCard(c.card) === "widget") return SHAPES[c.card] || c.card;
   if (c.entities.length > 1) return `${c.entities.length} × ${KIND_NAMES[kindOfCard(c.card)] || ""}`;
   if (c.entities[0]) return device(c.entities[0]).name;
@@ -616,8 +626,9 @@ function cardCell(pl, page) {
   const index = page.cards.indexOf(c);
   const known = !S.catalog.entities.length || c.entities.every((id) => entities()[id]);
   const size = `${pl.w}x${pl.h}`;
-  const cls = ["cell", "card", size === "2x1" ? "wide" : "", size === "2x2" ? "big" : "", S.sel === index ? "selected" : "", known ? "" : "missing"].join(" ");
-  const body = size === "2x2"
+  const big = pl.w >= 2 && pl.h >= 2;
+  const cls = ["cell", "card", size === "2x1" ? "wide" : "", big ? "big" : "", S.sel === index ? "selected" : "", known ? "" : "missing"].join(" ");
+  const body = big
     ? [el("div", { class: "ring" }, icon(cardIcon(c)), el("span", { class: "lbl" }, cardLabel(c)))]
     : size === "2x1"
       ? [icon(cardIcon(c), { style: { fontSize: "32px" } }), el("span", { class: "lbl" }, cardLabel(c)),
@@ -724,8 +735,9 @@ function cardSheet(index) {
   sheet(
     el("h3", {}, cardLabel(c)),
     el("p", { class: "muted" }, d ? `${KIND_NAMES[kindOfCard(c.card)] || ""} · ${S.catalog.areas.find((a) => a.id === d.area)?.name || "بدون غرفة"}` : SHAPES[c.card]),
-    variants.length > 1 ? field("الشكل", chips(variants.map((v) => [v, SHAPES[v] || v]), c.card, (v) => edit(() => setCardType(c, v)))) : null,
-    field("الحجم", chips(["1x1", "2x1", "2x2"].map((v) => [v, SIZES[v], !spec.sizes.includes(v)]), sizeOf(c), (v) => edit(() => { c.size = v; }))),
+    // Widgets are each their own thing: no shape to switch to.
+    variants.length > 1 && kindOfCard(c.card) !== "widget" ? field("الشكل", chips(variants.map((v) => [v, SHAPES[v] || v]), c.card, (v) => edit(() => setCardType(c, v)))) : null,
+    field("الحجم", chips(R.sizes.map((v) => [v, SIZES[v], !spec.sizes.includes(v)]), sizeOf(c), (v) => edit(() => { c.size = v; }))),
     field("الاسم على الشاشة", el("input", { value: c.label || "", placeholder: d?.name || "",
       onchange: (e) => edit(() => { const v = e.target.value.trim(); v ? c.label = v : delete c.label; }) })),
     field("الأيقونة", iconInput(c.icon, cardIcon({ ...c, icon: undefined }), (v) => edit(() => { v && validIcon(v) ? c.icon = v : delete c.icon; }))),
@@ -773,6 +785,25 @@ function entitySheet(screen, col, row) {
     };
     // The panel's own cards: the clock, and the widgets whose source the project sets.
     const widgets = q ? [] : WIDGETS.filter((w) => (!w.source || sources()[w.source]) && !page.cards.some((c) => c.card === w.card));
+    const cfg = S.configs[S.view.pid];
+    if (!cfg) loadConfig(S.view.pid).then(() => fill());
+    const androids = q ? [] : (cfg?.effective.widgets || []).filter((w) => !page.cards.some((c) => c.options?.provider === w.provider));
+    if (androids.length) {
+      const ul = el("ul", { class: "picklist" });
+      for (const w of androids) {
+        ul.append(el("li", { onclick: () => {
+          change((l) => {
+            const cards = pageCards(l);
+            const card = { id: nextCardId(l), card: "widget.android", entities: [], size: "2x2", options: { provider: w.provider } };
+            cards.push(card);
+            placeCard(cards, cards.length - 1, screen, col, row);
+            S.sel = cards.indexOf(card);
+          });
+          closeSheet();
+        } }, icon("mdi:widgets-outline"), el("span", { class: "grow" }, w.label || w.provider), el("span", { class: "muted" }, "تُربط على الشاشة")));
+      }
+      list.append(el("h4", {}, "ودجات أندرويد"), ul);
+    }
     if (widgets.length) {
       const ul = el("ul", { class: "picklist" });
       for (const w of widgets) {
@@ -941,6 +972,7 @@ function renderSettings(view, p) {
         render();
       } }, "حفظ")), msg),
     appsBox(pid, p, cfg),
+    (p.platform || "android") === "android" ? widgetsBox(pid, p, cfg) : null,
     el("div", { class: "box" }, el("h3", {}, "رمز خاص بهذه الشاشة (اختياري)"),
       el("p", { class: "muted" }, "بدونه تستعمل الشاشة رموز المشروع."),
       pinRow("رمز المُركِّب", cfg.config.installer_pin_set, cfg.config.installer_pin_set ? "● خاص بالشاشة" : "من المشروع",
@@ -1004,6 +1036,44 @@ function appsBox(pid, p, cfg) {
       toast(p.online ? "حُفظ ووصل للشاشة." : "حُفظ. ستستلمه الشاشة عند اتصالها.");
       render();
     } }, "حفظ التطبيقات")));
+}
+
+// Android widgets the panel may show: from those its installed apps offer (it reports them).
+function widgetsBox(pid, p, cfg) {
+  const widgets = (cfg.config.widgets || []).map((w) => ({ ...w }));
+  const installed = cfg.installed_widgets || [];
+  const nameOf = (provider) => installed.find((w) => w.provider === provider)?.label || provider.split("/")[0];
+  const list = el("div");
+  const draw = () => {
+    list.replaceChildren(...(widgets.length ? widgets.map((w, i) => el("div", { class: "row", style: { margin: "6px 0" } },
+      el("input", { value: w.label || "", placeholder: nameOf(w.provider), style: { width: "180px" },
+                    oninput: (e) => { w.label = e.target.value.trim() || undefined; } }),
+      el("span", { class: "muted", style: { minWidth: "220px", direction: "ltr", fontSize: "13px" } }, w.provider),
+      el("button", { class: "danger", onclick: () => { widgets.splice(i, 1); draw(); } }, "حذف"),
+    )) : [el("p", { class: "muted" }, "لا توجد ودجات مسموحة.")]));
+  };
+  draw();
+  const options = () => [["", installed.length ? "— اختر ودجة مثبتة —" : "— الشاشة لم ترسل ودجاتها بعد —"],
+    ...installed.filter((w) => !widgets.some((x) => x.provider === w.provider)).map((w) => [w.provider, w.label])];
+  const pick = selectEl(options(), "");
+  const add = () => {
+    if (!pick.value) return;
+    widgets.push({ provider: pick.value, label: nameOf(pick.value) });
+    pick.replaceChildren(...options().map(([v, l]) => el("option", { value: v }, l)));
+    draw();
+  };
+  return el("div", { class: "box" }, el("h3", {}, "ودجات أندرويد المسموحة"),
+    el("p", { class: "muted" }, "ودجات التطبيقات المثبتة على الشاشة (موسيقى، كاميرا...). تُضاف من + في المصمم أو على الشاشة، وتُربط على الشاشة بموافقة أندرويد لمرة واحدة."),
+    list,
+    el("div", { class: "row", style: { marginTop: "10px" } }, pick, el("button", { onclick: add }, "إضافة")),
+    el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
+      const clean = widgets.map((w) => Object.fromEntries(Object.entries(w).filter(([, v]) => v !== undefined && v !== "")));
+      const r = await put(`api/panels/${enc(pid)}/config`, { widgets: clean });
+      if (!r.ok) { alert("لم يُحفظ: " + (r.body?.error || r.status)); return; }
+      await loadConfig(pid);
+      toast(p.online ? "حُفظ ووصل للشاشة." : "حُفظ. ستستلمه الشاشة عند اتصالها.");
+      render();
+    } }, "حفظ الودجات")));
 }
 
 function renderAccess(view, p) {

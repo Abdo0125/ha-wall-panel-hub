@@ -30,10 +30,10 @@ ADDABLE = ("app", "widget")
 
 
 def check_panel_edit(old: dict, new: dict, caps: set[str], allowed_apps: set[str] | None = None,
-                     sources: set[str] | None = None) -> None:
+                     sources: set[str] | None = None, android_widgets: set[str] | None = None) -> None:
     """Raises EditRefused with the first change the capabilities do not allow."""
-    allowed_apps, sources = allowed_apps or set(), sources or set()
-    _check_dashboard(old, new, caps, allowed_apps, sources)
+    allowed = Allowed(allowed_apps or set(), sources or set(), android_widgets or set())
+    _check_dashboard(old, new, caps, allowed)
     old_pages = {p["id"]: p for p in old["pages"]}
     new_pages = {p["id"]: p for p in new["pages"]}
     if set(old_pages) != set(new_pages):
@@ -55,7 +55,7 @@ def check_panel_edit(old: dict, new: dict, caps: set[str], allowed_apps: set[str
         if (added or removed) and "add_widgets" not in caps:
             raise EditRefused("adding apps and widgets is not allowed on this panel")
         for card in added:
-            _check_new(card, allowed_apps, sources, "this room")
+            _check_new(card, allowed)
         kept = [cid for cid in (c["id"] for c in old_page["cards"]) if cid in new_cards]
         if kept != [c["id"] for c in new_page["cards"] if c["id"] in old_cards] and "reorder" not in caps:
             raise EditRefused("reordering cards is not allowed on this panel")
@@ -93,15 +93,30 @@ def _moved(old_cards: list[dict], new_cards: list[dict], pinning: bool) -> bool:
     return False
 
 
-def _check_new(card: dict, allowed_apps: set[str], sources: set[str], where: str) -> None:
+class Allowed:
+    """What the panel may add: its allowed apps, the project's sources, its allowed Android widgets."""
+
+    def __init__(self, apps: set[str], sources: set[str], android_widgets: set[str]):
+        self.apps, self.sources, self.android_widgets = apps, sources, android_widgets
+
+
+def _target(card: dict) -> str | None:
+    """What an app or Android widget card opens or shows: its package or provider."""
+    options = card.get("options") or {}
+    return options.get("provider") if card["card"] == "widget.android" else options.get("package")
+
+
+def _check_new(card: dict, allowed: Allowed) -> None:
     kind = kind_of_card(card["card"])
-    if kind == "app" and (card.get("options") or {}).get("package") not in allowed_apps:
+    if kind == "app" and _target(card) not in allowed.apps:
         raise EditRefused(f"card {card['id']}: this app is not allowed on this panel")
-    if kind == "widget" and not set(card.get("entities", [])) <= sources:
+    if card["card"] == "widget.android" and _target(card) not in allowed.android_widgets:
+        raise EditRefused(f"card {card['id']}: this Android widget is not allowed on this panel")
+    if kind == "widget" and not set(card.get("entities", [])) <= allowed.sources:
         raise EditRefused(f"card {card['id']}: a widget shows the project's sources only")
 
 
-def _check_dashboard(old: dict, new: dict, caps: set[str], allowed_apps: set[str], sources: set[str]) -> None:
+def _check_dashboard(old: dict, new: dict, caps: set[str], allowed: Allowed) -> None:
     """My dashboard, changed on the panel: with the dashboard permission, and only from what
     the panel already has (its rooms' entities, the project's sources, allowed apps, the
     panel's own cards)."""
@@ -113,16 +128,15 @@ def _check_dashboard(old: dict, new: dict, caps: set[str], allowed_apps: set[str
         raise EditRefused("changing my dashboard is not allowed on this panel")
     known = {e for p in new["pages"] for c in p["cards"] for e in c.get("entities", [])}
     known |= {e for c in before or [] for e in c.get("entities", [])}
-    known |= sources
-    had = {c["id"]: (c.get("options") or {}).get("package") for c in before or []}
+    known |= allowed.sources
+    had = {c["id"]: (c["card"], _target(c)) for c in before or []}
     for card in after:
         if not set(card.get("entities", [])) <= known:
             raise EditRefused(f"card {card['id']}: my dashboard only takes devices already on this panel")
-        # An app added now must be allowed; one already there stays, even if no longer allowed.
-        package = (card.get("options") or {}).get("package")
-        was = had.get(card["id"])
-        if kind_of_card(card["card"]) == "app" and package not in allowed_apps and (was is None or was != package):
-            raise EditRefused(f"card {card['id']}: this app is not allowed on this panel")
+        # An app or Android widget added now must be allowed; one already there stays, even
+        # if no longer allowed.
+        if had.get(card["id"]) != (card["card"], _target(card)) and kind_of_card(card["card"]) in ("app", "widget"):
+            _check_new(card, allowed)
 
 
 def _entity_options(card: dict) -> dict:

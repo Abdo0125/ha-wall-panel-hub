@@ -72,6 +72,9 @@
             "$ref": "#/$defs/capability"
           },
           "uniqueItems": true
+        },
+        "widgets": {
+          "$ref": "#/$defs/android_widgets"
         }
       }
     },
@@ -154,6 +157,9 @@
         },
         "sources": {
           "$ref": "#/$defs/sources"
+        },
+        "widgets": {
+          "$ref": "#/$defs/android_widgets"
         }
       }
     },
@@ -350,6 +356,26 @@
         "power": {
           "type": "string",
           "pattern": "^sensor\\.[a-z0-9_]+$"
+        }
+      }
+    },
+    "android_widgets": {
+      "description": "Widgets of the panel's installed apps it may show (Android panels), by provider: package/class.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "provider"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+/[A-Za-z0-9_.$]+$"
+          },
+          "label": {
+            "type": "string"
+          }
         }
       }
     }

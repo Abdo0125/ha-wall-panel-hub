@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.0
+
+- Android widgets: the panel reports the widgets its installed apps offer (music,
+  cameras...). Allow them per panel in Settings > Allowed Android widgets, then add them
+  with + in the designer or on the panel (same permissions as apps and widgets).
+- The panel binds each widget itself: Android asks once, then the widget's own setup if
+  it has one. Removing the card frees it.
+- Card sizes 3x2 and 4x2, for Android widgets. Panel app 0.12.0.
+
 ## 0.12.1
 
 - My dashboard: an app card already there no longer blocks saving when its app has

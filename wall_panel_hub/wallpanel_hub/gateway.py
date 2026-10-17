@@ -27,6 +27,7 @@ from .migrate import SCHEMA, downgrade
 from .store import LayoutInvalid, Store, layout_entities
 
 PACKAGE = re.compile(r"[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+")
+PROVIDER = re.compile(PACKAGE.pattern + r"/[A-Za-z0-9_.$]+")
 log = logging.getLogger(__name__)
 
 READ_ONLY = {
@@ -163,6 +164,15 @@ class PanelConnection:
             ]
             self.gateway.installed_apps[self.panel_id] = sorted(apps, key=lambda a: a["label"].lower())
             await self.send({"id": mid, "type": "result", "success": True, "result": None})
+        elif kind == "wallpanel/widgets/report":
+            # The widgets of the panel's installed apps, so the add-on can allow them by name.
+            widgets = [
+                {"provider": w["provider"], "label": str(w.get("label") or w["provider"])[:80]}
+                for w in (msg.get("widgets") or [])[:300]
+                if isinstance(w, dict) and isinstance(w.get("provider"), str) and PROVIDER.fullmatch(w["provider"])
+            ]
+            self.gateway.installed_widgets[self.panel_id] = sorted(widgets, key=lambda w: w["label"].lower())
+            await self.send({"id": mid, "type": "result", "success": True, "result": None})
         elif kind == "wallpanel/config/subscribe":
             self.config_subs.add(mid)
             await self.send({"id": mid, "type": "result", "success": True, "result": None})
@@ -185,6 +195,7 @@ class Gateway:
         self.connections: dict[str, set[PanelConnection]] = {}
         # Reported by each panel when it connects; kept in memory only.
         self.installed_apps: dict[str, list[dict]] = {}
+        self.installed_widgets: dict[str, list[dict]] = {}
 
     def online(self, panel_id: str) -> bool:
         return bool(self.connections.get(panel_id))

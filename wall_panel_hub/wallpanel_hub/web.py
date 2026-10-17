@@ -279,13 +279,14 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
             "config": _without_pins(store.get_panel_config(pid)),
             "effective": _without_pins(store.effective_config(pid)),
             "installed_apps": gateway.installed_apps.get(pid, []),
+            "installed_widgets": gateway.installed_widgets.get(pid, []),
         })
 
     async def put_panel_config(request: web.Request):
         pid = _panel(request)
         body = await _body(request)
         doc = store.get_panel_config(pid)
-        for key in ("overrides", "access", "access_known", "apps"):
+        for key in ("overrides", "access", "access_known", "apps", "widgets"):
             if key in body:
                 if body[key] is None:
                     doc.pop(key, None)
