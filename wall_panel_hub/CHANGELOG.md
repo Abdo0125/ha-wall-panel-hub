@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.2
+
+- A panel may ask HA to read its own devices again (`homeassistant.update_entity`), so a
+  command whose state did not change is still confirmed, and each page shown is read
+  again (at most once a minute per device).
+- `get_states` from a panel returns that panel's entities only: smaller and private.
+- Panel app 0.14.1: a command already as asked is done at once; no answer after a second
+  reads the device again; every page shown takes HA's state again.
+
 ## 0.14.1
 
 - Dragging a wide card onto the empty cell beside it slides it over (it still covers that

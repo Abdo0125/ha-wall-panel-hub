@@ -40,6 +40,10 @@ READ_ONLY = {
     "unsubscribe_events",
 }
 
+# Services of another domain a panel may call on its own entities: asking HA to read
+# the device again changes nothing.
+READS = {("homeassistant", "update_entity")}
+
 # Targets that would reach entities beyond the ones listed.
 WIDE_TARGETS = ("area_id", "device_id", "floor_id", "label_id")
 
@@ -76,7 +80,7 @@ def check_command(msg: dict, allowed: set[str]) -> tuple[dict | None, str | None
         for e in ids:
             if e not in allowed:
                 return None, f"{e} is not on this panel"
-            if e.split(".", 1)[0] != msg.get("domain"):
+            if e.split(".", 1)[0] != msg.get("domain") and (msg.get("domain"), msg.get("service")) not in READS:
                 return None, f"{msg.get('domain')}.{msg.get('service')} cannot target {e}"
         return msg, None
 
@@ -252,10 +256,22 @@ class Gateway:
         log.info("panel %s (%s) connected", panel.name, panel.id)
         await ws.send_json({"type": "auth_ok", "ha_version": ok.get("ha_version")})
 
+        # get_states asked by the panel: HA answers with every entity; the panel gets its own.
+        state_requests: set = set()
+
         async def from_ha():
             async for m in upstream:
                 if m.type != WSMsgType.TEXT:
                     break
+                if state_requests and '"result"' in m.data:
+                    msg = json.loads(m.data)
+                    if msg.get("type") == "result" and msg.get("id") in state_requests:
+                        state_requests.discard(msg["id"])
+                        if isinstance(msg.get("result"), list):
+                            allowed = conn.allowed
+                            msg["result"] = [s for s in msg["result"] if s.get("entity_id") in allowed]
+                        await ws.send_json(msg)
+                        continue
                 await ws.send_str(m.data)
 
         async def from_panel():
@@ -268,6 +284,8 @@ class Gateway:
                     continue
                 forward, reason = check_command(msg, conn.allowed)
                 if forward is not None:
+                    if forward.get("type") == "get_states":
+                        state_requests.add(forward.get("id"))
                     await upstream.send_json(forward)
                 elif reason == "empty":
                     # Nothing on the panel yet: answer like HA would for zero entities.
