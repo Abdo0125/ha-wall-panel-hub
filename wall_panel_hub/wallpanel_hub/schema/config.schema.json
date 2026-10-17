@@ -129,6 +129,11 @@
             }
           }
         },
+        "home_title": {
+          "description": "The home page's name on the panel; blank: My dashboard.",
+          "type": "string",
+          "maxLength": 40
+        },
         "app_return_seconds": {
           "$ref": "#/$defs/return_seconds"
         },
@@ -185,6 +190,11 @@
               "maximum": 100
             }
           }
+        },
+        "home_title": {
+          "description": "The home page's name on the panel; blank: My dashboard.",
+          "type": "string",
+          "maxLength": 40
         },
         "app_return_seconds": {
           "$ref": "#/$defs/return_seconds"

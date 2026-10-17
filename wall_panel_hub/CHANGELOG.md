@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.15.0
+
+- The panel's grid has 6 columns on an 11" screen (was 5): halves and thirds, no odd cell
+  left beside wide cards. The designer's preview follows. Cards keep their places; the
+  sixth column starts empty.
+- A home page title per panel or for the project (settings: "عنوان الصفحة الرئيسية"),
+  also set from the panel's display page; blank shows "My dashboard".
+- Panel app 0.15.0: the rooms move to a drawer opened from the menu, so the grid has the
+  whole width. The top bar: menu and page name; clock, date and weather; edit (as the
+  PIN's role allows) and apps.
+
 ## 0.14.2
 
 - A panel may ask HA to read its own devices again (`homeassistant.update_entity`), so a

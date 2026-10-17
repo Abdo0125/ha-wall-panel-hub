@@ -18,7 +18,7 @@ from .migrate import is_current, upgrade
 from .pins import verify_pin
 
 # Display settings that live in the panel configuration once a hub manages the panel.
-DISPLAY = ("lang", "theme", "screensaver")
+DISPLAY = ("lang", "theme", "screensaver", "home_title")
 # The apps that pair with the hub, one per kind of device.
 PLATFORMS = ("android", "esp32", "phone")
 
@@ -343,7 +343,7 @@ class Store:
         permission when the change was made, maybe offline, so there is nothing to approve."""
         doc = self.get_panel_config(panel_id)
         overrides = dict(doc.get("overrides") or {})
-        for key in ("lang", "theme"):
+        for key in ("lang", "theme", "home_title"):
             if key in display:
                 overrides[key] = display[key]
         if "screensaver" in display:

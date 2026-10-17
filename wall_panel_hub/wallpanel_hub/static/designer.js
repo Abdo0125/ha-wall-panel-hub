@@ -127,7 +127,7 @@ function setCardType(c, type) {
 
 // ---------- grid packing (same rule as the app, GridPacking.kt) ----------
 
-const COLS = 5, ROWS = 4;  // the 11" panel
+const COLS = 6, ROWS = 4;  // the 11" panel: halves and thirds, no odd cell left
 
 function spanOf(size) {
   const [w, h] = (size || "1x1").split("x").map(Number);
@@ -973,7 +973,7 @@ const CAPS = [["control", "التحكم"], ["apps", "التطبيقات"], ["edi
   ["connection", "صفحة الاتصال"], ["display", "صفحة الشاشة"], ["brightness", "السطوع"], ["system", "أزرار النظام"]];
 // Pages of the panel's settings screen: the guest never opens it.
 const PAGE_CAPS = new Set(["connection", "display", "brightness", "system"]);
-const BUILT_IN = { lang: "ar", theme: "light", screensaver: { idle_seconds: 60, dim_brightness: 10 }, app_return_seconds: 300 };
+const BUILT_IN = { lang: "ar", theme: "light", screensaver: { idle_seconds: 60, dim_brightness: 10 }, app_return_seconds: 300, home_title: "" };
 
 function selectEl(options, value) {
   const s = el("select");
@@ -991,8 +991,10 @@ function displayFields(form, values, inherited, inheritLabel) {
     idle: el("input", { type: "number", min: 10, value: ss.idle_seconds ?? "", placeholder: inherited.screensaver.idle_seconds }),
     dim: el("input", { type: "number", min: 0, max: 100, value: ss.dim_brightness ?? "", placeholder: inherited.screensaver.dim_brightness }),
     ret: el("input", { type: "number", min: 30, max: 3600, value: values.app_return_seconds ?? "", placeholder: inherited.app_return_seconds }),
+    home: el("input", { maxlength: 40, value: values.home_title ?? "", placeholder: inherited.home_title || "لوحتي" }),
   };
   form.append(
+    el("label", {}, "عنوان الصفحة الرئيسية"), f.home,
     el("label", {}, "اللغة"), f.lang,
     el("label", {}, "المظهر"), f.theme,
     el("label", {}, "شاشة التوقف بعد (ثانية)"), f.idle,
@@ -1008,6 +1010,7 @@ function displayFields(form, values, inherited, inheritLabel) {
     if (f.dim.value !== "") screensaver.dim_brightness = Number(f.dim.value);
     if (Object.keys(screensaver).length) out.screensaver = screensaver;
     if (f.ret.value !== "") out.app_return_seconds = Number(f.ret.value);
+    if (f.home.value.trim()) out.home_title = f.home.value.trim();
     return out;
   };
 }
@@ -1032,6 +1035,7 @@ function inheritedDisplay() {
     lang: d.lang || BUILT_IN.lang, theme: d.theme || BUILT_IN.theme,
     screensaver: { ...BUILT_IN.screensaver, ...(d.screensaver || {}) },
     app_return_seconds: d.app_return_seconds ?? BUILT_IN.app_return_seconds,
+    home_title: d.home_title ?? BUILT_IN.home_title,
   };
 }
 

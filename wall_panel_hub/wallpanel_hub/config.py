@@ -36,6 +36,7 @@ DEFAULTS = {
     "theme": "light",
     "screensaver": {"idle_seconds": 60, "dim_brightness": 10},
     "app_return_seconds": 300,
+    "home_title": "",
 }
 
 # The user may not reorder unless the installer allows it for a panel. connection, display,
@@ -102,6 +103,7 @@ def effective(site: dict, panel: dict, name: str) -> dict:
         "theme": _setting("theme", panel, site),
         "screensaver": screensaver,
         "app_return_seconds": _setting("app_return_seconds", panel, site),
+        "home_title": _setting("home_title", panel, site),
         "installer_pin": panel.get("installer_pin") or site.get("installer_pin"),
         "user_pin": panel.get("user_pin") or site.get("user_pin"),
         "access": access,
