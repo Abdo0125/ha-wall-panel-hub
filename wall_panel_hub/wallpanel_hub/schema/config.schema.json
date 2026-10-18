@@ -33,6 +33,9 @@
         },
         "sources": {
           "$ref": "#/$defs/sources"
+        },
+        "floors": {
+          "$ref": "#/$defs/floors"
         }
       }
     },
@@ -163,6 +166,9 @@
         },
         "sources": {
           "$ref": "#/$defs/sources"
+        },
+        "floors": {
+          "$ref": "#/$defs/floors"
         }
       }
     },
@@ -344,6 +350,33 @@
           },
           "return_seconds": {
             "$ref": "#/$defs/return_seconds"
+          }
+        }
+      }
+    },
+    "floors": {
+      "description": "Home Assistant's floors in level order, each with its areas; read from HA by the add-on, not edited. The panel's rooms menu groups the pages (an area's page has its id) by them.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "areas"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "areas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       }

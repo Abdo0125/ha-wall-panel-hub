@@ -22,7 +22,23 @@ async def main() -> None:
     browser = discovery.PanelBrowser()
     async with aiohttp.ClientSession() as session:
         gateway = Gateway(cfg, store, session)
-        catalog = CatalogCache(lambda: fetch_catalog(session, cfg.ha_ws_url, cfg.ha_token))
+
+        async def floors_changed(cat: dict) -> None:
+            if store.save_floors(cat):
+                await gateway.notify_config()
+
+        catalog = CatalogCache(lambda: fetch_catalog(session, cfg.ha_ws_url, cfg.ha_token), on_fetch=floors_changed)
+
+        async def watch_floors() -> None:
+            # The rooms menu follows HA's floors without the editor being opened.
+            while True:
+                try:
+                    await catalog.get(refresh=True)
+                except Exception as e:  # HA restarting...: next time
+                    log.info("floors not read: %s", e)
+                await asyncio.sleep(600)
+
+        floors_task = asyncio.create_task(watch_floors())
 
         runners = []
         for app, port in ((panel_api(store, gateway), cfg.panel_port),
@@ -42,6 +58,7 @@ async def main() -> None:
         try:
             await asyncio.Event().wait()
         finally:
+            floors_task.cancel()
             if zc:
                 await browser.close()
                 await zc.async_close()

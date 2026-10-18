@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.16.0
+
+- The panels get Home Assistant's floors with their areas (read when the add-on starts,
+  every 10 minutes and when the designer opens; sent only when they change).
+- Panel app 0.16.0: the page name in the top bar opens the rooms menu over the grid:
+  a large tile per room, a tab per floor (when the rooms are on more than one), home at
+  the end of the tabs and settings as the last tile. The drawer stays for edit mode only.
+
 ## 0.15.0
 
 - The panel's grid has 6 columns on an 11" screen (was 5): halves and thirds, no odd cell

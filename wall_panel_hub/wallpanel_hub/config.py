@@ -110,6 +110,7 @@ def effective(site: dict, panel: dict, name: str) -> dict:
         "apps": list(panel.get("apps") or []),
         "devices": dict(site.get("devices") or {}),
         "sources": dict(site.get("sources") or {}),
+        "floors": list(site.get("floors") or []),
     }
     validate("effective", out)
     return out

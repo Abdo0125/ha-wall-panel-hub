@@ -243,6 +243,20 @@ class Store:
         self._write(self.site_file, saved)
         return saved
 
+    def save_floors(self, catalog: dict) -> bool:
+        """HA's floors with their areas, kept for the panels' rooms menu. A new revision only
+        when they changed (a floor added, an area moved); True then."""
+        floors = []
+        for f in catalog.get("floors") or []:
+            areas = [a["id"] for a in catalog.get("areas") or [] if a.get("floor_id") == f["id"]]
+            if areas:
+                floors.append({"id": f["id"], "name": f["name"], "areas": areas})
+        site = self.get_site()
+        if floors == (site.get("floors") or []):
+            return False
+        self.save_site({**site, "floors": floors})
+        return True
+
     def get_panel_config(self, panel_id: str) -> dict:
         f = self._config_file(panel_id)
         return json.loads(f.read_text(encoding="utf-8")) if f.exists() else panel_config.new_panel()

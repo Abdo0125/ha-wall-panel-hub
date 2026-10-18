@@ -96,8 +96,10 @@ async def fetch(session: aiohttp.ClientSession, ws_url: str, token: str) -> dict
 class CatalogCache:
     """Avoids hitting HA on every editor click; the editor can force a refresh."""
 
-    def __init__(self, fetcher, ttl: float = 60):
+    def __init__(self, fetcher, ttl: float = 60, on_fetch=None):
         self.fetcher = fetcher
+        # Told of every fresh catalog (the floors go to the panels from it).
+        self.on_fetch = on_fetch
         self.ttl = ttl
         self.value: dict | None = None
         self.at = 0.0
@@ -109,4 +111,6 @@ class CatalogCache:
             if refresh or self.value is None or now - self.at > self.ttl:
                 self.value = await self.fetcher()
                 self.at = now
+                if self.on_fetch:
+                    await self.on_fetch(self.value)
             return self.value
