@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.1
+
+- "Apply to all panels" is now "Copy to all panels" (نسخ إلى كل الشاشات), in the add-on and the
+  panel app 0.17.1.
+
 ## 0.17.0
 
 - Parity, phase 1 (docs/parity.md): whoever has the permission will edit anything from the

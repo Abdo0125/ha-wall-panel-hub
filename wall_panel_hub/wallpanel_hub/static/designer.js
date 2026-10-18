@@ -1094,9 +1094,9 @@ function renderSettings(view, p) {
         const r = await post("api/site/display_all", { display });
         if (!r.ok) { msg.className = "msg error"; msg.textContent = "لم يُحفظ: " + (r.body?.error || r.status); return; }
         await loadSite(); await loadConfig(pid);
-        toast(r.body.replaced ? `طُبِّق على كل الشاشات، واستُبدل إعداد ${r.body.replaced} شاشة.` : "طُبِّق على كل الشاشات.");
+        toast(r.body.replaced ? `نُسخ إلى كل الشاشات، واستُبدل إعداد ${r.body.replaced} شاشة.` : "نُسخ إلى كل الشاشات.");
         render();
-      } }, "تطبيق على كل الشاشات")), msg),
+      } }, "نسخ إلى كل الشاشات")), msg),
     appsBox(pid, p, cfg),
     el("div", { class: "box" }, el("h3", {}, "رمز خاص بهذه الشاشة (اختياري)"),
       el("p", { class: "muted" }, "بدونه تستعمل الشاشة رموز المشروع."),
