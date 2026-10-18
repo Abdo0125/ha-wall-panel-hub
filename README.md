@@ -12,6 +12,6 @@ Or: **Settings → Add-ons → Add-on store → ⋮ → Repositories**, then add
 
 | Add-on | Version | |
 | --- | --- | --- |
-| [Wall Panel Hub](wall_panel_hub) | 0.16.1 | Pairing, layouts, and a secure gateway between panels and Home Assistant |
+| [Wall Panel Hub](wall_panel_hub) | 0.17.0 | Pairing, layouts, and a secure gateway between panels and Home Assistant |
 
 This repository is generated; changes are made in the main project and published here.

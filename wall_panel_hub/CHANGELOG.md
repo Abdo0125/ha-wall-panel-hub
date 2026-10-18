@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.17.0
+
+- Parity, phase 1 (docs/parity.md): whoever has the permission will edit anything from the
+  panel itself.
+- Four new permissions, on for the installer by default and restrictable per panel:
+  rooms, devices, panel, project. They take effect as the panel gains those edits.
+- Each panel says its type when it pairs: Android 11", Android 4", ESP32 4", phone. Shown in
+  the panel's settings; panels paired before are Android 11".
+- English is the default language.
+- "Apply to all panels": a panel's display settings become the project's and replace every
+  panel's own, from the add-on (panel settings) or from the panel (project permission,
+  online only).
+- Panel app 0.17.0: sends its type; English by default (the demo too); "Apply to all
+  panels" in its display page.
+
 ## 0.16.1
 
 - Designer: "+ غرفة" lists HA's areas by floor, with "+ الطابق كاملاً" to add every room

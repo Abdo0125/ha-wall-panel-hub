@@ -73,6 +73,7 @@ const SHAPES = {
 const SIZES = { "1x1": "صغيرة", "2x1": "عريضة", "2x2": "كبيرة", "3x2": "كبيرة عريضة", "4x2": "كبيرة جداً" };
 // Each kind of device pairs with its own app and has its own rules (docs/ui-plan.md, 5.3).
 const PLATFORMS = { android: "شاشة أندرويد", esp32: "شاشة ESP32", phone: "هاتف" };
+const TYPES = { android_11: 'أندرويد 11"', android_4: 'أندرويد 4"', esp32_4: 'ESP32 4"', phone: "هاتف" };
 const OPTION_NAMES = {
   min_brightness: "أدنى سطوع (%)", show_percent: "إظهار النسبة", dimmer: "تعتيم المجموعة",
   power_entity: "حساس الاستهلاك", step: "خطوة الحرارة", package: "التطبيق (اسم الحزمة)", return_seconds: "العودة بعد (ثانية)",
@@ -986,10 +987,11 @@ const LANGS = [["ar", "العربية"], ["fr", "Français"], ["en", "English"]]
 const THEMES = [["light", "فاتح"], ["dark", "داكن"]];
 const ROLES = [["guest", "بدون رمز"], ["user", "رمز المستخدم"], ["installer", "رمز المُركِّب"]];
 const CAPS = [["control", "التحكم"], ["apps", "التطبيقات"], ["edit_cards", "تعديل البطاقات"], ["reorder", "إعادة الترتيب"], ["dashboard", "تخصيص لوحتي"], ["add_widgets", "إضافة تطبيقات وودجات"],
-  ["connection", "صفحة الاتصال"], ["display", "صفحة الشاشة"], ["brightness", "السطوع"], ["system", "أزرار النظام"]];
+  ["connection", "صفحة الاتصال"], ["display", "صفحة الشاشة"], ["brightness", "السطوع"], ["system", "أزرار النظام"],
+  ["rooms", "الغرف"], ["devices", "الأجهزة"], ["panel", "إعدادات الشاشة"], ["project", "المشروع"]];
 // Pages of the panel's settings screen: the guest never opens it.
 const PAGE_CAPS = new Set(["connection", "display", "brightness", "system"]);
-const BUILT_IN = { lang: "ar", theme: "light", screensaver: { idle_seconds: 60, dim_brightness: 10 }, app_return_seconds: 300, home_title: "" };
+const BUILT_IN = { lang: "en", theme: "light", screensaver: { idle_seconds: 60, dim_brightness: 10 }, app_return_seconds: 300, home_title: "" };
 
 function selectEl(options, value) {
   const s = el("select");
@@ -1065,7 +1067,7 @@ function renderSettings(view, p) {
   const name = el("input", { value: p.name });
   const place = selectEl([["", "— بدون —"], ...S.catalog.areas.map((a) => [a.id, a.name])], S.editor[pid]?.area_id || "");
   const general = el("div", { class: "form" }, el("label", {}, "اسم الشاشة"), name, el("label", {}, "مكان تركيبها"), place,
-    el("label", {}, "نوع الجهاز"), el("div", { class: "muted" }, `${PLATFORMS[p.platform || "android"] || p.platform}${p.model ? " · " + p.model : ""}`));
+    el("label", {}, "نوع الجهاز"), el("div", { class: "muted" }, `${TYPES[p.type] || PLATFORMS[p.platform || "android"] || p.platform}${p.model ? " · " + p.model : ""}`));
   const display = el("div", { class: "form" });
   const readDisplay = displayFields(display, cfg.config.overrides || {}, inheritedDisplay(), "من المشروع");
 
@@ -1084,7 +1086,17 @@ function renderSettings(view, p) {
         await refresh(); await loadConfig(pid);
         toast(p.online ? "حُفظ ووصل للشاشة." : "حُفظ. ستستلمه الشاشة عند اتصالها.");
         render();
-      } }, "حفظ")), msg),
+      } }, "حفظ لهذه الشاشة"),
+      el("button", { onclick: async () => {
+        const display = readDisplay();
+        if (!Object.keys(display).length) { alert("لا إعداد خاص بهذه الشاشة لتطبيقه."); return; }
+        if (!confirm("تصبح هذه الإعدادات إعدادات المشروع، وتُستبدل الإعدادات الخاصة في كل الشاشات. متابعة؟")) return;
+        const r = await post("api/site/display_all", { display });
+        if (!r.ok) { msg.className = "msg error"; msg.textContent = "لم يُحفظ: " + (r.body?.error || r.status); return; }
+        await loadSite(); await loadConfig(pid);
+        toast(r.body.replaced ? `طُبِّق على كل الشاشات، واستُبدل إعداد ${r.body.replaced} شاشة.` : "طُبِّق على كل الشاشات.");
+        render();
+      } }, "تطبيق على كل الشاشات")), msg),
     appsBox(pid, p, cfg),
     el("div", { class: "box" }, el("h3", {}, "رمز خاص بهذه الشاشة (اختياري)"),
       el("p", { class: "muted" }, "بدونه تستعمل الشاشة رموز المشروع."),

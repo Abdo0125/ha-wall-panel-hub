@@ -20,7 +20,7 @@ import re
 import aiohttp
 from aiohttp import WSMsgType, web
 
-from .access import EditRefused
+from .access import EditRefused, role_caps
 from .cards import REGISTRY
 from .config import ConfigInvalid
 from .migrate import SCHEMA, downgrade
@@ -151,6 +151,18 @@ class PanelConnection:
                 return
             await self.send({"id": mid, "type": "result", "success": True, "result": {"version": saved["version"]}})
             await self.gateway.notify_layout(self.panel_id)
+        elif kind == "wallpanel/config/display" and msg.get("scope") == "all":
+            # For every panel: the project permission, checked with the PIN entered.
+            if "project" not in role_caps(store.effective_config(self.panel_id), store.role_for(self.panel_id, msg.get("pin"))):
+                await self.send(_error(mid, "forbidden", "changing the project is not allowed on this panel"))
+                return
+            try:
+                replaced = store.save_display_for_all(msg.get("display") or {})
+            except ConfigInvalid as e:
+                await self.send(_error(mid, "invalid_config", str(e)))
+                return
+            await self.send({"id": mid, "type": "result", "success": True, "result": {"replaced": replaced}})
+            await self.gateway.notify_config()
         elif kind == "wallpanel/config/display":
             try:
                 store.save_display_from_panel(self.panel_id, msg.get("display") or {})

@@ -305,11 +305,15 @@
         "display",
         "brightness",
         "system",
-        "settings"
+        "settings",
+        "rooms",
+        "devices",
+        "panel",
+        "project"
       ]
     },
     "access": {
-      "description": "What can be done on the panel: without a PIN (guest), with the user PIN, with the installer PIN. Adding or removing entities, pages or rooms is never possible on the panel.",
+      "description": "What can be done on the panel: without a PIN (guest), with the user PIN, with the installer PIN. rooms, devices, panel and project: what the add-on edits, from the panel too (docs/parity.md).",
       "type": "object",
       "additionalProperties": false,
       "properties": {

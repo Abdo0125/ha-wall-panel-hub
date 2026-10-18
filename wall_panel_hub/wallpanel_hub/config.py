@@ -32,7 +32,7 @@ def validate(kind: str, doc: dict) -> None:
 
 
 DEFAULTS = {
-    "lang": "ar",
+    "lang": "en",
     "theme": "light",
     "screensaver": {"idle_seconds": 60, "dim_brightness": 10},
     "app_return_seconds": 300,
@@ -40,11 +40,13 @@ DEFAULTS = {
 }
 
 # The user may not reorder unless the installer allows it for a panel. connection, display,
-# brightness and system are the pages of the panel's settings screen.
+# brightness and system are the pages of the panel's settings screen. rooms, devices, panel and
+# project: what the add-on edits, from the panel too (docs/parity.md); the installer's by default.
 DEFAULT_ACCESS = {
     "guest": ["control", "apps"],
     "user": ["control", "apps", "edit_cards", "dashboard", "add_widgets", "brightness"],
-    "installer": ["control", "apps", "edit_cards", "reorder", "dashboard", "add_widgets", "connection", "display", "brightness", "system"],
+    "installer": ["control", "apps", "edit_cards", "reorder", "dashboard", "add_widgets", "connection", "display", "brightness", "system",
+                  "rooms", "devices", "panel", "project"],
 }
 SETTINGS_PAGES = ["connection", "display", "brightness", "system"]
 # What the add-on offered before access_known was saved with the access (up to 0.11.0).

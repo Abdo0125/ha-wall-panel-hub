@@ -38,7 +38,7 @@ def panel_api(store: Store, gateway: Gateway) -> web.Application:
         except Exception:
             raise web.HTTPBadRequest(text="panel_id required")
         req = store.request_pairing(panel_id, str(body.get("name", "")), str(body.get("model", "")),
-                                    str(body.get("platform", "android")))
+                                    str(body.get("platform", "android")), body.get("type"))
         return web.json_response({"request_id": req.request_id, "code": req.code})
 
     async def pair_status(request: web.Request):
@@ -126,6 +126,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
                 "name": p.name,
                 "model": p.model,
                 "platform": p.platform,
+                "type": p.type,
                 "area_id": p.area_id,
                 "online": gateway.online(p.id),
                 "sent": store.get_layout(p.id),
@@ -181,6 +182,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
                     "name": p.name,
                     "model": p.model,
                     "platform": p.platform,
+                    "type": p.type,
                     "paired_at": p.paired_at,
                     "last_seen": p.last_seen,
                     "online": gateway.online(p.id),
@@ -189,7 +191,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
                 for p in sorted(store.panels.values(), key=lambda p: p.name)
             ],
             "pending": [
-                {"request_id": r.request_id, "panel_id": r.panel_id, "name": r.name, "model": r.model, "platform": r.platform,
+                {"request_id": r.request_id, "panel_id": r.panel_id, "name": r.name, "model": r.model, "platform": r.platform, "type": r.type,
                  "code": r.code, "age": int(now - r.created)}
                 for r in store.pending.values() if not r.key and not r.rejected
             ],
@@ -256,6 +258,16 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
             return _invalid(e)
         await gateway.notify_config()
         return web.json_response(_without_pins(saved))
+
+    async def display_all(request: web.Request):
+        """Display settings for every panel: the project's, replacing each panel's own."""
+        body = await _body(request)
+        try:
+            replaced = store.save_display_for_all(body.get("display") or {})
+        except ConfigInvalid as e:
+            return _invalid(e)
+        await gateway.notify_config()
+        return web.json_response({"replaced": replaced})
 
     def _pin_value(body: dict):
         role = body.get("role")
@@ -338,6 +350,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     app.router.add_get("/api/site", get_site)
     app.router.add_put("/api/site", put_site)
     app.router.add_post("/api/site/pin", site_pin)
+    app.router.add_post("/api/site/display_all", display_all)
     app.router.add_get("/api/panels/{pid}/config", get_panel_config)
     app.router.add_put("/api/panels/{pid}/config", put_panel_config)
     app.router.add_post("/api/panels/{pid}/pin", panel_pin)

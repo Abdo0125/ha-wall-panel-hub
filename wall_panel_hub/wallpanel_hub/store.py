@@ -21,6 +21,14 @@ from .pins import verify_pin
 DISPLAY = ("lang", "theme", "screensaver", "home_title")
 # The apps that pair with the hub, one per kind of device.
 PLATFORMS = ("android", "esp32", "phone")
+# The kinds of panel, each with its own app: a layout or a setting that depends on the screen's
+# size goes to panels of the same type only. iPhone and Android phones share one.
+TYPES = ("android_11", "android_4", "esp32_4", "phone")
+DEFAULT_TYPE = {"android": "android_11", "esp32": "esp32_4", "phone": "phone"}
+
+
+def _type(platform: str, kind: str | None) -> str:
+    return kind if kind in TYPES else DEFAULT_TYPE.get(platform, "android_11")
 
 PAIRING_TTL_S = 600
 MAX_PENDING = 10
@@ -88,6 +96,8 @@ class Panel:
     area_id: str | None = None
     # Which app the device runs: each has its own grid and card rules (docs/ui-plan.md, 5.3).
     platform: str = "android"
+    # Which kind of panel (TYPES): Android 11" and 4" run the same platform.
+    type: str = "android_11"
 
 
 @dataclass
@@ -98,6 +108,7 @@ class PairRequest:
     model: str
     code: str
     platform: str = "android"
+    type: str = "android_11"
     created: float = field(default_factory=time.time)
     # Set once approved; handed to the panel a single time.
     key: str | None = None
@@ -141,7 +152,8 @@ class Store:
         for rid in [r for r, p in self.pending.items() if now - p.created > PAIRING_TTL_S]:
             del self.pending[rid]
 
-    def request_pairing(self, panel_id: str, name: str, model: str, platform: str = "android") -> PairRequest:
+    def request_pairing(self, panel_id: str, name: str, model: str, platform: str = "android",
+                        kind: str | None = None) -> PairRequest:
         self._expire()
         # One open request per panel: a retry replaces the previous one.
         for rid in [r for r, p in self.pending.items() if p.panel_id == panel_id]:
@@ -155,6 +167,7 @@ class Store:
             model=model[:60],
             code=f"{secrets.randbelow(1_000_000):06d}",
             platform=platform if platform in PLATFORMS else "android",
+            type=_type(platform, kind),
         )
         self.pending[req.request_id] = req
         return req
@@ -163,7 +176,7 @@ class Store:
         self._expire()
         req = self.pending[request_id]
         key = secrets.token_urlsafe(32)
-        panel = Panel(req.panel_id, req.name, req.model, _hash(key), time.time(), platform=req.platform)
+        panel = Panel(req.panel_id, req.name, req.model, _hash(key), time.time(), platform=req.platform, type=req.type)
         self.panels[panel.id] = panel
         self._save_panels()
         req.key = key
@@ -350,6 +363,26 @@ class Store:
         if verify_pin(pin, eff["user_pin"]):
             return "user"
         return "guest"
+
+    def save_display_for_all(self, display: dict) -> int:
+        """Display settings for every panel: the project's, and no panel keeps its own value
+        for them any more. Returns how many panels had their own value replaced."""
+        keys = [k for k in DISPLAY if k in display]
+        site = self.get_site()
+        defaults = dict(site.get("defaults") or {})
+        for key in keys:
+            defaults[key] = display[key]
+        self.save_site({**site, "defaults": defaults})
+        replaced = 0
+        for pid in self.panels:
+            doc = self.get_panel_config(pid)
+            overrides = dict(doc.get("overrides") or {})
+            if any(k in overrides for k in keys):
+                replaced += 1
+                for k in keys:
+                    overrides.pop(k, None)
+                self.save_panel_config(pid, {**doc, "overrides": overrides})
+        return replaced
 
     def save_display_from_panel(self, panel_id: str, display: dict) -> dict:
         """Theme, language and screensaver changed on the panel: stored as this panel's own
