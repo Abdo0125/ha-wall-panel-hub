@@ -1,8 +1,9 @@
 """What a panel may change in its own layout, enforced by the hub.
 
-The panel's editor hides what is not allowed; this is the check that counts. On the
-panel nothing is ever added or removed (entities, cards, pages): that is done in the
-add-on. Depending on the role's capabilities (config.schema.json, access):
+The panel's editor hides what is not allowed; this is the check that counts. Depending on
+the role's capabilities (config.schema.json, access; docs/parity.md):
+
+- rooms: rooms added (with their devices), removed, renamed or given another icon;
 
 - edit_cards: a card's shape (same kind), size, label, icon, confirmation, options;
 - reorder: the order of pages, and of cards within their page;
@@ -36,16 +37,21 @@ def check_panel_edit(old: dict, new: dict, caps: set[str], allowed_apps: set[str
     _check_dashboard(old, new, caps, allowed)
     old_pages = {p["id"]: p for p in old["pages"]}
     new_pages = {p["id"]: p for p in new["pages"]}
-    if set(old_pages) != set(new_pages):
-        raise EditRefused("pages can only be added or removed in the add-on")
-    if [p["id"] for p in old["pages"]] != [p["id"] for p in new["pages"]] and "reorder" not in caps:
+    if set(old_pages) != set(new_pages) and "rooms" not in caps:
+        raise EditRefused("adding or removing rooms is not allowed on this panel")
+    # The rooms kept, in their order: a room added at the end moves no other.
+    kept_before = [p["id"] for p in old["pages"] if p["id"] in new_pages]
+    kept_after = [p["id"] for p in new["pages"] if p["id"] in old_pages]
+    if kept_before != kept_after and "reorder" not in caps:
         raise EditRefused("reordering pages is not allowed on this panel")
 
     for pid, new_page in new_pages.items():
-        old_page = old_pages[pid]
+        old_page = old_pages.get(pid)
+        if old_page is None:
+            continue  # a new room, with whatever devices it was given
         for key in ("title", "icon"):
-            if old_page.get(key) != new_page.get(key):
-                raise EditRefused("pages are renamed in the add-on")
+            if old_page.get(key) != new_page.get(key) and "rooms" not in caps:
+                raise EditRefused("renaming rooms is not allowed on this panel")
         old_cards = {c["id"]: c for c in old_page["cards"]}
         new_cards = {c["id"]: c for c in new_page["cards"]}
         added = [c for cid, c in new_cards.items() if cid not in old_cards]

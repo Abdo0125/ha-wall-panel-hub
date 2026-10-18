@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.18.0
+
+- Parity, phase 2: rooms from the panel. With the rooms permission a panel adds rooms
+  (with their devices), removes them and changes their name and icon; the hub accepts it.
+  A device added to a room already there still waits for phase 3.
+- The permissions page no longer says rooms and devices are edited in the add-on only.
+- Panel app 0.18.0: in edit mode the rooms menu (the page name) is where rooms are edited:
+  long-press and drag to move one, the pencil for its name, icon and removal, + to add HA's
+  rooms by floor or a whole floor. The rooms drawer is gone; home is beside Cancel.
+
 ## 0.17.1
 
 - "Apply to all panels" is now "Copy to all panels" (نسخ إلى كل الشاشات), in the add-on and the
