@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.1
+
+- Designer: "+ غرفة" lists HA's areas by floor, with "+ الطابق كاملاً" to add every room
+  of a floor (with its devices) at once. The rooms list shows each room's floor.
+- Panel app 0.16.2: settings leave the rooms menu for ⚙ in the top bar, shown while the
+  menu is open (beside ⌂).
+
 ## 0.16.0
 
 - The panels get Home Assistant's floors with their areas (read when the add-on starts,

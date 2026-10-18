@@ -582,6 +582,7 @@ function renderDesign(view) {
     rooms.append(el("li", { class: "room" + (i === S.page ? " active" : ""), dataset: { index: i }, onclick: () => { S.page = i; S.sel = null; render(); } },
       icon(pg.icon || "mdi:floor-plan"),
       el("span", { class: "grow" }, pg.title),
+      floorOf(pg.id) ? el("span", { class: "muted" }, floorOf(pg.id)) : null,
       el("span", { class: "edit mdi", title: "تعديل الغرفة", onclick: (ev) => { ev.stopPropagation(); pageSheet(i); } }, String.fromCodePoint(CODEPOINTS["pencil"] || 63))));
   });
   Sortable.create(rooms, {
@@ -923,16 +924,31 @@ function addSheet(screen, col, row) {
   search.focus();
 }
 
-// Add a room: from HA's areas (with its devices), or an empty one.
+// The HA floor a page's area is on (the panel's rooms menu has a tab per floor).
+function floorOf(pageId) {
+  const area = S.catalog.areas.find((a) => a.id === pageId);
+  return area?.floor_id ? S.catalog.floors.find((f) => f.id === area.floor_id)?.name || "" : "";
+}
+
+// Add a room: from HA's areas (with its devices), by floor or a whole floor at once, or an empty one.
 function roomSheet() {
   const layout = L();
   const have = new Set(layout.pages.map((p) => p.id));
   const list = el("ul", { class: "picklist" });
-  for (const a of S.catalog.areas) {
-    if (have.has(a.id)) continue;
-    const n = controlsIn(a.id).length;
-    list.append(el("li", { onclick: () => { change((l) => { addRoomPages(l, [a.id]); S.page = l.pages.length - 1; }); closeSheet(); } },
-      icon(a.icon || "mdi:floor-plan"), el("span", { class: "grow" }, a.name), el("span", { class: "muted" }, `${n} جهاز`)));
+  const floors = [...S.catalog.floors, { id: null, name: "بدون طابق" }];
+  for (const f of floors) {
+    const areas = S.catalog.areas.filter((a) => (a.floor_id || null) === f.id && !have.has(a.id));
+    if (!areas.length) continue;
+    if (S.catalog.floors.length) {
+      list.append(el("div", { class: "floorhead" }, el("h4", { class: "grow" }, f.name),
+        areas.length > 1 ? el("button", { onclick: () => { change((l) => { const at = l.pages.length; addRoomPages(l, areas.map((a) => a.id)); S.page = at; }); closeSheet(); } },
+          `+ الطابق كاملاً (${areas.length})`) : null));
+    }
+    for (const a of areas) {
+      const n = controlsIn(a.id).length;
+      list.append(el("li", { onclick: () => { change((l) => { addRoomPages(l, [a.id]); S.page = l.pages.length - 1; }); closeSheet(); } },
+        icon(a.icon || "mdi:floor-plan"), el("span", { class: "grow" }, a.name), el("span", { class: "muted" }, `${n} جهاز`)));
+    }
   }
   sheet(
     el("h3", {}, "إضافة غرفة"),
