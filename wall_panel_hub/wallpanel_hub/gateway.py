@@ -151,6 +151,22 @@ class PanelConnection:
                 return
             await self.send({"id": mid, "type": "result", "success": True, "result": {"version": saved["version"]}})
             await self.gateway.notify_layout(self.panel_id)
+        elif kind == "wallpanel/config/floor":
+            # A floor's name: on this panel with the rooms permission, for all with project.
+            everywhere = msg.get("scope") == "all"
+            need = "project" if everywhere else "rooms"
+            if need not in role_caps(store.effective_config(self.panel_id), store.role_for(self.panel_id, msg.get("pin"))):
+                await self.send(_error(mid, "forbidden", f"naming floors needs the {need} permission"))
+                return
+            try:
+                icon = msg.get("icon")
+                store.name_floor(self.panel_id, str(msg.get("floor_id") or ""), str(msg.get("name") or ""), everywhere,
+                                 None if icon is None else str(icon))
+            except ConfigInvalid as e:
+                await self.send(_error(mid, "invalid_config", str(e)))
+                return
+            await self.send({"id": mid, "type": "result", "success": True, "result": None})
+            await self.gateway.notify_config(None if everywhere else self.panel_id)
         elif kind == "wallpanel/config/display" and msg.get("scope") == "all":
             # For every panel: the project permission, checked with the PIN entered.
             if "project" not in role_caps(store.effective_config(self.panel_id), store.role_for(self.panel_id, msg.get("pin"))):

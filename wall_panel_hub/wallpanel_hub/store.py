@@ -27,6 +27,14 @@ TYPES = ("android_11", "android_4", "esp32_4", "phone")
 DEFAULT_TYPE = {"android": "android_11", "esp32": "esp32_4", "phone": "phone"}
 
 
+def _floor_icon(floor: dict) -> str:
+    """HA's icon for a floor, else one by its level, as HA shows it."""
+    if floor.get("icon"):
+        return floor["icon"]
+    return {-1: "mdi:home-floor-negative-1", 0: "mdi:home-floor-0", 1: "mdi:home-floor-1",
+            2: "mdi:home-floor-2", 3: "mdi:home-floor-3"}.get(floor.get("level"), "mdi:home-floor-l")
+
+
 def _type(platform: str, kind: str | None) -> str:
     return kind if kind in TYPES else DEFAULT_TYPE.get(platform, "android_11")
 
@@ -263,7 +271,7 @@ class Store:
         for f in catalog.get("floors") or []:
             areas = [a["id"] for a in catalog.get("areas") or [] if a.get("floor_id") == f["id"]]
             if areas:
-                floors.append({"id": f["id"], "name": f["name"], "areas": areas})
+                floors.append({"id": f["id"], "name": f["name"], "icon": _floor_icon(f), "areas": areas})
         site = self.get_site()
         if floors == (site.get("floors") or []):
             return False
@@ -383,6 +391,38 @@ class Store:
                     overrides.pop(k, None)
                 self.save_panel_config(pid, {**doc, "overrides": overrides})
         return replaced
+
+    def name_floor(self, panel_id: str, floor_id: str, name: str, everywhere: bool, icon: str | None = None) -> None:
+        """A floor's name and icon on this panel, or the project's (and no panel keeps its own).
+        Blank goes back to HA's; an icon of None stays as it is."""
+        values = {"floor_names": name.strip()[:40]}
+        if icon is not None:
+            values["floor_icons"] = icon.strip()
+
+        def put(settings: dict) -> dict:
+            settings = dict(settings or {})
+            for key, value in values.items():
+                given = dict(settings.get(key) or {})
+                if value:
+                    given[floor_id] = value
+                else:
+                    given.pop(floor_id, None)
+                settings[key] = given
+            return settings
+
+        if everywhere:
+            site = self.get_site()
+            self.save_site({**site, "defaults": put(site.get("defaults"))})
+            for pid in self.panels:
+                doc = self.get_panel_config(pid)
+                overrides = dict(doc.get("overrides") or {})
+                if any(floor_id in (overrides.get(k) or {}) for k in values):
+                    for k in values:
+                        overrides[k] = {f: v for f, v in (overrides.get(k) or {}).items() if f != floor_id}
+                    self.save_panel_config(pid, {**doc, "overrides": overrides})
+        else:
+            doc = self.get_panel_config(panel_id)
+            self.save_panel_config(panel_id, {**doc, "overrides": put(doc.get("overrides"))})
 
     def save_display_from_panel(self, panel_id: str, display: dict) -> dict:
         """Theme, language and screensaver changed on the panel: stored as this panel's own

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.19.0
+
+- Floors get a name and an icon of their own on a panel, or for all panels: HA's (or an
+  icon by level) where none is given; nothing changes in HA. Set from the panel (rooms
+  permission for this panel, project for all panels).
+- The panels get each floor's icon from HA.
+- Panel app 0.19.0: floor tabs show their icon; in edit mode a pencil on each opens its
+  name and icon ("This panel" / "Copy to all panels"). The edit bar keeps the page name
+  where it is, with Cancel and Done at the end, and no home button. The pencil shows in
+  the rooms menu too, editing the rooms there.
+
 ## 0.18.0
 
 - Parity, phase 2: rooms from the panel. With the rooms permission a panel adds rooms

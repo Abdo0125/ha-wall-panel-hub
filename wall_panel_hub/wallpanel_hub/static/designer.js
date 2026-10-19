@@ -1081,7 +1081,8 @@ function renderSettings(view, p) {
           await post(`api/panels/${enc(pid)}/area`, { area_id: place.value || null });
           if (S.editor[pid]) S.editor[pid].area_id = place.value || null;
         }
-        const r = await put(`api/panels/${enc(pid)}/config`, { overrides: readDisplay() });
+        const keep = cfg.config.overrides?.floor_names ? { floor_names: cfg.config.overrides.floor_names } : {};
+        const r = await put(`api/panels/${enc(pid)}/config`, { overrides: { ...keep, ...readDisplay() } });
         if (!r.ok) { msg.className = "msg error"; msg.textContent = "لم يُحفظ: " + (r.body?.error || r.status); return; }
         await refresh(); await loadConfig(pid);
         toast(p.online ? "حُفظ ووصل للشاشة." : "حُفظ. ستستلمه الشاشة عند اتصالها.");
@@ -1218,7 +1219,9 @@ function renderProject(view) {
       el("div", { class: "form" }, el("label", {}, "اسم المشروع"), name),
       el("h3", { style: { marginTop: "18px" } }, "الإعدادات الافتراضية لكل الشاشات"), display,
       el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
-        const r = await put("api/site", { name: name.value.trim(), defaults: read() });
+        // Floor names are not on this form: kept as they are.
+        const keep = site.defaults?.floor_names ? { floor_names: site.defaults.floor_names } : {};
+        const r = await put("api/site", { name: name.value.trim(), defaults: { ...keep, ...read() } });
         if (!r.ok) { alert("لم يُحفظ: " + (r.body?.error || r.status)); return; }
         S.site = r.body; toast("حُفظ، ووصل لكل الشاشات المتصلة."); render();
       } }, "حفظ"))),

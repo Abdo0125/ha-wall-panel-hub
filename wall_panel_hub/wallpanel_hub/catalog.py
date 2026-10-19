@@ -55,7 +55,8 @@ def build(floors: list, areas: list, devices: list, registry: list, states: list
 
     return {
         "floors": sorted(
-            ({"id": f["floor_id"], "name": f.get("name") or f["floor_id"], "level": f.get("level")}
+            ({"id": f["floor_id"], "name": f.get("name") or f["floor_id"], "level": f.get("level"),
+              "icon": f.get("icon")}
              for f in floors if "floor_id" in f),
             key=lambda f: (f["level"] is None, f["level"] or 0, f["name"]),
         ),
