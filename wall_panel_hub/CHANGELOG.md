@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.24.0
+
+- A room's place in the rooms menu (layout page `tile.pos`): rooms are placed freely in their
+  floor's grid on a panel, as cards are on a page.
+- Panel app 0.24.0: the edit bar is one line as high as the top bar (the hint in its middle),
+  so the grid keeps its 4 rows while editing; flat Cancel and Done; rooms moved to any cell
+  of the rooms menu, and added from + in an empty cell; a card or a room picked to add shows
+  its settings first, added with Add, in the cell touched (sizes that do not fit there
+  greyed); cards added by hand start at 1x1.
+
 ## 0.23.0
 
 - A room's card in the panel's rooms menu (layout page `tile`): picture or details, and its
