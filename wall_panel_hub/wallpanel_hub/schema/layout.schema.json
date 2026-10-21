@@ -30,6 +30,14 @@
         "$ref": "#/$defs/page"
       }
     },
+    "floors": {
+      "description": "Floors shown in the panel's rooms menu even with no room on them (HA floor ids, or ids of floors added on the panels); a floor with rooms shows anyway.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
     "dashboard": {
       "description": "My dashboard, the first entry of the sidebar: favourites from the panel's rooms, scenes, apps and the panel's own cards (widget.*). Omitted: the clock, then the panel's scenes.",
       "type": "object",

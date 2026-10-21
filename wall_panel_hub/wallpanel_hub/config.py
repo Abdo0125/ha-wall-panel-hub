@@ -78,13 +78,22 @@ def _setting(key: str, panel: dict, site: dict):
     return DEFAULTS[key]
 
 
+# A floor added on a panel, not in HA: its id starts with this, its name is all it has.
+CUSTOM_FLOOR = "wp_"
+
+
 def _floors(site: dict, panel: dict) -> list:
-    """HA's floors, each under the name and icon given to it: this panel's, else the project's, else HA's."""
+    """HA's floors, each under the name and icon given to it: this panel's, else the project's,
+    else HA's. Then the floors added on the panels (CUSTOM_FLOOR ids named there), with no area."""
     def given(key: str) -> dict:
         return {**((site.get("defaults") or {}).get(key) or {}), **((panel.get("overrides") or {}).get(key) or {})}
     names, icons = given("floor_names"), given("floor_icons")
+    ha = site.get("floors") or []
+    known = {f["id"] for f in ha}
+    added = [{"id": fid, "name": name, "areas": []} for fid, name in names.items()
+             if fid.startswith(CUSTOM_FLOOR) and fid not in known and name]
     return [{**f, "name": names.get(f["id"]) or f["name"], **({"icon": icons[f["id"]]} if icons.get(f["id"]) else {})}
-            for f in site.get("floors") or []]
+            for f in ha + added]
 
 
 def effective(site: dict, panel: dict, name: str) -> dict:

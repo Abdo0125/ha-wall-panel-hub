@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.25.0
+
+- Floors added from the panel: layout `floors` lists the floors a panel's rooms menu shows
+  even with no room on them (rooms permission). A floor not in HA is named on the panel
+  (`wp_` id, this panel or all panels) and comes after HA's floors, with no area.
+- Panel app 0.25.0: + after the floor tabs in edit mode adds one of HA's floors (empty or
+  with its rooms) or a new floor; a floor's pencil deletes it from the panel with its rooms.
+
 ## 0.24.0
 
 - A room's place in the rooms menu (layout page `tile.pos`): rooms are placed freely in their

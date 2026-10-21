@@ -1,5 +1,5 @@
 name: Wall Panel Hub
-version: "0.24.0"
+version: "0.25.0"
 slug: wall_panel_hub
 description: Unified management for wall panels (Android and ESP32) - pairing, layouts, secure gateway to Home Assistant
 url: https://github.com/Abdo0125/ha-wall-panel-hub

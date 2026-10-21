@@ -4,6 +4,7 @@ The panel's editor hides what is not allowed; this is the check that counts. Dep
 the role's capabilities (config.schema.json, access; docs/parity.md):
 
 - rooms: rooms added (with their devices), removed, renamed, given another icon or floor;
+  the floors shown in the rooms menu (empty ones too);
 - devices: device cards added from anywhere in HA, removed or moved to another room, in the
   rooms and on my dashboard;
 
@@ -41,6 +42,8 @@ def check_panel_edit(old: dict, new: dict, caps: set[str], allowed_apps: set[str
     new_pages = {p["id"]: p for p in new["pages"]}
     if set(old_pages) != set(new_pages) and "rooms" not in caps:
         raise EditRefused("adding or removing rooms is not allowed on this panel")
+    if (old.get("floors") or []) != (new.get("floors") or []) and "rooms" not in caps:
+        raise EditRefused("adding or removing floors needs the rooms permission")
     # The rooms kept, in their order: a room added at the end moves no other.
     kept_before = [p["id"] for p in old["pages"] if p["id"] in new_pages]
     kept_after = [p["id"] for p in new["pages"] if p["id"] in old_pages]
