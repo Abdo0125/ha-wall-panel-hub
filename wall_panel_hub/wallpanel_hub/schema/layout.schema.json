@@ -119,6 +119,23 @@
           "type": "string",
           "minLength": 1
         },
+        "tile": {
+          "description": "The room's card in the panel's rooms menu; left out: its picture at 2x1.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "card": {
+              "enum": [
+                "room.card",
+                "room.summary"
+              ]
+            },
+            "size": {
+              "type": "string",
+              "pattern": "^[1-4]x[1-4]$"
+            }
+          }
+        },
         "cards": {
           "type": "array",
           "items": {

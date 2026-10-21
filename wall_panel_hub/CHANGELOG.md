@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.23.0
+
+- A room's card in the panel's rooms menu (layout page `tile`): picture or details, and its
+  size; by default its picture at 2x1. Changed from the panel with the rooms permission.
+- The room picture card (room.card) also comes in 1x1.
+- Panel app 0.23.0: the rooms menu shows each room as a room card (picture at 2x1 by
+  default); in edit mode the room's sheet picks its card in the menu (previews) and size.
+
 ## 0.22.0
 
 - Room details card (room.summary, 2x1 by default, or 1x1): the room's picture band, its

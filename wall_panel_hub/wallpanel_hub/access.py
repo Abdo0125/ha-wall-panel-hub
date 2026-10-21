@@ -51,7 +51,7 @@ def check_panel_edit(old: dict, new: dict, caps: set[str], allowed_apps: set[str
         old_page = old_pages.get(pid)
         if old_page is None:
             continue  # a new room, with whatever devices it was given
-        for key in ("title", "icon", "floor"):
+        for key in ("title", "icon", "floor", "tile"):
             if old_page.get(key) != new_page.get(key) and "rooms" not in caps:
                 raise EditRefused("renaming rooms is not allowed on this panel")
         old_cards = {c["id"]: c for c in old_page["cards"]}
