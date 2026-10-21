@@ -209,6 +209,21 @@ class PanelConnection:
             self.config_subs.add(mid)
             await self.send({"id": mid, "type": "result", "success": True, "result": None})
             await self.push_config()
+        elif kind == "wallpanel/catalog/get":
+            # HA's rooms and devices, to add some on the panel: the panel's own get_states
+            # only has its entities. With the rooms or devices permission.
+            if not {"rooms", "devices"} & role_caps(store.effective_config(self.panel_id), store.role_for(self.panel_id, msg.get("pin"))):
+                await self.send(_error(mid, "forbidden", "reading HA's rooms needs the rooms or devices permission"))
+                return
+            if self.gateway.catalog is None:
+                await self.send(_error(mid, "unavailable", "no Home Assistant connection"))
+                return
+            try:
+                cat = await self.gateway.catalog.get()
+            except Exception as e:  # HA restarting...
+                await self.send(_error(mid, "unavailable", str(e)))
+                return
+            await self.send({"id": mid, "type": "result", "success": True, "result": cat})
         elif kind == "wallpanel/registry/get":
             await self.send({"id": mid, "type": "result", "success": True, "result": REGISTRY})
         else:
@@ -228,6 +243,8 @@ class Gateway:
         # Reported by each panel when it connects; kept in memory only.
         self.installed_apps: dict[str, list[dict]] = {}
         self.installed_widgets: dict[str, list[dict]] = {}
+        # HA's building (catalog.CatalogCache), for panels that add rooms and devices.
+        self.catalog = None
 
     def online(self, panel_id: str) -> bool:
         return bool(self.connections.get(panel_id))

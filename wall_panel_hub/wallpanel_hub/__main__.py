@@ -28,6 +28,7 @@ async def main() -> None:
                 await gateway.notify_config()
 
         catalog = CatalogCache(lambda: fetch_catalog(session, cfg.ha_ws_url, cfg.ha_token), on_fetch=floors_changed)
+        gateway.catalog = catalog
 
         async def watch_floors() -> None:
             # The rooms menu follows HA's floors without the editor being opened.

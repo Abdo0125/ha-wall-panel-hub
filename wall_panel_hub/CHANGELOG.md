@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.19.1
+
+- Fix: rooms added on a panel came without devices ("0 devices"): the panel read HA's
+  states through the hub, which keeps them to the panel's own entities. The panel now asks
+  the hub for HA's rooms and devices (wallpanel/catalog/get, rooms or devices permission).
+- Panel app 0.19.3: reads them from the hub.
+
 ## 0.19.0
 
 - Floors get a name and an icon of their own on a panel, or for all panels: HA's (or an
