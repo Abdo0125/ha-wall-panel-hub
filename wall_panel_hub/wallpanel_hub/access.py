@@ -3,7 +3,8 @@
 The panel's editor hides what is not allowed; this is the check that counts. Depending on
 the role's capabilities (config.schema.json, access; docs/parity.md):
 
-- rooms: rooms added (with their devices), removed, renamed, given another icon or floor;
+- rooms: rooms added (with their devices), removed, renamed, given another icon or floor,
+  shown on more floors;
   the floors shown in the rooms menu (empty ones too);
 - devices: device cards added from anywhere in HA, removed or moved to another room, in the
   rooms and on my dashboard;
@@ -54,7 +55,7 @@ def check_panel_edit(old: dict, new: dict, caps: set[str], allowed_apps: set[str
         old_page = old_pages.get(pid)
         if old_page is None:
             continue  # a new room, with whatever devices it was given
-        for key in ("title", "icon", "floor", "tile"):
+        for key in ("title", "icon", "floor", "tile", "also"):
             if old_page.get(key) != new_page.get(key) and "rooms" not in caps:
                 raise EditRefused("renaming rooms is not allowed on this panel")
         old_cards = {c["id"]: c for c in old_page["cards"]}

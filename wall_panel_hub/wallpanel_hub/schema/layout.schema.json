@@ -171,6 +171,66 @@
             }
           }
         },
+        "also": {
+          "description": "Other floors the room shows on in the panel's rooms menu, besides its own (floor), each with its card there; the same room, not a copy.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "floor"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "floor": {
+                "type": "string"
+              },
+              "tile": {
+                "description": "The room's card in the panel's rooms menu; left out: its picture at 2x1, laid out in order.",
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "card": {
+                    "enum": [
+                      "room.card",
+                      "room.summary"
+                    ]
+                  },
+                  "size": {
+                    "type": "string",
+                    "pattern": "^[1-4]x[1-4]$"
+                  },
+                  "pos": {
+                    "description": "Its place in its floor's grid in the rooms menu (screen, column, row, from the reading side). Omitted: laid out in order after the placed rooms.",
+                    "type": "object",
+                    "required": [
+                      "screen",
+                      "col",
+                      "row"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "screen": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 20
+                      },
+                      "col": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 11
+                      },
+                      "row": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 11
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "cards": {
           "type": "array",
           "items": {

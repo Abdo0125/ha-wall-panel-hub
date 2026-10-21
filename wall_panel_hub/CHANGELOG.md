@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.26.0
+
+- A room shown on more than one floor of a panel's rooms menu (layout page `also`: the other
+  floors, each with the room's card there), with the rooms permission. The same room, not a copy.
+- Panel app 0.26.0: + in a floor's tab also lists the panel's rooms on other floors, shown
+  there too; such a room's pencil sets its card on that floor or takes it off that floor only.
+  Deleting a floor keeps a room shown on another floor there.
+
 ## 0.25.0
 
 - Floors added from the panel: layout `floors` lists the floors a panel's rooms menu shows
