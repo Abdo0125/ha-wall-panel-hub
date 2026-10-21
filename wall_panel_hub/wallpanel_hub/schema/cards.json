@@ -639,6 +639,27 @@
           "required": true
         }
       }
+    },
+    "room.summary": {
+      "entities": {
+        "min": 0,
+        "max": 0
+      },
+      "sizes": [
+        "1x1",
+        "2x1"
+      ],
+      "default_size": "2x1",
+      "targets": [
+        "android"
+      ],
+      "options": {
+        "page": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "required": true
+        }
+      }
     }
   }
 }

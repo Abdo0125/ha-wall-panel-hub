@@ -58,6 +58,8 @@ const kindOf = (entityId) => Object.keys(R.kinds).find((k) => R.kinds[k].domains
 const kindOfCard = (type) => type.split(".")[0];
 const cardDomains = (type) => R.cards[type]?.entities.domains || R.kinds[kindOfCard(type)]?.domains || [];
 const sizeOf = (c) => c.size || R.cards[c.card]?.default_size || "1x1";
+const area = (s) => s.split("x").reduce((x, y) => x * y, 1);
+const smallestSize = (type) => [...(R.cards[type]?.sizes || ["1x1"])].sort((a, b) => area(a) - area(b))[0];
 
 // Plain names: the installer never sees card ids or entity ids.
 const SHAPES = {
@@ -67,7 +69,7 @@ const SHAPES = {
   "climate.compact": "مختصرة", "climate.thermostat": "منظم حرارة",
   "fan.toggle": "مفتاح", "fan.speed": "سرعات", "lock.lock": "قفل",
   "scene.action": "زر", "scene.bar": "شريط مشاهد", "script.action": "زر", "button.action": "زر",
-  "sensor.value": "قيمة", "sensor.multi": "عدة قيم", "sensor.binary": "حالة", "app.launch": "تطبيق", "room.card": "بطاقة الغرفة", "widget.clock": "الساعة",
+  "sensor.value": "قيمة", "sensor.multi": "عدة قيم", "sensor.binary": "حالة", "app.launch": "تطبيق", "room.card": "صورة الغرفة", "room.summary": "تفاصيل الغرفة", "widget.clock": "الساعة",
   "widget.weather": "الطقس", "widget.android": "ودجة أندرويد", "widget.temperature": "الحرارة الخارجية", "widget.power": "الاستهلاك الآن",
 };
 const SIZES = { "1x1": "صغيرة", "2x1": "عريضة", "2x2": "كبيرة", "3x2": "كبيرة عريضة", "4x2": "كبيرة جداً" };
@@ -800,6 +802,8 @@ function addSheet(screen, col, row) {
       const cards = pageCards(l);
       let last = null;
       for (const m of [].concat(make(l, cards))) {
+        // Added by hand: its smallest size (a room's details card: wide, as asked).
+        if (m.card !== "room.summary") m.size = smallestSize(m.card);
         cards.push(m);
         placeCard(cards, cards.length - 1, screen, col, row);
         last = m;

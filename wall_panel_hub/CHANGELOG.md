@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.22.0
+
+- Room details card (room.summary, 2x1 by default, or 1x1): the room's picture band, its
+  name, lights on of all, covers open of all and its AC. The picture card is room.card;
+  each switches to the other.
+- A card added by hand starts at its smallest size (the room details card: 2x1), in the
+  designer and on the panel.
+- Panel app 0.22.0: room cards have a list of their own in + (details or picture); a card's
+  shapes show as small pictures of the card; the pencil shows on rooms with a picture.
+
 ## 0.21.0
 
 - Room card (room.card, 2x2 or 2x1): one of the panel's rooms with HA's picture of its area,
