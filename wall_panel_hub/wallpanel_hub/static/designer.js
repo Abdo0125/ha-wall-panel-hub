@@ -583,7 +583,7 @@ function renderDesign(view) {
     rooms.append(el("li", { class: "room" + (i === S.page ? " active" : ""), dataset: { index: i }, onclick: () => { S.page = i; S.sel = null; render(); } },
       icon(pg.icon || "mdi:floor-plan"),
       el("span", { class: "grow" }, pg.title),
-      floorOf(pg.id) ? el("span", { class: "muted" }, floorOf(pg.id)) : null,
+      floorOf(pg) ? el("span", { class: "muted" }, floorOf(pg)) : null,
       el("span", { class: "edit mdi", title: "تعديل الغرفة", onclick: (ev) => { ev.stopPropagation(); pageSheet(i); } }, String.fromCodePoint(CODEPOINTS["pencil"] || 63))));
   });
   Sortable.create(rooms, {
@@ -925,10 +925,10 @@ function addSheet(screen, col, row) {
   search.focus();
 }
 
-// The HA floor a page's area is on (the panel's rooms menu has a tab per floor).
-function floorOf(pageId) {
-  const area = S.catalog.areas.find((a) => a.id === pageId);
-  return area?.floor_id ? S.catalog.floors.find((f) => f.id === area.floor_id)?.name || "" : "";
+// The floor a room shows under on the panel: its own, else its HA area's (the rooms menu has a tab per floor).
+function floorOf(page) {
+  const id = page.floor || S.catalog.areas.find((a) => a.id === page.id)?.floor_id;
+  return id ? S.catalog.floors.find((f) => f.id === id)?.name || "" : "";
 }
 
 // Add a room: from HA's areas (with its devices), by floor or a whole floor at once, or an empty one.
@@ -970,6 +970,12 @@ function pageSheet(i) {
     el("h3", {}, p.title),
     field("الاسم", el("input", { value: p.title, onchange: (e) => { const v = e.target.value.trim(); if (v) edit(() => { p.title = v; }); } })),
     field("الأيقونة", iconInput(p.icon, "mdi:floor-plan", (v) => edit(() => { v && validIcon(v) ? p.icon = v : delete p.icon; }))),
+    S.catalog.floors.length ? field("الطابق على الشاشة", (() => {
+      const haFloor = S.catalog.floors.find((f) => f.id === S.catalog.areas.find((a) => a.id === p.id)?.floor_id)?.name;
+      const s = selectEl([["", `من HA (${haFloor || "بدون طابق"})`], ...S.catalog.floors.map((f) => [f.id, f.name])], p.floor || "");
+      s.onchange = () => edit(() => { s.value ? p.floor = s.value : delete p.floor; });
+      return s;
+    })()) : null,
     el("div", { class: "actions" },
       el("button", { class: "primary", onclick: closeSheet }, "تم"),
       el("span", { class: "spacer" }),

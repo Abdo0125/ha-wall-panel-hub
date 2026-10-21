@@ -23,15 +23,29 @@ COMMANDS = {
 }
 
 
+# Device domains the panels will get cards for.
+UPCOMING = ("media_player", "camera", "alarm_control_panel", "vacuum", "water_heater", "humidifier", "valve",
+            "siren", "remote", "number", "input_number", "select", "input_select")
+
+
 def build(floors: list, areas: list, devices: list, registry: list, states: list) -> dict:
     device_area = {d["id"]: d.get("area_id") for d in devices if "id" in d}
     reg = {e["entity_id"]: e for e in registry if "entity_id" in e}
 
     entities = []
+    upcoming = []
     for s in states:
         eid = s.get("entity_id", "")
         kind = kind_of(eid)
         if not kind:
+            if eid.split(".", 1)[0] in UPCOMING:
+                r = reg.get(eid)
+                if not (r and (r.get("hidden_by") or r.get("disabled_by") or r.get("entity_category"))):
+                    upcoming.append({
+                        "entity_id": eid,
+                        "name": (s.get("attributes") or {}).get("friendly_name") or (r or {}).get("name") or eid,
+                        "area_id": (r or {}).get("area_id") or device_area.get((r or {}).get("device_id")),
+                    })
             continue
         r = reg.get(eid)
         if r and (r.get("hidden_by") or r.get("disabled_by") or r.get("entity_category")):
@@ -66,6 +80,8 @@ def build(floors: list, areas: list, devices: list, registry: list, states: list
             key=lambda a: a["name"].lower(),
         ),
         "entities": entities,
+        # Devices the panels have no card for yet: shown as coming soon.
+        "upcoming": sorted(upcoming, key=lambda e: (e["name"].lower(), e["entity_id"])),
     }
 
 

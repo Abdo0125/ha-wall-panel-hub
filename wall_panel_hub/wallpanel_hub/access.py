@@ -3,7 +3,9 @@
 The panel's editor hides what is not allowed; this is the check that counts. Depending on
 the role's capabilities (config.schema.json, access; docs/parity.md):
 
-- rooms: rooms added (with their devices), removed, renamed or given another icon;
+- rooms: rooms added (with their devices), removed, renamed, given another icon or floor;
+- devices: device cards added from anywhere in HA, removed or moved to another room, in the
+  rooms and on my dashboard;
 
 - edit_cards: a card's shape (same kind), size, label, icon, confirmation, options;
 - reorder: the order of pages, and of cards within their page;
@@ -49,19 +51,20 @@ def check_panel_edit(old: dict, new: dict, caps: set[str], allowed_apps: set[str
         old_page = old_pages.get(pid)
         if old_page is None:
             continue  # a new room, with whatever devices it was given
-        for key in ("title", "icon"):
+        for key in ("title", "icon", "floor"):
             if old_page.get(key) != new_page.get(key) and "rooms" not in caps:
                 raise EditRefused("renaming rooms is not allowed on this panel")
         old_cards = {c["id"]: c for c in old_page["cards"]}
         new_cards = {c["id"]: c for c in new_page["cards"]}
         added = [c for cid, c in new_cards.items() if cid not in old_cards]
         removed = [c for cid, c in old_cards.items() if cid not in new_cards]
-        if any(kind_of_card(c["card"]) not in ADDABLE for c in added + removed):
-            raise EditRefused("cards can only be added, removed or moved to another page in the add-on")
-        if (added or removed) and "add_widgets" not in caps:
+        if any(kind_of_card(c["card"]) not in ADDABLE for c in added + removed) and "devices" not in caps:
+            raise EditRefused("adding, removing or moving devices is not allowed on this panel")
+        if any(kind_of_card(c["card"]) in ADDABLE for c in added + removed) and "add_widgets" not in caps:
             raise EditRefused("adding apps and widgets is not allowed on this panel")
         for card in added:
-            _check_new(card, allowed)
+            if kind_of_card(card["card"]) in ADDABLE:
+                _check_new(card, allowed)
         kept = [cid for cid in (c["id"] for c in old_page["cards"]) if cid in new_cards]
         if kept != [c["id"] for c in new_page["cards"] if c["id"] in old_cards] and "reorder" not in caps:
             raise EditRefused("reordering cards is not allowed on this panel")
@@ -73,12 +76,12 @@ def check_panel_edit(old: dict, new: dict, caps: set[str], allowed_apps: set[str
             if cid not in old_cards:
                 continue
             before = old_cards[cid]
-            if card.get("entities") != before.get("entities"):
-                raise EditRefused(f"card {cid}: entities are chosen in the add-on")
+            if card.get("entities") != before.get("entities") and "devices" not in caps:
+                raise EditRefused(f"card {cid}: changing a card's device is not allowed on this panel")
             if kind_of_card(card["card"]) != kind_of_card(before["card"]):
                 raise EditRefused(f"card {cid}: a card keeps its kind")
-            if _entity_options(card) != _entity_options(before):
-                raise EditRefused(f"card {cid}: entities are chosen in the add-on")
+            if _entity_options(card) != _entity_options(before) and "devices" not in caps:
+                raise EditRefused(f"card {cid}: changing a card's device is not allowed on this panel")
             changed = any(card.get(k) != before.get(k) for k in CARD_FIELDS)
             if changed and "edit_cards" not in caps:
                 raise EditRefused("editing cards is not allowed on this panel")
@@ -137,7 +140,7 @@ def _check_dashboard(old: dict, new: dict, caps: set[str], allowed: Allowed) -> 
     known |= allowed.sources
     had = {c["id"]: (c["card"], _target(c)) for c in before or []}
     for card in after:
-        if not set(card.get("entities", [])) <= known:
+        if "devices" not in caps and not set(card.get("entities", [])) <= known:
             raise EditRefused(f"card {card['id']}: my dashboard only takes devices already on this panel")
         # An app or Android widget added now must be allowed; one already there stays, even
         # if no longer allowed.

@@ -114,6 +114,11 @@
         "icon": {
           "$ref": "#/$defs/icon"
         },
+        "floor": {
+          "description": "The floor (an HA floor id) this room shows under on this panel; left out: its area's floor in HA.",
+          "type": "string",
+          "minLength": 1
+        },
         "cards": {
           "type": "array",
           "items": {

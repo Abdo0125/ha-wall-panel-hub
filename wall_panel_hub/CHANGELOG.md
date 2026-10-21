@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.20.0
+
+- Parity, phase 3: devices from the panel. With the devices permission a panel adds any of
+  HA's devices to any room or to my dashboard, removes device cards and moves them to
+  another room; the hub accepts it.
+- A room's floor on a panel (layout `floor`): a room added in a floor's tab stays there,
+  whatever its floor in HA; changed from the panel (rooms) or the designer's room settings.
+- HA's devices with no card yet (media players, cameras, alarms...) are listed as coming soon.
+- Panel app 0.20.0: + lists every device in HA by room ("No room" for the rest), the coming
+  ones greyed; a device card can be removed or moved to another room; rooms keep the floor
+  they were added in, and their sheet changes it; "Empty room" in Add rooms.
+
 ## 0.19.1
 
 - Fix: rooms added on a panel came without devices ("0 devices"): the panel read HA's
