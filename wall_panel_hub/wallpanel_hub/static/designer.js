@@ -67,7 +67,7 @@ const SHAPES = {
   "climate.compact": "مختصرة", "climate.thermostat": "منظم حرارة",
   "fan.toggle": "مفتاح", "fan.speed": "سرعات", "lock.lock": "قفل",
   "scene.action": "زر", "scene.bar": "شريط مشاهد", "script.action": "زر", "button.action": "زر",
-  "sensor.value": "قيمة", "sensor.multi": "عدة قيم", "sensor.binary": "حالة", "app.launch": "تطبيق", "widget.clock": "الساعة",
+  "sensor.value": "قيمة", "sensor.multi": "عدة قيم", "sensor.binary": "حالة", "app.launch": "تطبيق", "room.card": "بطاقة الغرفة", "widget.clock": "الساعة",
   "widget.weather": "الطقس", "widget.android": "ودجة أندرويد", "widget.temperature": "الحرارة الخارجية", "widget.power": "الاستهلاك الآن",
 };
 const SIZES = { "1x1": "صغيرة", "2x1": "عريضة", "2x2": "كبيرة", "3x2": "كبيرة عريضة", "4x2": "كبيرة جداً" };

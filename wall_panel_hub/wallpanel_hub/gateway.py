@@ -13,6 +13,7 @@ wallpanel/layout/subscribe or /get; an older app, which does not, gets format v1
 """
 
 import asyncio
+import base64
 import json
 import logging
 import re
@@ -224,6 +225,19 @@ class PanelConnection:
                 await self.send(_error(mid, "unavailable", str(e)))
                 return
             await self.send({"id": mid, "type": "result", "success": True, "result": cat})
+        elif kind == "wallpanel/area/picture":
+            # HA's picture of one of this panel's rooms: the panel has no HA token.
+            area = str(msg.get("area_id") or "")
+            layout = store.get_layout(self.panel_id) or {"pages": []}
+            if area not in {p["id"] for p in layout["pages"]}:
+                await self.send(_error(mid, "unauthorized", "not a room of this panel"))
+                return
+            try:
+                picture = await self.gateway.area_picture(area)
+            except Exception as e:  # HA restarting...
+                await self.send(_error(mid, "unavailable", str(e)))
+                return
+            await self.send({"id": mid, "type": "result", "success": True, "result": picture})
         elif kind == "wallpanel/registry/get":
             await self.send({"id": mid, "type": "result", "success": True, "result": REGISTRY})
         else:
@@ -245,6 +259,30 @@ class Gateway:
         self.installed_widgets: dict[str, list[dict]] = {}
         # HA's building (catalog.CatalogCache), for panels that add rooms and devices.
         self.catalog = None
+        # Rooms' pictures from HA, by area, until HA's picture changes.
+        self.pictures: dict[str, dict] = {}
+
+    async def area_picture(self, area_id: str) -> dict | None:
+        """{"picture": HA's path, "type", "data" (base64)} of an area's picture, or None."""
+        if self.catalog is None:
+            return None
+        area = next((a for a in (await self.catalog.get())["areas"] if a["id"] == area_id), None)
+        path = (area or {}).get("picture")
+        if not path:
+            return None
+        cached = self.pictures.get(area_id)
+        if cached and cached["picture"] == path:
+            return cached
+        # HA's HTTP API beside its WebSocket: ws://supervisor/core/websocket -> http://supervisor/core.
+        base = re.sub(r"/(api/)?websocket$", "", self.settings.ha_ws_url).replace("ws", "http", 1)
+        async with self.session.get(base + path, headers={"Authorization": f"Bearer {self.settings.ha_token}"}) as resp:
+            if resp.status != 200:
+                return None
+            data = await resp.read()
+        picture = {"picture": path, "type": resp.headers.get("Content-Type", "image/jpeg"),
+                   "data": base64.b64encode(data).decode()}
+        self.pictures[area_id] = picture
+        return picture
 
     def online(self, panel_id: str) -> bool:
         return bool(self.connections.get(panel_id))

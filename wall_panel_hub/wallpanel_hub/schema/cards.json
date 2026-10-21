@@ -99,6 +99,11 @@
       ],
       "default": "widget.weather",
       "controllable": false
+    },
+    "room": {
+      "domains": [],
+      "default": "room.card",
+      "controllable": false
     }
   },
   "cards": {
@@ -610,6 +615,27 @@
         "provider": {
           "type": "string",
           "pattern": "^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+/[A-Za-z0-9_.$]+$",
+          "required": true
+        }
+      }
+    },
+    "room.card": {
+      "entities": {
+        "min": 0,
+        "max": 0
+      },
+      "sizes": [
+        "2x1",
+        "2x2"
+      ],
+      "default_size": "2x2",
+      "targets": [
+        "android"
+      ],
+      "options": {
+        "page": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
           "required": true
         }
       }

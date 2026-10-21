@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.21.0
+
+- Room card (room.card, 2x2 or 2x1): one of the panel's rooms with HA's picture of its area,
+  its name, how many lights are on and its temperature; a button turns its lights off, a
+  touch opens the room. Added on the panel (+ > Room cards) to my dashboard or a room.
+- The hub hands panels their rooms' pictures from HA (wallpanel/area/picture); the catalog
+  carries each area's picture.
+- Panel app 0.21.0: the room card; the rooms menu shows each room's picture in place of its
+  icon; pictures are kept on the panel for offline use.
+
 ## 0.20.0
 
 - Parity, phase 3: devices from the panel. With the devices permission a panel adds any of

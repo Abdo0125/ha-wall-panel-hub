@@ -76,7 +76,7 @@ def build(floors: list, areas: list, devices: list, registry: list, states: list
         ),
         "areas": sorted(
             ({"id": a["area_id"], "name": a.get("name") or a["area_id"], "floor_id": a.get("floor_id"),
-              "icon": a.get("icon")} for a in areas if "area_id" in a),
+              "icon": a.get("icon"), "picture": a.get("picture")} for a in areas if "area_id" in a),
             key=lambda a: a["name"].lower(),
         ),
         "entities": entities,
