@@ -269,6 +269,7 @@ function device(id) {
 function cardIcon(c) {
   if (c.icon) return c.icon;
   const kind = kindOfCard(c.card);
+  if (kind === "room") return L()?.pages.find((p) => p.id === c.options?.page)?.icon || "mdi:floor-plan";
   if (kind === "app") return "mdi:apps";
   if (c.card === "widget.android") return "mdi:widgets-outline";
   const widget = WIDGETS.find((w) => w.card === c.card);
@@ -295,6 +296,7 @@ function cardLabel(c) {
   if (c.label) return c.label;
   if (c.card === "widget.android") return androidWidgetName(c.options?.provider);
   if (c.card === "app.launch") return appName(c.options?.package);
+  if (kindOfCard(c.card) === "room") return L()?.pages.find((p) => p.id === c.options?.page)?.title || "غرفة محذوفة";
   if (kindOfCard(c.card) === "widget") return SHAPES[c.card] || c.card;
   if (c.entities.length > 1) return `${c.entities.length} × ${KIND_NAMES[kindOfCard(c.card)] || ""}`;
   if (c.entities[0]) return device(c.entities[0]).name;
@@ -378,12 +380,18 @@ function redo() {
 function problems(layout) {
   const out = [];
   if (!layout.pages.length) out.push("لا توجد غرف.");
+  const pages = new Set(layout.pages.map((p) => p.id));
+  const roomGone = (c) => kindOfCard(c.card) === "room" && !pages.has(c.options?.page) ? "غرفتها لم تعد على الشاشة. احذف البطاقة." : null;
   for (const page of layout.pages) {
     if (!page.title?.trim()) out.push("غرفة بلا اسم.");
     for (const c of page.cards) {
-      const p = cardProblem(c);
+      const p = cardProblem(c) || roomGone(c);
       if (p) out.push(`${page.title} ← ${cardLabel(c)}: ${p}`);
     }
+  }
+  for (const c of layout.dashboard?.cards || []) {
+    const p = roomGone(c);
+    if (p) out.push(`لوحتي ← ${cardLabel(c)}: ${p}`);
   }
   return out;
 }
@@ -645,9 +653,20 @@ function cardCell(pl, page) {
       ? [icon(cardIcon(c), { style: { fontSize: "32px" } }), el("span", { class: "lbl" }, cardLabel(c)),
          ["light.dimmer", "cover.position", "cover.tilt"].includes(c.card) ? el("span", { class: "bar" }) : null]
       : [icon(cardIcon(c)), el("span", { class: "lbl" }, cardLabel(c))];
+  let roomCls = "", roomBg = "";
+  if (kindOfCard(c.card) === "room") {
+    const room = L().pages.find((p) => p.id === c.options?.page);
+    const a = room && S.catalog.areas.find((x) => x.id === room.id);
+    const picture = c.card === "room.card" && a?.picture;
+    body.splice(0, body.length,
+      picture ? null : icon(cardIcon(c), { class: "ricon" }),
+      el("div", { class: "rname" }, el("b", {}, cardLabel(c)), el("span", {}, c.card === "room.summary" && room ? `${room.cards.length} بطاقة` : "")));
+    roomCls = " rtile" + (picture ? " pic" : "");
+    roomBg = picture ? `url("api/editor/area_picture/${enc(room.id)}?v=${enc(a.picture)}")` : "";
+  }
   const node = el("div", {
-    class: cls, draggable: "true", title: known ? "" : "جهاز غير موجود في Home Assistant",
-    style: { gridColumn: `${pl.col + 1} / span ${pl.w}`, gridRow: `${pl.row + 1} / span ${pl.h}` },
+    class: cls + roomCls, draggable: "true", title: known ? "" : "جهاز غير موجود في Home Assistant",
+    style: { gridColumn: `${pl.col + 1} / span ${pl.w}`, gridRow: `${pl.row + 1} / span ${pl.h}`, backgroundImage: roomBg },
     onclick: () => { S.sel = index; render(); cardSheet(index); },
     ondragstart: (ev) => { dragFrom = index; ev.dataTransfer.effectAllowed = "move"; ev.dataTransfer.setData("text/plain", c.id); node.classList.add("dragging"); },
     ondragend: () => { dragFrom = null; node.classList.remove("dragging"); },
@@ -755,6 +774,17 @@ function cardSheet(index) {
     field("طلب تأكيد قبل التنفيذ", chips([["", "تلقائي"], ["true", "نعم"], ["false", "لا"]], c.confirm === undefined ? "" : String(c.confirm),
       (v) => edit(() => { v === "" ? delete c.confirm : c.confirm = v === "true"; }))),
     ...optionFields,
+    // A device's card to another room, as on the panel: in its first free cell there.
+    S.page !== DASH && !["app", "widget", "room"].includes(kindOfCard(c.card)) && L().pages.length > 1 ? field("نقل إلى غرفة أخرى", (() => {
+      const sel = selectEl([["", "— اختر —"], ...L().pages.map((p, i) => [String(i), p.title]).filter(([i]) => Number(i) !== S.page)], "");
+      sel.onchange = () => {
+        if (!sel.value) return;
+        const to = Number(sel.value);
+        change((l) => { const cs = pageCards(l); cs.splice(cs.indexOf(c), 1); delete c.pos; l.pages[to].cards.push(c); S.sel = null; });
+        closeSheet();
+      };
+      return sel;
+    })()) : null,
     el("div", { class: "actions" },
       el("button", { class: "primary", onclick: () => { closeSheet(); S.sel = null; render(); } }, "تم"),
       el("span", { class: "spacer" }),
@@ -770,6 +800,7 @@ const ADD_TABS = [
   ["apps", "التطبيقات", "mdi:apps"],
   ["widgets", "الودجات", "mdi:widgets-outline"],
 ];
+ADD_TABS.splice(2, 0, ["roomcards", "بطاقات الغرف", "mdi:image-multiple-outline"]);
 // The window remembers where it was between openings.
 const addState = { tab: "rooms", room: null, kind: "", area: "", control: true, wkind: "" };
 
@@ -793,12 +824,15 @@ function addSheet(screen, col, row) {
 
   // Puts new cards in the chosen cell, the next ones in the first free spots.
   const add = (make) => {
+    let single = false;
     change((l) => {
       const cards = pageCards(l);
       let last = null;
-      for (const m of [].concat(make(l, cards))) {
-        // Added by hand: its smallest size (a room's details card: wide, as asked).
-        if (m.card !== "room.summary") m.size = smallestSize(m.card);
+      const made = [].concat(make(l, cards));
+      single = made.length === 1;
+      for (const m of made) {
+        // Added by hand: its smallest size, so it stays in the cell chosen.
+        m.size = smallestSize(m.card);
         cards.push(m);
         placeCard(cards, cards.length - 1, screen, col, row);
         last = m;
@@ -806,6 +840,8 @@ function addSheet(screen, col, row) {
       S.sel = last ? cards.indexOf(last) : null;
     });
     closeSheet();
+    // One card: its settings next, as on the panel.
+    if (single && S.sel !== null) cardSheet(S.sel);
   };
   const entityCard = (e) => (l, cards) => newCard(l, e.entity_id, cards);
   const onPage = () => new Set(page.cards.flatMap((c) => c.entities));
@@ -837,13 +873,14 @@ function addSheet(screen, col, row) {
     rooms: () => S.catalog.areas.length,
     devices: () => free().filter((e) => !addState.control || e.controllable).length,
     apps: () => apps().filter((a) => !page.cards.some((c) => c.options?.package === a.package)).length,
+    roomcards: () => L().pages.filter((p) => p.id !== page.id).length,
     widgets: () => builtins().length + androids().length,
   };
 
   function draw() {
     nav.replaceChildren(...ADD_TABS.map(([id, label, ic]) => el("li", { class: addState.tab === id ? "on" : "", onclick: () => { addState.tab = id; search.value = ""; draw(); } },
       icon(ic), el("span", { class: "grow" }, label), el("span", { class: "n" }, String(counts[id]())))));
-    search.placeholder = { rooms: "بحث باسم الغرفة أو الجهاز", devices: "بحث باسم الجهاز", apps: "بحث باسم التطبيق", widgets: "بحث باسم الودجة" }[addState.tab];
+    search.placeholder = { rooms: "بحث باسم الغرفة أو الجهاز", devices: "بحث باسم الجهاز", roomcards: "بحث باسم الغرفة", apps: "بحث باسم التطبيق", widgets: "بحث باسم الودجة" }[addState.tab];
     fillList();
   }
 
@@ -870,7 +907,7 @@ function addSheet(screen, col, row) {
       body.replaceChildren(el("div", { class: "addsplit" },
         rooms.length ? roomList : el("p", { class: "muted" }, "لا غرف."),
         el("div", {}, el("div", { class: "addhead" }, el("h4", {}, areaName[addState.room] || ""), addAll),
-          listOf(shown.map((e) => entityRow(e)), "كل أجهزة هذه الغرفة على الصفحة."))));
+          listOf([...shown.map((e) => entityRow(e)), ...soon((e) => e.area_id === addState.room)], "كل أجهزة هذه الغرفة على الصفحة."))));
     } else if (t === "devices") {
       const sel = el("select", { onchange: (ev) => { addState.area = ev.target.value; fillList(); } },
         [["", "كل الغرف"], ["-", "بدون غرفة"], ...S.catalog.areas.map((a) => [a.id, a.name])].map(([v, l]) => el("option", { value: v, selected: v === addState.area }, l)));
@@ -880,7 +917,16 @@ function addSheet(screen, col, row) {
         // This room's first.
         .sort((x, y) => (y.area_id === page.id) - (x.area_id === page.id));
       filters.append(kindChips(inArea, fillList), el("div", { class: "row" }, sel, controlToggle()));
-      body.replaceChildren(listOf(shown.slice(0, 300).map((e) => entityRow(e, areaName[e.area_id] || "بدون غرفة")), "لا أجهزة أخرى."));
+      body.replaceChildren(listOf([...shown.slice(0, 300).map((e) => entityRow(e, areaName[e.area_id] || "بدون غرفة")),
+        ...soon((e) => !addState.area || (addState.area === "-" ? !e.area_id : e.area_id === addState.area))], "لا أجهزة أخرى."));
+    } else if (t === "roomcards") {
+      // The panel's rooms, as a card here: its picture, or its details.
+      const rooms = L().pages.filter((p) => p.id !== page.id && hits(p.title));
+      const roomCard = (p, type) => () => add((l) => ({ id: nextCardId(l), card: type, entities: [], options: { page: p.id } }));
+      body.replaceChildren(listOf(rooms.map((p) => el("li", {},
+        icon(p.icon || "mdi:floor-plan"), el("span", { class: "grow" }, p.title),
+        el("button", { onclick: roomCard(p, "room.card") }, "صورة الغرفة"),
+        el("button", { onclick: roomCard(p, "room.summary") }, "التفاصيل"))), "لا غرف أخرى على هذه الشاشة."));
     } else if (t === "apps") {
       const list = apps().filter((a) => hits(appName(a.package), a.package));
       body.replaceChildren(
@@ -909,6 +955,12 @@ function addSheet(screen, col, row) {
       }
       body.replaceChildren(listOf(items, "لا ودجات متاحة. ودجات أندرويد تأتي من التطبيقات المسموحة."));
     }
+  }
+
+  // Devices the panels have no card for yet: shown greyed, not added.
+  function soon(where) {
+    return (S.catalog.upcoming || []).filter((e) => where(e) && hits(e.name, e.entity_id))
+      .map((e) => row_("mdi:clock-outline", e.name, "قريباً", null, true));
   }
 
   function controlToggle() {

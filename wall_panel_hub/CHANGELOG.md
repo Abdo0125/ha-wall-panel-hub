@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.27.1
+
+- The designer catches up with the panel's + window: room cards (a room's picture or its
+  details) on my dashboard or a room, drawn as on the panel; HA devices with no card yet
+  listed greyed as "coming soon"; every card added by hand at its smallest size, then its
+  settings. A device's card is moved to another room from its sheet. A room card whose room
+  is gone is flagged before sending.
+
 ## 0.27.0
 
 - The designer's Design tab works as the panel: the page's name with ▾ opens the rooms
