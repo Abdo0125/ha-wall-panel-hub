@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.30.0
+
+- A panel edits its own settings with the panel permission (docs/parity.md 4a), through
+  wallpanel/panel/get, update, pin and unpair: its name and place, the return time from
+  other apps, the allowed apps, each role's permissions (no role takes the panel permission
+  from itself there), its own PINs (hashed in the hub), and unpairing.
+- Panel app 0.28.0: a "This panel" page in the settings for all of it, saved at once.
+
 ## 0.29.0
 
 - Spanish (es) as a panel language, in the panel's settings and the add-on's.

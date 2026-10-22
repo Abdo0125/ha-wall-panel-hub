@@ -23,7 +23,9 @@ from aiohttp import WSMsgType, web
 
 from .access import EditRefused, role_caps
 from .cards import REGISTRY
+from . import panel_settings
 from .config import ConfigInvalid
+from .pins import PinInvalid
 from .migrate import SCHEMA, downgrade
 from .store import LayoutInvalid, Store, layout_entities
 
@@ -102,6 +104,36 @@ class PanelConnection:
     def allowed(self) -> set[str]:
         return layout_entities(self.gateway.store.get_layout(self.panel_id))
 
+    async def panel_settings(self, mid, kind: str, msg: dict) -> None:
+        store = self.gateway.store
+        try:
+            role = panel_settings.allowed(store, self.panel_id, msg.get("pin"))
+            if kind == "wallpanel/panel/get":
+                result = panel_settings.get(store, self.panel_id, await _areas(self.gateway),
+                                            self.gateway.installed_apps.get(self.panel_id, []))
+            elif kind == "wallpanel/panel/update":
+                areas = {a["id"] for a in await _areas(self.gateway)}
+                panel_settings.update(store, self.panel_id, role, msg.get("changes") or {}, areas)
+                result = None
+            elif kind == "wallpanel/panel/pin":
+                panel_settings.set_pin(store, self.panel_id, str(msg.get("role") or ""), msg.get("new_pin"))
+                result = None
+            else:
+                # Unpaired: told first, then cut off; it pairs again from its connection page.
+                await self.send({"id": mid, "type": "result", "success": True, "result": None})
+                store.revoke(self.panel_id)
+                await self.gateway.disconnect(self.panel_id)
+                return
+        except panel_settings.Refused as e:
+            await self.send(_error(mid, "forbidden", str(e)))
+            return
+        except (ConfigInvalid, PinInvalid, ValueError, TypeError) as e:
+            await self.send(_error(mid, "invalid_config", str(e)))
+            return
+        await self.send({"id": mid, "type": "result", "success": True, "result": result})
+        if kind != "wallpanel/panel/get":
+            await self.gateway.notify_config(self.panel_id)
+
     async def send(self, data: dict) -> None:
         if not self.ws.closed:
             await self.ws.send_str(json.dumps(data, ensure_ascii=False))
@@ -152,6 +184,9 @@ class PanelConnection:
                 return
             await self.send({"id": mid, "type": "result", "success": True, "result": {"version": saved["version"]}})
             await self.gateway.notify_layout(self.panel_id)
+        elif kind in ("wallpanel/panel/get", "wallpanel/panel/update", "wallpanel/panel/pin", "wallpanel/panel/unpair"):
+            # This panel's own settings, from the panel itself (panel permission; docs/parity.md 4a).
+            await self.panel_settings(mid, kind, msg)
         elif kind == "wallpanel/config/floor":
             # A floor's name: on this panel with the rooms permission, for all with project.
             everywhere = msg.get("scope") == "all"
@@ -242,6 +277,16 @@ class PanelConnection:
             await self.send({"id": mid, "type": "result", "success": True, "result": REGISTRY})
         else:
             await self.send(_error(mid, "unknown_command", f"{kind} is not known"))
+
+
+async def _areas(gateway) -> list[dict]:
+    """HA's rooms, for a panel's place; none without HA."""
+    if gateway.catalog is None:
+        return []
+    try:
+        return (await gateway.catalog.get())["areas"]
+    except Exception:  # HA restarting...
+        return []
 
 
 def _error(mid, code: str, message: str) -> dict:
