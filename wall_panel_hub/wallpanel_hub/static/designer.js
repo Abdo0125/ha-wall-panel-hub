@@ -16,6 +16,7 @@ function el(tag, attrs = {}, ...children) {
     else if (v !== undefined && v !== null && v !== false) e.setAttribute(k, v === true ? "" : v);
   }
   for (const c of children.flat()) if (c !== null && c !== undefined && c !== false) e.append(c instanceof Node ? c : String(c));
+  if (tag === "input" && attrs.type === "number") numberField(e);
   return e;
 }
 const $ = (id) => document.getElementById(id);

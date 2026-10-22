@@ -1138,6 +1138,19 @@ function t(key, ...args) {
   return s.replace(/\{(\d+)\}/g, (_, i) => (args[i] ?? ""));
 }
 
+// Numbers always in 0-9: a number field shows the system's own digits (Arabic-Indic on an
+// Arabic system) whatever the page's language, so the pages use text fields instead, and
+// digits typed on an Arabic keyboard become 0-9.
+const latinDigits = (s) => String(s).replace(/[٠-٩]/g, (d) => d.charCodeAt(0) - 0x660).replace(/[۰-۹]/g, (d) => d.charCodeAt(0) - 0x6f0);
+function numberField(e) {
+  e.type = "text";
+  e.inputMode = "numeric";
+  e.dir = "ltr";
+  // Before the page's own listeners, so they read 0-9.
+  e.addEventListener("input", () => { const v = latinDigits(e.value); if (v !== e.value) e.value = v; }, true);
+  return e;
+}
+
 document.documentElement.lang = LANG;
 document.documentElement.dir = LANG === "ar" ? "rtl" : "ltr";
 

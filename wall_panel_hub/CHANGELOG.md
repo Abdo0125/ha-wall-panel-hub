@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.28.1
+
+- Numbers in the add-on's fields always in 0-9: a number field showed the system's digits
+  (Arabic-Indic on an Arabic system) whatever the page's language. Digits typed on an
+  Arabic keyboard become 0-9.
+
 ## 0.28.0
 
 - The add-on's pages in English (the default), Arabic, French and Spanish, picked in their
