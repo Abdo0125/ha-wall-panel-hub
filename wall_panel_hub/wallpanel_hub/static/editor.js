@@ -66,15 +66,15 @@ function newCard(layout, entityId) {
 // Same check as the hub (cards.py); the hub re-checks on send.
 function cardProblem(c) {
   const spec = R.cards[c.card];
-  if (!spec) return `نوع البطاقة ${c.card} غير معروف.`;
+  if (!spec) return t("Unknown card type {0}.", c.card);
   const { min, max } = spec.entities;
-  if (c.entities.length < min || c.entities.length > max) return `${c.card} تقبل ${min} إلى ${max} كيانات.`;
+  if (c.entities.length < min || c.entities.length > max) return t("{0} takes {1} to {2} entities.", c.card, min, max);
   const domains = cardDomains(c.card);
   const wrong = c.entities.find((e) => !domains.includes("*") && !domains.includes(domainOf(e)));
-  if (wrong) return `${c.card} لا تناسب ${wrong}.`;
-  if (c.size && !spec.sizes.includes(c.size)) return `${c.card} لا تقبل الحجم ${c.size}.`;
+  if (wrong) return t("{0} does not fit {1}.", c.card, wrong);
+  if (c.size && !spec.sizes.includes(c.size)) return t("{0} does not take size {1}.", c.card, c.size);
   for (const [key, opt] of Object.entries(spec.options || {})) {
-    if (opt.required && (c.options?.[key] === undefined || c.options[key] === "")) return `${c.card}: الخيار ${key} مطلوب.`;
+    if (opt.required && (c.options?.[key] === undefined || c.options[key] === "")) return t("{0}: option {1} is required.", c.card, key);
   }
   return null;
 }
@@ -89,8 +89,8 @@ function pageId(wanted, taken) {
 
 // Entity type filter chips; the choice is remembered in this browser.
 const TYPE_FILTERS = [
-  ["light", "إنارة"], ["switch", "مفاتيح"], ["cover", "ستائر"], ["climate", "مكيفات"], ["fan", "مراوح"],
-  ["lock", "أقفال"], ["scene", "مشاهد"], ["script", "سكربتات"], ["button", "أزرار"], ["sensor", "حساسات"],
+  ["light", t("Lights")], ["switch", t("Switches")], ["cover", t("Covers")], ["climate", t("Climate")], ["fan", t("Fans")],
+  ["lock", t("Locks")], ["scene", t("Scenes")], ["script", t("Scripts")], ["button", t("Buttons")], ["sensor", t("Sensors")],
 ];
 function loadTypes() {
   try {
@@ -251,7 +251,7 @@ async function copyPageTo(pid, page) {
   w.unsent = true;
   await saveDraft(pid);
   const name = S.panels.find((p) => p.id === pid)?.name;
-  notice("ok", `نُسخت الصفحة "${page.title}" إلى ${name}`);
+  notice("ok", t("Page \"{0}\" copied to {1}", page.title, name));
 }
 
 // ---------- send / discard ----------
@@ -259,26 +259,26 @@ async function copyPageTo(pid, page) {
 async function send(force) {
   const pid = S.current;
   const problems = validate(L()).filter((m) => m.level === "error");
-  if (problems.length) { notice("error", "لا يمكن الإرسال قبل إصلاح الأخطاء أدناه."); return; }
+  if (problems.length) { notice("error", t("Fix the errors below before sending.")); return; }
   clearTimeout(saveTimers[pid]);
   await saveDraft(pid);
   const r = await api(`api/editor/panels/${encodeURIComponent(pid)}/send`, { method: "POST", body: JSON.stringify({ force: !!force }) });
   if (r.status === 409) {
-    notice("warn", `عُدّل تخطيط هذه الشاشة (v${r.body.current?.version}) بعد بدء تعديلاتك، غالباً من الشاشة نفسها.`, [
-      ["إرسال تعديلاتي فوقه", () => send(true)],
-      ["تجاهل تعديلاتي", discard],
+    notice("warn", t("This panel's layout changed (v{0}) after you started, most likely on the panel itself.", r.body.current?.version), [
+      [t("Send my changes over it"), () => send(true)],
+      [t("Discard my changes"), discard],
     ]);
     return;
   }
-  if (!r.ok) { notice("error", "رفض الـ Hub التخطيط: " + (r.body?.error || r.status)); return; }
+  if (!r.ok) { notice("error", t("The hub refused the layout: ") + (r.body?.error || r.status)); return; }
   await loadState();
-  notice("ok", `أُرسل التخطيط v${r.body.version}` + (r.body.online ? " وطُبّق على الشاشة." : ". الشاشة غير متصلة الآن، وستستلمه عند اتصالها."));
+  notice("ok", t("Layout v{0} sent", r.body.version) + (r.body.online ? t(" and applied on the panel.") : t(". The panel is offline and will get it when it connects.")));
   render();
 }
 
 async function discard() {
   const pid = S.current;
-  if (!confirm("تجاهل كل التعديلات غير المرسلة لهذه الشاشة؟")) return;
+  if (!confirm(t("Discard all this panel's unsent changes?"))) return;
   clearTimeout(saveTimers[pid]);
   await api(`api/editor/panels/${encodeURIComponent(pid)}/draft`, { method: "DELETE" });
   delete S.work[pid];
@@ -295,25 +295,25 @@ function validate(layout) {
   const err = (text) => out.push({ level: "error", text });
   const warn = (text) => out.push({ level: "warn", text });
   const byId = entityById();
-  if (!layout.pages.length) err("لا توجد صفحات.");
+  if (!layout.pages.length) err(t("No pages."));
   const ids = new Set();
   const cardIds = new Set();
   for (const page of layout.pages) {
-    if (ids.has(page.id)) err(`معرّف الصفحة "${page.id}" مكرر.`);
+    if (ids.has(page.id)) err(t("Page id \"{0}\" is used twice.", page.id));
     ids.add(page.id);
-    if (!/^[a-z0-9_]+$/.test(page.id)) err(`معرّف الصفحة "${page.id}" غير صالح.`);
-    if (!page.title?.trim()) err(`الصفحة "${page.id}" بلا عنوان.`);
-    if (page.icon && !/^mdi:[a-z0-9-]+$/.test(page.icon)) err(`أيقونة الصفحة "${page.title}" يجب أن تكون بصيغة mdi:name.`);
-    if (!page.cards.length) warn(`الصفحة "${page.title}" فارغة.`);
+    if (!/^[a-z0-9_]+$/.test(page.id)) err(t("Page id \"{0}\" is not valid.", page.id));
+    if (!page.title?.trim()) err(t("Page \"{0}\" has no title.", page.id));
+    if (page.icon && !/^mdi:[a-z0-9-]+$/.test(page.icon)) err(t("Page \"{0}\" icon must be mdi:name.", page.title));
+    if (!page.cards.length) warn(t("Page \"{0}\" is empty.", page.title));
     for (const c of page.cards) {
       const name = c.label || c.entities[0] || c.card;
-      if (cardIds.has(c.id)) err(`معرّف البطاقة "${c.id}" مكرر.`);
+      if (cardIds.has(c.id)) err(t("Card id \"{0}\" is used twice.", c.id));
       cardIds.add(c.id);
       const problem = cardProblem(c);
       if (problem) err(`${name}: ${problem}`);
-      if (c.icon && !/^mdi:[a-z0-9-]+$/.test(c.icon)) err(`${name}: الأيقونة يجب أن تكون بصيغة mdi:name.`);
+      if (c.icon && !/^mdi:[a-z0-9-]+$/.test(c.icon)) err(t("{0}: the icon must be mdi:name.", name));
       for (const e of cardEntities(c)) {
-        if (S.catalog.entities.length && !byId[e]) warn(`${e} غير موجود في Home Assistant (في "${page.title}").`);
+        if (S.catalog.entities.length && !byId[e]) warn(t("{0} is not in Home Assistant (in \"{1}\").", e, page.title));
       }
     }
   }
@@ -355,7 +355,7 @@ function renderTabs() {
   resetSortables("tabs");
   const tabs = $("tabs");
   tabs.replaceChildren();
-  if (!S.panels.length) { tabs.append(el("span", { class: "muted" }, "لا توجد شاشات مربوطة. اربط شاشة أولاً.")); return; }
+  if (!S.panels.length) { tabs.append(el("span", { class: "muted" }, t("No paired panels. Pair a panel first."))); return; }
   for (const p of S.panels) {
     const w = S.work[p.id];
     const tab = el("div", {
@@ -365,7 +365,7 @@ function renderTabs() {
     },
       el("span", { class: "dot", style: `color:${p.online ? "var(--ok)" : "var(--muted)"}` }, p.online ? "●" : "○"),
       p.name,
-      w?.unsent ? el("span", { class: "unsent", title: "تعديلات غير مرسلة" }, "✱") : null,
+      w?.unsent ? el("span", { class: "unsent", title: t("Unsent changes") }, "✱") : null,
     );
     tabs.append(tab);
     // Each tab is a drop target: a page dropped on it is copied to that panel.
@@ -397,7 +397,7 @@ function renderTree() {
   resetSortables("tree");
   const tree = $("tree");
   tree.replaceChildren();
-  if (S.catalogError) { tree.append(el("p", { class: "msg error" }, "تعذّرت قراءة المبنى من HA: " + S.catalogError)); return; }
+  if (S.catalogError) { tree.append(el("p", { class: "msg error" }, t("Could not read the building from HA: ") + S.catalogError)); return; }
   renderTypeChips();
   const q = $("search").value.trim().toLowerCase();
   const unusedOnly = $("unusedOnly").checked;
@@ -417,7 +417,7 @@ function renderTree() {
       ul.append(el("li", { class: "ent", dataset: { entity: e.entity_id }, title: e.entity_id },
         el("span", { class: "badge" }, e.type.toUpperCase().slice(0, 5)),
         el("span", { class: "name" }, e.name),
-        where ? el("span", { class: "used", title: [...where].join("، ") }, `⧉${where.size}`) : null,
+        where ? el("span", { class: "used", title: [...where].join(t(", ")) }, `⧉${where.size}`) : null,
       ));
     }
     sortable("tree", ul, { group: { name: "ha", pull: "clone", put: false }, sort: false });
@@ -451,13 +451,13 @@ function renderTree() {
 
   const unplaced = panelsIn(null);
   if (unplaced.length) {
-    tree.append(el("h2", {}, "شاشات بدون موقع"));
+    tree.append(el("h2", {}, t("Panels with no place")));
     for (const p of unplaced) tree.append(panelNode(p));
-    tree.append(el("p", { class: "muted" }, "حدّد موقع الشاشة من إعدادات الشاشة ← الموقع."));
+    tree.append(el("p", { class: "muted" }, t("Set the panel's place in its settings → Place.")));
   }
 
   const root = el("ul", { class: "tree root" });
-  const floors = [...S.catalog.floors, { id: null, name: "بدون طابق" }];
+  const floors = [...S.catalog.floors, { id: null, name: t("No floor") }];
   for (const f of floors) {
     const areas = S.catalog.areas.filter((a) => (a.floor_id || null) === f.id);
     if (!areas.length) continue;
@@ -478,7 +478,7 @@ function renderTree() {
 
   const loose = entitiesOf(null);
   if (loose.length) {
-    tree.append(el("h2", { style: "margin-top:12px" }, "بدون منطقة"));
+    tree.append(el("h2", { style: "margin-top:12px" }, t("No area")));
     tree.append(entityList(null));
   }
 }
@@ -492,7 +492,7 @@ function renderTypeChips() {
   box.append(el("span", {
     class: "chip" + (all ? " on" : ""),
     onclick: () => { S.types = all ? new Set() : new Set(TYPE_FILTERS.map(([t]) => t)); saveTypes(); renderTree(); },
-  }, "الكل"));
+  }, t("All")));
   for (const [type, label] of TYPE_FILTERS) {
     if (!count[type]) continue;
     box.append(el("span", {
@@ -512,12 +512,12 @@ function panelNode(p) {
   const row = el("div", {
     class: "panelnode" + (p.id === S.current ? " active" : ""),
     dataset: { pid: p.id },
-    title: "اضغط لفتح الشاشة، أو اسحب إليها كيانات أو غرفة",
+    title: t("Tap to open the panel, or drag entities or a room onto it"),
     onclick: () => selectPanel(p.id),
   },
     el("span", {}, "🖥"),
     el("span", { class: "name" }, p.name),
-    S.work[p.id]?.unsent ? el("span", { class: "unsent", title: "تعديلات غير مرسلة" }, "✱") : null,
+    S.work[p.id]?.unsent ? el("span", { class: "unsent", title: t("Unsent changes") }, "✱") : null,
     el("span", { class: "dot", style: `color:${p.online ? "var(--ok)" : "var(--muted)"}` }, p.online ? "●" : "○"),
   );
   sortable("tree", row, {
@@ -550,7 +550,7 @@ function dropOnPanel(pid, entityIds, areaId) {
         i = l.pages.length - 1;
       }
       if (i < 0) {
-        if (!l.pages.length) l.pages.push({ id: "page", title: "صفحة جديدة", cards: [] });
+        if (!l.pages.length) l.pages.push({ id: "page", title: t("New page"), cards: [] });
         i = sameAsOpen ? Math.min(openPage, l.pages.length - 1) : 0;
       }
       return i;
@@ -568,7 +568,7 @@ function dropOnPanel(pid, entityIds, areaId) {
     S.sel = { kind: "page", page: S.page };
     pageTitle = l.pages[S.page]?.title || "";
   });
-  notice("ok", `أُضيف إلى ${panel?.name} ← ${pageTitle}`);
+  notice("ok", t("Added to {0} → {1}", panel?.name, pageTitle));
 }
 
 async function renamePanel(pid, name) {
@@ -622,8 +622,8 @@ function renderGrid() {
   grid.replaceChildren();
   const layout = L();
   const page = layout?.pages[S.page];
-  $("pageTitle").textContent = page ? `المعاينة · ${page.title}` : "المعاينة";
-  if (!page) { grid.append(el("p", { class: "muted" }, layout ? "أضف صفحة أو اسحب غرفة إلى قائمة الصفحات." : "")); return; }
+  $("pageTitle").textContent = page ? t("Preview · {0}", page.title) : t("Preview");
+  if (!page) { grid.append(el("p", { class: "muted" }, layout ? t("Add a page, or drag a room to the pages list.") : "")); return; }
   const byId = entityById();
   page.cards.forEach((c, i) => {
     const e = byId[c.entities[0]];
@@ -636,11 +636,11 @@ function renderGrid() {
       dataset: { index: i },
       onclick: () => { S.sel = { kind: "card", page: S.page, card: i }; render(); },
     },
-      el("span", { class: "x", title: "حذف", onclick: (ev) => { ev.stopPropagation(); removeCard(i); } }, "✕"),
+      el("span", { class: "x", title: t("Delete"), onclick: (ev) => { ev.stopPropagation(); removeCard(i); } }, "✕"),
       el("span", { class: "badge" }, c.card.toUpperCase()),
       el("div", {},
         el("div", { class: "label" }, c.label || (c.entities.length > 1 ? `${c.entities.length} ×` : e?.name) || c.entities[0] || c.card),
-        el("div", { class: "eid" }, c.entities.join("، ") || c.options?.package || "")),
+        el("div", { class: "eid" }, c.entities.join(t(", ")) || c.options?.package || "")),
     ));
   });
   sortable("grid", grid, {
@@ -697,14 +697,14 @@ function optionField(c, key, opt) {
     if (v === undefined) { if (c.options) delete c.options[key]; if (c.options && !Object.keys(c.options).length) delete c.options; }
     else c.options = { ...(c.options || {}), [key]: v };
   });
-  const hint = opt.default !== undefined ? ` (افتراضي: ${opt.default})` : opt.required ? " *" : "";
+  const hint = opt.default !== undefined ? t(" (default: {0})", opt.default) : opt.required ? " *" : "";
   const label = key + hint;
   if (opt.type === "bool") {
-    return field(label, select([["", "افتراضي"], ["true", "نعم"], ["false", "لا"]],
+    return field(label, select([["", t("Default")], ["true", t("Yes")], ["false", t("No")]],
       value === undefined ? "" : String(value), (v) => set(v === "" ? undefined : v === "true")));
   }
   if (opt.type === "enum") {
-    return field(label, select([["", "افتراضي"], ...opt.values.map((v) => [v, v])], value ?? "", (v) => set(v || undefined)));
+    return field(label, select([["", t("Default")], ...opt.values.map((v) => [v, v])], value ?? "", (v) => set(v || undefined)));
   }
   if (opt.type === "int") {
     return field(label, textInput(value, (v) => set(v === "" || isNaN(Number(v)) ? undefined : Number(v)),
@@ -730,15 +730,15 @@ function renderProps() {
     box.append(
       el("p", {}, el("b", {}, e?.name || c.entities[0] || c.card), el("br"),
         el("span", { class: "muted", dir: "ltr" }, c.entities.join(", "))),
-      field("شكل البطاقة", select(variantsFor(c).map((v) => [v, v]), c.card, (v) => change(() => setCardType(c, v)))),
-      field("الحجم", select(spec.sizes.map((v) => [v, v]), c.size || spec.default_size, (v) => change(() => { c.size = v; }))),
-      field("الاسم على الشاشة", textInput(c.label, (v) => change(() => { v.trim() ? c.label = v.trim() : delete c.label; }), { placeholder: e?.name || "" })),
-      field("الأيقونة (mdi:...)", textInput(c.icon, (v) => change(() => { v.trim() ? c.icon = v.trim() : delete c.icon; }), { placeholder: "mdi:lightbulb", dir: "ltr" })),
-      field("تأكيد قبل التنفيذ", select([["", "افتراضي (الأقفال فقط)"], ["true", "نعم"], ["false", "لا"]],
+      field(t("Card shape"), select(variantsFor(c).map((v) => [v, v]), c.card, (v) => change(() => setCardType(c, v)))),
+      field(t("Size"), select(spec.sizes.map((v) => [v, v]), c.size || spec.default_size, (v) => change(() => { c.size = v; }))),
+      field(t("Name on the panel"), textInput(c.label, (v) => change(() => { v.trim() ? c.label = v.trim() : delete c.label; }), { placeholder: e?.name || "" })),
+      field(t("Icon (mdi:...)"), textInput(c.icon, (v) => change(() => { v.trim() ? c.icon = v.trim() : delete c.icon; }), { placeholder: "mdi:lightbulb", dir: "ltr" })),
+      field(t("Confirm before acting"), select([["", t("Default (locks only)")], ["true", t("Yes")], ["false", t("No")]],
         c.confirm === undefined ? "" : String(c.confirm),
         (v) => change(() => { v === "" ? delete c.confirm : c.confirm = v === "true"; }))),
       ...Object.entries(spec.options || {}).map(([key, opt]) => optionField(c, key, opt)),
-      el("button", { class: "danger", onclick: () => removeCard(sel.card) }, "حذف البطاقة"),
+      el("button", { class: "danger", onclick: () => removeCard(sel.card) }, t("Delete card")),
     );
     return;
   }
@@ -747,14 +747,14 @@ function renderProps() {
     const p = layout.pages[sel.page];
     if (!p) { S.sel = { kind: "panel" }; return renderProps(); }
     box.append(
-      field("عنوان الصفحة", textInput(p.title, (v) => change(() => { p.title = v; }))),
-      field("المعرّف", el("input", { value: p.id, disabled: true, dir: "ltr" })),
-      field("الأيقونة (mdi:...)", textInput(p.icon, (v) => change(() => { v.trim() ? p.icon = v.trim() : delete p.icon; }), { placeholder: "mdi:sofa", dir: "ltr" })),
+      field(t("Page title"), textInput(p.title, (v) => change(() => { p.title = v; }))),
+      field(t("Id"), el("input", { value: p.id, disabled: true, dir: "ltr" })),
+      field(t("Icon (mdi:...)"), textInput(p.icon, (v) => change(() => { v.trim() ? p.icon = v.trim() : delete p.icon; }), { placeholder: "mdi:sofa", dir: "ltr" })),
       el("button", { class: "danger", onclick: () => change((l) => {
         l.pages.splice(sel.page, 1);
         S.page = Math.max(0, Math.min(S.page, l.pages.length - 1));
         S.sel = { kind: "panel" };
-      }) }, "حذف الصفحة"),
+      }) }, t("Delete page")),
     );
     return;
   }
@@ -763,14 +763,14 @@ function renderProps() {
   // settings (Wall Panels page), not part of the layout.
   const hubPanel = S.panels.find((p) => p.id === S.current);
   box.append(
-    el("p", { class: "muted" }, `${hubPanel?.model || ""} · المرسل: ${hubPanel?.sent ? "v" + hubPanel.sent.version : "لا شيء بعد"}`),
-    field("الموقع (الغرفة)", select(
-      [["", "— بدون موقع —"], ...S.catalog.areas.map((a) => [a.id, a.name])],
+    el("p", { class: "muted" }, t("{0} · sent: {1}", hubPanel?.model || "", hubPanel?.sent ? "v" + hubPanel.sent.version : t("Nothing yet"))),
+    field(t("Place (room)"), select(
+      [["", t("— No place —")], ...S.catalog.areas.map((a) => [a.id, a.name])],
       hubPanel?.area_id || "",
       (v) => placePanel(S.current, v),
     )),
-    field("اسم الشاشة", textInput(hubPanel?.name, (v) => renamePanel(S.current, v))),
-    el("p", { class: "muted" }, "اللغة والمظهر وشاشة التوقف والصلاحيات وكلمات السر: ", el("a", { href: "./", style: "color:var(--accent)" }, "صفحة الشاشات ← الإعدادات"), "."),
+    field(t("Panel name"), textInput(hubPanel?.name, (v) => renamePanel(S.current, v))),
+    el("p", { class: "muted" }, t("Language, theme, screensaver, permissions and PINs: "), el("a", { href: "./", style: "color:var(--accent)" }, t("Panels page → Settings")), "."),
   );
 }
 
@@ -783,14 +783,14 @@ function renderMessages() {
       ...n.actions.map(([label, fn]) => el("button", { onclick: () => { S.notices = []; fn(); } }, label))));
   }
   if (!w) return;
-  if (w.unsent) box.append(el("div", { class: "msg warn" }, "✱ تعديلات غير مرسلة. اضغط \"إرسال للشاشة\" لتطبيقها."));
+  if (w.unsent) box.append(el("div", { class: "msg warn" }, t("✱ Unsent changes. Tap \"Send to panel\" to apply them.")));
   const sent = S.panels.find((p) => p.id === S.current)?.sent;
   if (w.unsent && sent && w.base !== null && sent.version !== w.base) {
-    box.append(el("div", { class: "msg warn" }, `تنبيه: تخطيط الشاشة تغيّر (v${sent.version}) منذ بدأت التعديل (v${w.base}).`));
+    box.append(el("div", { class: "msg warn" }, t("Note: the panel's layout changed (v{0}) since you started editing (v{1}).", sent.version, w.base)));
   }
   const problems = validate(w.layout);
   for (const m of problems) box.append(el("div", { class: "msg " + m.level }, m.text));
-  if (!problems.length && !w.unsent && !S.notices.length) box.append(el("div", { class: "msg ok" }, "✓ لا ملاحظات. التخطيط مطابق لما على الشاشة."));
+  if (!problems.length && !w.unsent && !S.notices.length) box.append(el("div", { class: "msg ok" }, t("✓ No notes. The layout matches the panel.")));
 }
 
 // ---------- wiring ----------
@@ -801,7 +801,7 @@ $("send").onclick = () => send(false);
 $("discard").onclick = discard;
 $("addPage").onclick = () => change((l) => {
   const id = pageId("page", new Set(l.pages.map((p) => p.id)));
-  l.pages.push({ id, title: "صفحة جديدة", cards: [] });
+  l.pages.push({ id, title: t("New page"), cards: [] });
   S.page = l.pages.length - 1;
   S.sel = { kind: "page", page: S.page };
 });

@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Wall Panels · المحرر</title>
+<title>Wall Panels · Editor</title>
 <style>
   :root {
     --bg: #111; --pane: #181818; --fg: #eee; --muted: #999; --line: #2e2e2e;
@@ -103,43 +103,44 @@
 </head>
 <body>
 <header>
-  <a href="./">← الشاشات</a>
-  <h1>محرر التخطيط</h1>
+  <a href="./" data-i18n>← Panels</a>
+  <h1 data-i18n>Layout editor</h1>
+  <select id="lang" aria-label="Language"></select>
   <div id="tabs"></div>
-  <button id="undo" title="Ctrl+Z">↶ تراجع</button>
-  <button id="redo" title="Ctrl+Y">↷ إعادة</button>
-  <button id="discard" class="danger">تجاهل التغييرات</button>
-  <button id="send" class="primary">إرسال للشاشة ⇧</button>
+  <button id="undo" title="Ctrl+Z" data-i18n>↶ Undo</button>
+  <button id="redo" title="Ctrl+Y" data-i18n>↷ Redo</button>
+  <button id="discard" class="danger" data-i18n>Discard changes</button>
+  <button id="send" class="primary" data-i18n>Send to panel ⇧</button>
 </header>
 
 <main>
   <section class="pane">
-    <h2>مبنى Home Assistant</h2>
+    <h2 data-i18n>Home Assistant building</h2>
     <div class="tools">
-      <input id="search" placeholder="بحث بالاسم أو المعرّف">
+      <input id="search" placeholder="Search by name or id" data-i18n-placeholder>
       <div id="typeChips" class="chips"></div>
-      <label><input type="checkbox" id="unusedOnly"> غير المستعملة في أي شاشة</label>
-      <button id="refresh">↻ تحديث من HA</button>
+      <label><input type="checkbox" id="unusedOnly"> <span data-i18n>Not used on any panel</span></label>
+      <button id="refresh" data-i18n>↻ Refresh from HA</button>
     </div>
     <div id="tree"></div>
   </section>
 
   <section class="pane">
-    <h2>الصفحات</h2>
+    <h2 data-i18n>Pages</h2>
     <ul id="pages"></ul>
-    <div class="drophint">اسحب غرفة أو طابقاً هنا</div>
-    <p><button id="addPage">+ صفحة فارغة</button></p>
-    <p><button id="panelProps">إعدادات الشاشة</button></p>
+    <div class="drophint" data-i18n>Drag a room or a floor here</div>
+    <p><button id="addPage" data-i18n>+ Empty page</button></p>
+    <p><button id="panelProps" data-i18n>Panel settings</button></p>
   </section>
 
   <section class="pane">
-    <h2 id="pageTitle">المعاينة</h2>
+    <h2 id="pageTitle" data-i18n>Preview</h2>
     <div id="grid"></div>
-    <p class="muted">اسحب كيانات أو غرفة من المبنى إلى هنا. اسحب البطاقات لترتيبها، واختر شكلها وحجمها من الخصائص. اسحب صفحة إلى تبويب شاشة أخرى لنسخها.</p>
+    <p class="muted" data-i18n>Drag entities or a room from the building here. Drag cards to arrange them, and pick their shape and size in Properties. Drag a page onto another panel's tab to copy it.</p>
   </section>
 
   <section class="pane">
-    <h2>الخصائص</h2>
+    <h2 data-i18n>Properties</h2>
     <div id="props"></div>
   </section>
 </main>
@@ -147,6 +148,7 @@
 <footer id="messages"></footer>
 
 <script src="static/vendor/Sortable.min.js"></script>
+<script src="static/i18n.js"></script>
 <script src="static/editor.js"></script>
 </body>
 </html>

@@ -33,11 +33,11 @@ const post = (path, body) => api(path, { method: "POST", body: JSON.stringify(bo
 
 let toastTimer;
 function toast(text) {
-  const t = $("toast");
-  t.textContent = text;
-  t.hidden = false;
+  const box = $("toast");
+  box.textContent = text;
+  box.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.hidden = true; }, 3500);
+  toastTimer = setTimeout(() => { box.hidden = true; }, 3500);
 }
 
 // ---------- icons (Material Design Icons webfont, same set as the panel) ----------
@@ -63,38 +63,38 @@ const smallestSize = (type) => [...(R.cards[type]?.sizes || ["1x1"])].sort((a, b
 
 // Plain names: the installer never sees card ids or entity ids.
 const SHAPES = {
-  "light.toggle": "مفتاح", "light.dimmer": "تعتيم", "light.color": "ألوان", "light.group": "مجموعة",
-  "switch.toggle": "مفتاح", "switch.outlet": "مقبس مع الاستهلاك",
-  "cover.buttons": "أزرار", "cover.position": "موضع", "cover.tilt": "ميلان", "cover.group": "مجموعة",
-  "climate.compact": "مختصرة", "climate.thermostat": "منظم حرارة",
-  "fan.toggle": "مفتاح", "fan.speed": "سرعات", "lock.lock": "قفل",
-  "scene.action": "زر", "scene.bar": "شريط مشاهد", "script.action": "زر", "button.action": "زر",
-  "sensor.value": "قيمة", "sensor.multi": "عدة قيم", "sensor.binary": "حالة", "app.launch": "تطبيق", "room.card": "صورة الغرفة", "room.summary": "تفاصيل الغرفة", "widget.clock": "الساعة",
-  "widget.weather": "الطقس", "widget.android": "ودجة أندرويد", "widget.temperature": "الحرارة الخارجية", "widget.power": "الاستهلاك الآن",
+  "light.toggle": t("Switch"), "light.dimmer": t("Dimmer"), "light.color": t("Colour"), "light.group": t("Group"),
+  "switch.toggle": t("Switch"), "switch.outlet": t("Outlet with power"),
+  "cover.buttons": t("Buttons"), "cover.position": t("Position"), "cover.tilt": t("Tilt"), "cover.group": t("Group"),
+  "climate.compact": t("Compact"), "climate.thermostat": t("Thermostat"),
+  "fan.toggle": t("Switch"), "fan.speed": t("Speeds"), "lock.lock": t("Lock"),
+  "scene.action": t("Button"), "scene.bar": t("Scene bar"), "script.action": t("Button"), "button.action": t("Button"),
+  "sensor.value": t("Value"), "sensor.multi": t("Several values"), "sensor.binary": t("State"), "app.launch": t("App"), "room.card": t("Room picture"), "room.summary": t("Room details"), "widget.clock": t("Clock"),
+  "widget.weather": t("Weather"), "widget.android": t("Android widget"), "widget.temperature": t("Outdoor temperature"), "widget.power": t("Power now"),
 };
 // Sizes in cells, columns × rows, as the panel names them.
 // Isolated left to right, so 2×1 reads 2×1 on an Arabic page too.
 const SIZES = Object.fromEntries(["1x1", "2x1", "2x2", "3x2", "4x2"].map((v) => [v, "⁦" + v.replace("x", "×") + "⁩"]));
 // Each kind of device pairs with its own app and has its own rules (docs/ui-plan.md, 5.3).
-const PLATFORMS = { android: "شاشة أندرويد", esp32: "شاشة ESP32", phone: "هاتف" };
-const TYPES = { android_11: 'أندرويد 11"', android_4: 'أندرويد 4"', esp32_4: 'ESP32 4"', phone: "هاتف" };
+const PLATFORMS = { android: t("Android panel"), esp32: t("ESP32 panel"), phone: t("Phone") };
+const TYPES = { android_11: t("Android 11\""), android_4: t("Android 4\""), esp32_4: 'ESP32 4"', phone: t("Phone") };
 const OPTION_NAMES = {
-  min_brightness: "أدنى سطوع (%)", show_percent: "إظهار النسبة", dimmer: "تعتيم المجموعة",
-  power_entity: "حساس الاستهلاك", step: "خطوة الحرارة", package: "التطبيق (اسم الحزمة)", return_seconds: "العودة بعد (ثانية)",
+  min_brightness: t("Minimum brightness (%)"), show_percent: t("Show percentage"), dimmer: t("Group dimming"),
+  power_entity: t("Power sensor"), step: t("Temperature step"), package: t("App (package name)"), return_seconds: t("Return after (seconds)"),
 };
 const KIND_NAMES = {
-  light: "إنارة", switch: "مفاتيح", cover: "ستائر", climate: "مكيفات", fan: "مراوح", lock: "أقفال",
-  scene: "مشاهد", script: "سكربتات", button: "أزرار", sensor: "حساسات",
+  light: t("Lights"), switch: t("Switches"), cover: t("Covers"), climate: t("Climate"), fan: t("Fans"), lock: t("Locks"),
+  scene: t("Scenes"), script: t("Scripts"), button: t("Buttons"), sensor: t("Sensors"),
 };
 
 // Device types per domain (HA's device_class names), set once for the project.
 const DEVICE_TYPES = {
-  cover: [["shutter", "ستارة معدنية"], ["shade", "ستارة لفّ"], ["curtain", "ستارة قماش"], ["blind", "شيش"],
-          ["window", "نافذة"], ["garage", "غراج"], ["gate", "بوابة"], ["door", "باب"], ["awning", "مظلة"], ["damper", "فتحة تهوية"]],
-  switch: [["switch", "مفتاح"], ["outlet", "مقبس"], ["light", "إنارة"], ["heater", "مدفأة"], ["boiler", "سخان ماء"],
-           ["fan", "مروحة"], ["pump", "مضخة"], ["valve", "صمام"]],
-  binary_sensor: [["door", "باب"], ["window", "نافذة"], ["garage_door", "باب غراج"], ["motion", "حركة"], ["occupancy", "تواجد"],
-                  ["smoke", "دخان"], ["moisture", "تسرب ماء"], ["gas", "غاز"]],
+  cover: [["shutter", t("Shutter")], ["shade", t("Roller blind")], ["curtain", t("Curtain")], ["blind", t("Blind")],
+          ["window", t("Window")], ["garage", t("Garage")], ["gate", t("Gate")], ["door", t("Door")], ["awning", t("Awning")], ["damper", t("Damper")]],
+  switch: [["switch", t("Switch")], ["outlet", t("Outlet")], ["light", t("Lights")], ["heater", t("Heater")], ["boiler", t("Water heater")],
+           ["fan", t("Fan")], ["pump", t("Pump")], ["valve", t("Valve")]],
+  binary_sensor: [["door", t("Door")], ["window", t("Window")], ["garage_door", t("Garage door")], ["motion", t("Motion")], ["occupancy", t("Presence")],
+                  ["smoke", t("Smoke")], ["moisture", t("Water leak")], ["gas", t("Gas")]],
 };
 
 function variantsFor(card) {
@@ -110,14 +110,14 @@ function variantsFor(card) {
 // Same check as the hub (cards.py); the hub checks again on send.
 function cardProblem(c) {
   const spec = R.cards[c.card];
-  if (!spec) return "نوع بطاقة غير معروف.";
+  if (!spec) return t("Unknown card type.");
   const { min, max } = spec.entities;
-  if (c.entities.length < min || c.entities.length > max) return `تقبل ${min} إلى ${max} أجهزة.`;
+  if (c.entities.length < min || c.entities.length > max) return t("Takes {0} to {1} devices.", min, max);
   const domains = cardDomains(c.card);
-  if (c.entities.some((e) => !domains.includes("*") && !domains.includes(domainOf(e)))) return "جهاز لا يناسب هذا الشكل.";
-  if (c.size && !spec.sizes.includes(c.size)) return "حجم غير مسموح لهذا الشكل.";
+  if (c.entities.some((e) => !domains.includes("*") && !domains.includes(domainOf(e)))) return t("A device does not fit this shape.");
+  if (c.size && !spec.sizes.includes(c.size)) return t("Size not allowed for this shape.");
   for (const [key, opt] of Object.entries(spec.options || {})) {
-    if (opt.required && (c.options?.[key] === undefined || c.options[key] === "")) return `${OPTION_NAMES[key] || key} مطلوب.`;
+    if (opt.required && (c.options?.[key] === undefined || c.options[key] === "")) return t("{0} is required.", OPTION_NAMES[key] || key);
   }
   return null;
 }
@@ -276,18 +276,18 @@ function cardIcon(c) {
   if (widget) return widget.icon;
   const d = c.entities[0] ? device(c.entities[0]) : null;
   if (d?.icon && c.entities.length === 1) return d.icon;
-  const t = d?.type;
+  const type = d?.type;
   const m = {
     light: c.card === "light.group" ? "lightbulb-group-outline" : "lightbulb-outline",
-    switch: { outlet: "power-socket-eu", heater: "radiator", boiler: "water-boiler", pump: "pump", fan: "fan", light: "lightbulb-outline", valve: "valve" }[t]
+    switch: { outlet: "power-socket-eu", heater: "radiator", boiler: "water-boiler", pump: "pump", fan: "fan", light: "lightbulb-outline", valve: "valve" }[type]
       || (c.card === "switch.outlet" ? "power-socket-eu" : domainOf(c.entities[0] || "") === "input_boolean" ? "toggle-switch-off-outline" : "toggle-switch-variant-off"),
     cover: { blind: "blinds", curtain: "curtains-closed", garage: "garage", gate: "gate", door: "door-closed", window: "window-closed",
-             awning: "awning-outline", shade: "roller-shade-closed", damper: "valve-closed" }[t] || "window-shutter",
+             awning: "awning-outline", shade: "roller-shade-closed", damper: "valve-closed" }[type] || "window-shutter",
     climate: "thermostat", fan: "fan", lock: "lock", scene: "palette-outline", script: "script-text-outline",
     button: "gesture-tap-button",
     sensor: domainOf(c.entities[0] || "") === "binary_sensor"
-      ? ({ door: "door-closed", garage_door: "garage", window: "window-closed-variant", motion: "motion-sensor", smoke: "smoke-detector-variant", moisture: "water-off", gas: "gas-cylinder" }[t] || "checkbox-blank-circle-outline")
-      : ({ temperature: "thermometer", humidity: "water-percent", power: "flash", energy: "lightning-bolt", illuminance: "brightness-5", battery: "battery" }[t] || "gauge"),
+      ? ({ door: "door-closed", garage_door: "garage", window: "window-closed-variant", motion: "motion-sensor", smoke: "smoke-detector-variant", moisture: "water-off", gas: "gas-cylinder" }[type] || "checkbox-blank-circle-outline")
+      : ({ temperature: "thermometer", humidity: "water-percent", power: "flash", energy: "lightning-bolt", illuminance: "brightness-5", battery: "battery" }[type] || "gauge"),
   }[kind];
   return "mdi:" + (m || "help-circle-outline");
 }
@@ -296,7 +296,7 @@ function cardLabel(c) {
   if (c.label) return c.label;
   if (c.card === "widget.android") return androidWidgetName(c.options?.provider);
   if (c.card === "app.launch") return appName(c.options?.package);
-  if (kindOfCard(c.card) === "room") return L()?.pages.find((p) => p.id === c.options?.page)?.title || "غرفة محذوفة";
+  if (kindOfCard(c.card) === "room") return L()?.pages.find((p) => p.id === c.options?.page)?.title || t("Deleted room");
   if (kindOfCard(c.card) === "widget") return SHAPES[c.card] || c.card;
   if (c.entities.length > 1) return `${c.entities.length} × ${KIND_NAMES[kindOfCard(c.card)] || ""}`;
   if (c.entities[0]) return device(c.entities[0]).name;
@@ -379,11 +379,11 @@ function redo() {
 
 function problems(layout) {
   const out = [];
-  if (!layout.pages.length) out.push("لا توجد غرف.");
+  if (!layout.pages.length) out.push(t("No rooms."));
   const pages = new Set(layout.pages.map((p) => p.id));
-  const roomGone = (c) => kindOfCard(c.card) === "room" && !pages.has(c.options?.page) ? "غرفتها لم تعد على الشاشة. احذف البطاقة." : null;
+  const roomGone = (c) => kindOfCard(c.card) === "room" && !pages.has(c.options?.page) ? t("Its room is no longer on the panel. Delete the card.") : null;
   for (const page of layout.pages) {
-    if (!page.title?.trim()) out.push("غرفة بلا اسم.");
+    if (!page.title?.trim()) out.push(t("A room has no name."));
     for (const c of page.cards) {
       const p = cardProblem(c) || roomGone(c);
       if (p) out.push(`${page.title} ← ${cardLabel(c)}: ${p}`);
@@ -391,7 +391,7 @@ function problems(layout) {
   }
   for (const c of layout.dashboard?.cards || []) {
     const p = roomGone(c);
-    if (p) out.push(`لوحتي ← ${cardLabel(c)}: ${p}`);
+    if (p) out.push(t("My dashboard → {0}: {1}", cardLabel(c), p));
   }
   return out;
 }
@@ -399,24 +399,24 @@ function problems(layout) {
 async function send(force) {
   const pid = S.view.pid;
   const issues = problems(L());
-  if (issues.length) { alert("لا يمكن الإرسال:\n" + issues.join("\n")); return; }
+  if (issues.length) { alert(t("Cannot send:\n") + issues.join("\n")); return; }
   clearTimeout(saveTimers[pid]);
   await saveDraft(pid);
   const r = await post(`api/editor/panels/${enc(pid)}/send`, { force: !!force });
   if (r.status === 409) {
-    if (confirm("عُدّلت بطاقات هذه الشاشة من الشاشة نفسها بعد بدء تعديلاتك.\nإرسال تعديلاتك فوقها؟ (إلغاء = تجاهل تعديلاتك)")) return send(true);
+    if (confirm(t("This panel's cards were changed on the panel itself after you started.\nSend your changes over them? (Cancel = discard your changes)"))) return send(true);
     return discard(true);
   }
-  if (!r.ok) { alert("رفض الـ Hub التخطيط: " + (r.body?.error || r.status)); return; }
+  if (!r.ok) { alert(t("The hub refused the layout: ") + (r.body?.error || r.status)); return; }
   S.work[pid].unsent = false;
   await loadEditor();
-  toast(r.body.online ? "أُرسل وطُبّق على الشاشة." : "أُرسل. الشاشة غير متصلة الآن، وستستلمه عند اتصالها.");
+  toast(r.body.online ? t("Sent and applied on the panel.") : t("Sent. The panel is offline and will get it when it connects."));
   render();
 }
 
 async function discard(noAsk) {
   const pid = S.view.pid;
-  if (!noAsk && !confirm("تجاهل كل التعديلات غير المرسلة لهذه الشاشة؟")) return;
+  if (!noAsk && !confirm(t("Discard all this panel's unsent changes?"))) return;
   clearTimeout(saveTimers[pid]);
   await api(`api/editor/panels/${enc(pid)}/draft`, { method: "DELETE" });
   delete S.work[pid];
@@ -474,33 +474,33 @@ function renderNav() {
   nav.replaceChildren();
   const o = S.overview;
   if (o.pending.length) {
-    nav.append(el("h2", {}, "شاشات تطلب الربط"));
+    nav.append(el("h2", {}, t("Panels asking to pair")));
     for (const r of o.pending) {
       nav.append(el("div", { class: "request" },
         el("div", { class: "row" }, el("span", { class: "code" }, r.code), el("span", { class: "muted" }, r.name)),
         el("div", { class: "row", style: { marginTop: "6px" } },
-          el("button", { class: "primary", onclick: () => wizard(r) }, "إعداد"),
-          el("button", { onclick: async () => { await post(`api/pending/${enc(r.request_id)}/reject`); await refresh(); } }, "رفض")),
+          el("button", { class: "primary", onclick: () => wizard(r) }, t("Set up")),
+          el("button", { onclick: async () => { await post(`api/pending/${enc(r.request_id)}/reject`); await refresh(); } }, t("Reject"))),
       ));
     }
   }
-  nav.append(el("h2", {}, "الشاشات"));
-  if (!o.panels.length) nav.append(el("p", { class: "muted", style: { margin: "0 6px" } }, "لا توجد شاشات. شغّل شاشة جديدة في نفس الشبكة وستظهر هنا تطلب الربط."));
+  nav.append(el("h2", {}, t("Panels")));
+  if (!o.panels.length) nav.append(el("p", { class: "muted", style: { margin: "0 6px" } }, t("No panels. Start a new panel on the same network and it shows here, asking to pair.")));
   for (const p of o.panels) {
     const active = S.view.kind === "panel" && S.view.pid === p.id;
     nav.append(el("div", { class: "navitem" + (active ? " active" : ""), onclick: () => openPanel(p.id) },
       el("span", { class: "dot " + (p.online ? "on" : "off") }, p.online ? "●" : "○"),
       el("span", { class: "grow" }, p.name),
-      S.work[p.id]?.unsent ? el("span", { title: "تعديلات غير مرسلة", style: { color: "var(--accent)" } }, "✱") : null,
+      S.work[p.id]?.unsent ? el("span", { title: t("Unsent changes"), style: { color: "var(--accent)" } }, "✱") : null,
     ));
   }
   if (o.discovered.length) {
-    nav.append(el("h2", {}, "شاشات أخرى في الشبكة"));
+    nav.append(el("h2", {}, t("Other panels on the network")));
     for (const d of o.discovered) nav.append(el("div", { class: "navitem", title: d.address }, el("span", { class: "dot off" }, "○"), el("span", { class: "grow muted" }, d.name)));
   }
-  nav.append(el("h2", {}, "المشروع"));
+  nav.append(el("h2", {}, t("Project")));
   nav.append(el("div", { class: "navitem" + (S.view.kind === "project" ? " active" : ""), onclick: () => openProject("general") },
-    icon("mdi:home-city-outline", { style: { fontSize: "18px" } }), el("span", { class: "grow" }, S.site?.name || "المشروع")));
+    icon("mdi:home-city-outline", { style: { fontSize: "18px" } }), el("span", { class: "grow" }, S.site?.name || t("Project"))));
 }
 
 async function openPanel(pid, tab = "design") {
@@ -521,9 +521,9 @@ function renderView() {
   if (S.view.kind === "panel" && S.overview.panels.some((p) => p.id === S.view.pid)) return renderPanel(view);
   if (S.view.kind === "project") return renderProject(view);
   view.append(el("div", { class: "box" },
-    el("h3", {}, "مرحباً"),
-    el("p", { class: "muted" }, "اختر شاشة من القائمة لتصميمها، أو أعدّ شاشة جديدة تطلب الربط، أو افتح المشروع لضبط كلمات السر وأنواع الأجهزة."),
-    S.catalogError ? el("p", { class: "msg error" }, "تعذّرت قراءة الأجهزة من Home Assistant: " + S.catalogError) : null,
+    el("h3", {}, t("Welcome")),
+    el("p", { class: "muted" }, t("Pick a panel from the list to design it, set up a new panel asking to pair, or open the project for PINs and device types.")),
+    S.catalogError ? el("p", { class: "msg error" }, t("Could not read Home Assistant's devices: ") + S.catalogError) : null,
   ));
 }
 
@@ -533,18 +533,18 @@ function renderPanel(view) {
   const pid = S.view.pid;
   const p = S.overview.panels.find((x) => x.id === pid);
   const w = W();
-  const tabs = [["design", "التصميم"], ["settings", "الإعدادات"], ["access", "الصلاحيات"]];
+  const tabs = [["design", t("Design")], ["settings", t("Settings")], ["access", t("Permissions")]];
   view.append(el("div", { class: "titlebar" },
     el("h2", {}, p.name),
-    el("span", { class: "dot " + (p.online ? "on" : "off") }, p.online ? "● متصلة" : "○ غير متصلة"),
+    el("span", { class: "dot " + (p.online ? "on" : "off") }, p.online ? t("● Online") : t("○ Offline")),
     el("div", { class: "tabs" }, tabs.map(([id, label]) =>
       el("button", { class: S.view.tab === id ? "active" : "", onclick: () => { S.view.tab = id; render(); } }, label))),
     el("span", { class: "spacer" }),
     S.view.tab === "design" ? [
       el("button", { disabled: !w?.undo.length, onclick: undo, title: "Ctrl+Z" }, "↶"),
       el("button", { disabled: !w?.redo.length, onclick: redo, title: "Ctrl+Y" }, "↷"),
-      el("button", { class: "danger", disabled: !w?.unsent, onclick: () => discard() }, "تجاهل"),
-      el("button", { class: w?.unsent ? "solid" : "primary", onclick: () => send(false) }, w?.unsent ? "إرسال للشاشة ✱" : "إرسال للشاشة"),
+      el("button", { class: "danger", disabled: !w?.unsent, onclick: () => discard() }, t("Discard")),
+      el("button", { class: w?.unsent ? "solid" : "primary", onclick: () => send(false) }, w?.unsent ? t("Send to panel ✱") : t("Send to panel")),
     ] : null,
   ));
   if (S.view.tab === "design") renderDesign(view);
@@ -568,7 +568,7 @@ function defaultDashboard(l) {
 // The open room, or my dashboard as a page.
 function curPage(l) {
   if (S.page !== DASH) return l.pages[S.page];
-  return { id: "__dashboard", title: "لوحتي", icon: "mdi:view-dashboard-outline", cards: l.dashboard ? l.dashboard.cards : defaultDashboard(l) };
+  return { id: "__dashboard", title: t("My dashboard"), icon: "mdi:view-dashboard-outline", cards: l.dashboard ? l.dashboard.cards : defaultDashboard(l) };
 }
 
 // The cards a change edits: my dashboard is saved the first time it is changed.
@@ -585,7 +585,7 @@ function ensureDashboard() {
 function renderDesign(view) {
   const layout = L();
   if (!layout) return;
-  if (S.catalogError) view.append(el("p", { class: "msg error" }, "تعذّرت قراءة الأجهزة من Home Assistant: " + S.catalogError));
+  if (S.catalogError) view.append(el("p", { class: "msg error" }, t("Could not read Home Assistant's devices: ") + S.catalogError));
   const eff = S.configs[S.view.pid]?.effective || {};
   const rtl = eff.lang === "ar";
   if (S.page !== DASH) S.page = Math.min(S.page, Math.max(0, layout.pages.length - 1));
@@ -595,14 +595,14 @@ function renderDesign(view) {
 
   // Top bar, as on the panel: the page's name with ▾ opens the rooms menu; ⌂ my dashboard.
   const now = new Date();
-  const title = S.menu ? "الغرف" : page?.title || "";
+  const title = S.menu ? t("Rooms") : page?.title || "";
   const top = el("div", { class: "dtop" },
-    el("span", { class: "dtitle", title: "قائمة الغرف", onclick: () => { S.menu = !S.menu; S.sel = null; render(); } },
+    el("span", { class: "dtitle", title: t("Rooms menu"), onclick: () => { S.menu = !S.menu; S.sel = null; render(); } },
       S.menu ? null : icon(page?.icon || "mdi:home-outline", { style: { fontSize: "20px" } }),
       el("span", {}, title), icon(S.menu ? "mdi:chevron-up" : "mdi:chevron-down", { style: { fontSize: "20px" } })),
     el("span", { class: "clock" }, `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`),
     S.page !== DASH || S.menu
-      ? el("span", { class: "dhome", title: "لوحتي", onclick: () => { S.page = DASH; S.menu = false; S.sel = null; render(); } }, icon("mdi:home-outline"))
+      ? el("span", { class: "dhome", title: t("My dashboard"), onclick: () => { S.page = DASH; S.menu = false; S.sel = null; render(); } }, icon("mdi:home-outline"))
       : null);
 
   const main = el("div", { class: "dmain" }, top);
@@ -614,7 +614,7 @@ function renderDesign(view) {
     for (let s = 0; s < screens; s++) {
       const grid = el("div", { class: "screen" });
       grid.style.height = "100%";
-      if (screens > 1) grid.append(el("span", { class: "screenlabel" }, `الشاشة ${s + 1} من ${screens} (سحب أفقي)`));
+      if (screens > 1) grid.append(el("span", { class: "screenlabel" }, t("Screen {0} of {1} (swipe)", s + 1, screens)));
       for (const pl of placed.filter((x) => x.screen === s)) grid.append(cardCell(pl, page));
       for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
         if (grids[s][r][c]) continue;
@@ -624,7 +624,7 @@ function renderDesign(view) {
     }
     // Room for one more screen after the last, as on the panel in edit mode.
     const grid = el("div", { class: "screen" });
-    grid.append(el("span", { class: "screenlabel" }, `الشاشة ${screens + 1} (جديدة، تُحفظ عند إضافة بطاقة)`));
+    grid.append(el("span", { class: "screenlabel" }, t("Screen {0} (new, kept once a card is added)", screens + 1)));
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) grid.append(emptyCell(screens, c, r, true));
     screensBox.append(grid);
     main.append(screensBox);
@@ -632,9 +632,9 @@ function renderDesign(view) {
   const device = el("div", { class: "device" + (eff.theme === "dark" ? " dark" : ""), dir: rtl ? "rtl" : "ltr" }, main);
   view.append(device);
   view.append(el("p", { class: "muted" }, S.menu
-    ? "الطوابق تبويبات: القلم للاسم والأيقونة والحذف، و+ لإضافة طابق. اسحب الغرفة إلى أي خانة أو فوق غرفة أخرى لتبديل مكانيهما، و+ في الخانة الفارغة يضيف غرفة. القلم على الغرفة لاسمها وشكلها وحجمها، والضغط عليها يفتحها."
-    : "اضغط اسم الصفحة لقائمة الغرف. اضغط + لإضافة جهاز أو تطبيق أو ودجة، واضغط بطاقة لتغيير شكلها وحجمها واسمها. اسحب البطاقة إلى أي خلية فارغة لتضعها هناك، أو فوق بطاقة أخرى لتبديل مكانيهما."));
-  const issues = problems(layout).filter((x) => x !== "لا توجد غرف.");
+    ? t("Floors are tabs: the pencil for name, icon and deleting, + to add a floor. Drag a room to any cell, or onto another to swap them; + in an empty cell adds a room. A room's pencil sets its name, shape and size; tapping it opens it.")
+    : t("Tap the page's name for the rooms menu. Tap + to add a device, an app or a widget, and a card to change its shape, size and name. Drag a card to any empty cell to put it there, or onto another to swap them.")));
+  const issues = problems(layout).filter((x) => x !== t("No rooms."));
   for (const m of issues) view.append(el("div", { class: "msg error" }, m));
 }
 
@@ -660,12 +660,12 @@ function cardCell(pl, page) {
     const picture = c.card === "room.card" && a?.picture;
     body.splice(0, body.length,
       picture ? null : icon(cardIcon(c), { class: "ricon" }),
-      el("div", { class: "rname" }, el("b", {}, cardLabel(c)), el("span", {}, c.card === "room.summary" && room ? `${room.cards.length} بطاقة` : "")));
+      el("div", { class: "rname" }, el("b", {}, cardLabel(c)), el("span", {}, c.card === "room.summary" && room ? t("{0} cards", room.cards.length) : "")));
     roomCls = " rtile" + (picture ? " pic" : "");
     roomBg = picture ? `url("api/editor/area_picture/${enc(room.id)}?v=${enc(a.picture)}")` : "";
   }
   const node = el("div", {
-    class: cls + roomCls, draggable: "true", title: known ? "" : "جهاز غير موجود في Home Assistant",
+    class: cls + roomCls, draggable: "true", title: known ? "" : t("Device not in Home Assistant"),
     style: { gridColumn: `${pl.col + 1} / span ${pl.w}`, gridRow: `${pl.row + 1} / span ${pl.h}`, backgroundImage: roomBg },
     onclick: () => { S.sel = index; render(); cardSheet(index); },
     ondragstart: (ev) => { dragFrom = index; ev.dataTransfer.effectAllowed = "move"; ev.dataTransfer.setData("text/plain", c.id); node.classList.add("dragging"); },
@@ -690,7 +690,7 @@ function cardCell(pl, page) {
 // Any empty cell takes a new card, or a dragged one (free placement).
 function emptyCell(screen, col, row, open) {
   const node = el("div", {
-    class: "cell" + (open ? " empty" : ""), title: open ? "إضافة بطاقة" : "",
+    class: "cell" + (open ? " empty" : ""), title: open ? t("Add a card") : "",
     style: { gridColumn: `${col + 1}`, gridRow: `${row + 1}` },
     onclick: () => { if (open) addSheet(screen, col, row); },
     ondragover: (ev) => { if (dragFrom !== null && open) { ev.preventDefault(); node.classList.add("over"); } },
@@ -749,13 +749,13 @@ function cardSheet(index) {
       else c.options = { ...(c.options || {}), [key]: v };
     });
     const label = OPTION_NAMES[key] || key;
-    if (opt.type === "bool") return field(label, chips([["", "افتراضي"], ["true", "نعم"], ["false", "لا"]], value === undefined ? "" : String(value), (v) => set(v === "" ? undefined : v === "true")));
-    if (opt.type === "enum") return field(label, chips([["", "افتراضي"], ...opt.values.map((v) => [v, v])], value ?? "", (v) => set(v || undefined)));
+    if (opt.type === "bool") return field(label, chips([["", t("Default")], ["true", t("Yes")], ["false", t("No")]], value === undefined ? "" : String(value), (v) => set(v === "" ? undefined : v === "true")));
+    if (opt.type === "enum") return field(label, chips([["", t("Default")], ...opt.values.map((v) => [v, v])], value ?? "", (v) => set(v || undefined)));
     if (opt.type === "int") return field(label, el("input", { type: "number", min: opt.min, max: opt.max, value: value ?? "", placeholder: opt.default ?? "",
       onchange: (e) => set(e.target.value === "" ? undefined : Number(e.target.value)) }));
     if (opt.type === "entity") {
       const s = el("select", { onchange: (e) => set(e.target.value || undefined) },
-        el("option", { value: "" }, "— بدون —"),
+        el("option", { value: "" }, t("— None —")),
         S.catalog.entities.filter((e) => opt.domains.includes(domainOf(e.entity_id))).map((e) =>
           el("option", { value: e.entity_id, selected: e.entity_id === value }, device(e.entity_id).name)));
       return field(label, s);
@@ -764,19 +764,19 @@ function cardSheet(index) {
   });
   sheet(
     el("h3", {}, cardLabel(c)),
-    el("p", { class: "muted" }, d ? `${KIND_NAMES[kindOfCard(c.card)] || ""} · ${S.catalog.areas.find((a) => a.id === d.area)?.name || "بدون غرفة"}` : SHAPES[c.card]),
+    el("p", { class: "muted" }, d ? `${KIND_NAMES[kindOfCard(c.card)] || ""} · ${S.catalog.areas.find((a) => a.id === d.area)?.name || t("No room")}` : SHAPES[c.card]),
     // Widgets are each their own thing: no shape to switch to.
-    variants.length > 1 && kindOfCard(c.card) !== "widget" ? field("الشكل", chips(variants.map((v) => [v, SHAPES[v] || v]), c.card, (v) => edit(() => setCardType(c, v)))) : null,
-    field("الحجم", chips(R.sizes.map((v) => [v, SIZES[v], !spec.sizes.includes(v)]), sizeOf(c), (v) => edit(() => { c.size = v; }))),
-    field("الاسم على الشاشة", el("input", { value: c.label || "", placeholder: d?.name || "",
+    variants.length > 1 && kindOfCard(c.card) !== "widget" ? field(t("Shape"), chips(variants.map((v) => [v, SHAPES[v] || v]), c.card, (v) => edit(() => setCardType(c, v)))) : null,
+    field(t("Size"), chips(R.sizes.map((v) => [v, SIZES[v], !spec.sizes.includes(v)]), sizeOf(c), (v) => edit(() => { c.size = v; }))),
+    field(t("Name on the panel"), el("input", { value: c.label || "", placeholder: d?.name || "",
       onchange: (e) => edit(() => { const v = e.target.value.trim(); v ? c.label = v : delete c.label; }) })),
-    field("الأيقونة", iconInput(c.icon, cardIcon({ ...c, icon: undefined }), (v) => edit(() => { v && validIcon(v) ? c.icon = v : delete c.icon; }))),
-    field("طلب تأكيد قبل التنفيذ", chips([["", "تلقائي"], ["true", "نعم"], ["false", "لا"]], c.confirm === undefined ? "" : String(c.confirm),
+    field(t("Icon"), iconInput(c.icon, cardIcon({ ...c, icon: undefined }), (v) => edit(() => { v && validIcon(v) ? c.icon = v : delete c.icon; }))),
+    field(t("Ask before acting"), chips([["", t("Automatic")], ["true", t("Yes")], ["false", t("No")]], c.confirm === undefined ? "" : String(c.confirm),
       (v) => edit(() => { v === "" ? delete c.confirm : c.confirm = v === "true"; }))),
     ...optionFields,
     // A device's card to another room, as on the panel: in its first free cell there.
-    S.page !== DASH && !["app", "widget", "room"].includes(kindOfCard(c.card)) && L().pages.length > 1 ? field("نقل إلى غرفة أخرى", (() => {
-      const sel = selectEl([["", "— اختر —"], ...L().pages.map((p, i) => [String(i), p.title]).filter(([i]) => Number(i) !== S.page)], "");
+    S.page !== DASH && !["app", "widget", "room"].includes(kindOfCard(c.card)) && L().pages.length > 1 ? field(t("Move to another room"), (() => {
+      const sel = selectEl([["", t("— Choose —")], ...L().pages.map((p, i) => [String(i), p.title]).filter(([i]) => Number(i) !== S.page)], "");
       sel.onchange = () => {
         if (!sel.value) return;
         const to = Number(sel.value);
@@ -786,21 +786,21 @@ function cardSheet(index) {
       return sel;
     })()) : null,
     el("div", { class: "actions" },
-      el("button", { class: "primary", onclick: () => { closeSheet(); S.sel = null; render(); } }, "تم"),
+      el("button", { class: "primary", onclick: () => { closeSheet(); S.sel = null; render(); } }, t("Done")),
       el("span", { class: "spacer" }),
-      el("button", { class: "danger", onclick: () => { change((l) => { const cs = pageCards(l); cs.splice(cs.indexOf(c), 1); S.sel = null; }); closeSheet(); } }, "حذف البطاقة")),
+      el("button", { class: "danger", onclick: () => { change((l) => { const cs = pageCards(l); cs.splice(cs.indexOf(c), 1); S.sel = null; }); closeSheet(); } }, t("Delete card"))),
   );
 }
 
 // ---------- adding a card: one window, a list per kind (rooms, devices, apps, widgets) ----------
 
 const ADD_TABS = [
-  ["rooms", "الغرف", "mdi:floor-plan"],
-  ["devices", "الأجهزة", "mdi:lightbulb-group-outline"],
-  ["apps", "التطبيقات", "mdi:apps"],
-  ["widgets", "الودجات", "mdi:widgets-outline"],
+  ["rooms", t("Rooms"), "mdi:floor-plan"],
+  ["devices", t("Devices"), "mdi:lightbulb-group-outline"],
+  ["apps", t("Apps"), "mdi:apps"],
+  ["widgets", t("Widgets"), "mdi:widgets-outline"],
 ];
-ADD_TABS.splice(2, 0, ["roomcards", "بطاقات الغرف", "mdi:image-multiple-outline"]);
+ADD_TABS.splice(2, 0, ["roomcards", t("Room cards"), "mdi:image-multiple-outline"]);
 // The window remembers where it was between openings.
 const addState = { tab: "rooms", room: null, kind: "", area: "", control: true, wkind: "" };
 
@@ -850,7 +850,7 @@ function addSheet(screen, col, row) {
 
   const row_ = (iconName, name, note, onPick, off) => el("li", { class: off ? "off" : "", onclick: off ? null : onPick },
     icon(iconName), el("span", { class: "grow" }, name), el("span", { class: "muted" }, note || ""));
-  const listOf = (items, empty) => items.length ? el("ul", { class: "picklist" }, items) : el("p", { class: "muted" }, q() ? "لا نتائج." : empty);
+  const listOf = (items, empty) => items.length ? el("ul", { class: "picklist" }, items) : el("p", { class: "muted" }, q() ? t("No results.") : empty);
   const entityRow = (e, note) => row_(cardIcon({ card: R.kinds[kindOf(e.entity_id)].default, entities: [e.entity_id] }),
     device(e.entity_id).name, note, () => add(entityCard(e)));
   const kinds = (list) => {
@@ -858,7 +858,7 @@ function addSheet(screen, col, row) {
     for (const e of list) { const k = kindOf(e.entity_id); n[k] = (n[k] || 0) + 1; }
     return Object.keys(KIND_NAMES).filter((k) => n[k]).map((k) => [k, `${KIND_NAMES[k]} ${n[k]}`]);
   };
-  const kindChips = (list, onPick) => chips([["", `الكل ${list.length}`], ...kinds(list)], addState.kind, (v) => { addState.kind = v; onPick(); });
+  const kindChips = (list, onPick) => chips([["", t("All {0}", list.length)], ...kinds(list)], addState.kind, (v) => { addState.kind = v; onPick(); });
 
   // The entities that can still go on this page.
   const free = () => { const have = onPage(); return S.catalog.entities.filter((e) => kindOf(e.entity_id) && kindOf(e.entity_id) !== "widget" && !have.has(e.entity_id)); };
@@ -880,14 +880,14 @@ function addSheet(screen, col, row) {
   function draw() {
     nav.replaceChildren(...ADD_TABS.map(([id, label, ic]) => el("li", { class: addState.tab === id ? "on" : "", onclick: () => { addState.tab = id; search.value = ""; draw(); } },
       icon(ic), el("span", { class: "grow" }, label), el("span", { class: "n" }, String(counts[id]())))));
-    search.placeholder = { rooms: "بحث باسم الغرفة أو الجهاز", devices: "بحث باسم الجهاز", roomcards: "بحث باسم الغرفة", apps: "بحث باسم التطبيق", widgets: "بحث باسم الودجة" }[addState.tab];
+    search.placeholder = { rooms: t("Search by room or device"), devices: t("Search by device"), roomcards: t("Search by room"), apps: t("Search by app"), widgets: t("Search by widget") }[addState.tab];
     fillList();
   }
 
   function fillList() {
-    const t = addState.tab;
+    const tab = addState.tab;
     filters.replaceChildren();
-    if (t === "rooms") {
+    if (tab === "rooms") {
       // Rooms on one side, the chosen room's devices on the other.
       const ents = free();
       const inRoom = (id) => ents.filter((e) => e.area_id === id);
@@ -895,7 +895,7 @@ function addSheet(screen, col, row) {
       if (rooms.length && !rooms.some((a) => a.id === addState.room)) addState.room = rooms[0].id;
       const roomList = el("ul", { class: "picklist rooms" }, rooms.map((a) => el("li", { class: a.id === addState.room ? "on" : "", onclick: () => { addState.room = a.id; addState.kind = ""; fillList(); } },
         icon(/^mdi:[a-z0-9-]+$/.test(a.icon || "") ? a.icon : "mdi:floor-plan"), el("span", { class: "grow" }, a.name),
-        el("span", { class: "muted" }, a.id === page.id ? "هذه الغرفة" : String(inRoom(a.id).filter((e) => !addState.control || e.controllable).length)))));
+        el("span", { class: "muted" }, a.id === page.id ? t("This room") : String(inRoom(a.id).filter((e) => !addState.control || e.controllable).length)))));
       const all = inRoom(addState.room).filter((e) => !addState.control || e.controllable);
       const shown = all.filter((e) => (!addState.kind || kindOf(e.entity_id) === addState.kind) && (hits(device(e.entity_id).name, e.entity_id) || hits(areaName[addState.room])));
       filters.append(kindChips(all, fillList), controlToggle());
@@ -903,75 +903,75 @@ function addSheet(screen, col, row) {
         const out = [];
         for (const e of shown) out.push(newCard(l, e.entity_id, [...cards, ...out]));
         return out;
-      }) }, `إضافة الكل (${shown.length})`) : null;
+      }) }, t("Add all ({0})", shown.length)) : null;
       body.replaceChildren(el("div", { class: "addsplit" },
-        rooms.length ? roomList : el("p", { class: "muted" }, "لا غرف."),
+        rooms.length ? roomList : el("p", { class: "muted" }, t("No rooms.")),
         el("div", {}, el("div", { class: "addhead" }, el("h4", {}, areaName[addState.room] || ""), addAll),
-          listOf([...shown.map((e) => entityRow(e)), ...soon((e) => e.area_id === addState.room)], "كل أجهزة هذه الغرفة على الصفحة."))));
-    } else if (t === "devices") {
+          listOf([...shown.map((e) => entityRow(e)), ...soon((e) => e.area_id === addState.room)], t("All this room's devices are on the page.")))));
+    } else if (tab === "devices") {
       const sel = el("select", { onchange: (ev) => { addState.area = ev.target.value; fillList(); } },
-        [["", "كل الغرف"], ["-", "بدون غرفة"], ...S.catalog.areas.map((a) => [a.id, a.name])].map(([v, l]) => el("option", { value: v, selected: v === addState.area }, l)));
+        [["", t("All rooms")], ["-", t("No room")], ...S.catalog.areas.map((a) => [a.id, a.name])].map(([v, l]) => el("option", { value: v, selected: v === addState.area }, l)));
       const inArea = free().filter((e) => (!addState.control || e.controllable) &&
         (!addState.area || (addState.area === "-" ? !e.area_id : e.area_id === addState.area)));
       const shown = inArea.filter((e) => (!addState.kind || kindOf(e.entity_id) === addState.kind) && hits(device(e.entity_id).name, e.entity_id, areaName[e.area_id]))
         // This room's first.
         .sort((x, y) => (y.area_id === page.id) - (x.area_id === page.id));
       filters.append(kindChips(inArea, fillList), el("div", { class: "row" }, sel, controlToggle()));
-      body.replaceChildren(listOf([...shown.slice(0, 300).map((e) => entityRow(e, areaName[e.area_id] || "بدون غرفة")),
-        ...soon((e) => !addState.area || (addState.area === "-" ? !e.area_id : e.area_id === addState.area))], "لا أجهزة أخرى."));
-    } else if (t === "roomcards") {
+      body.replaceChildren(listOf([...shown.slice(0, 300).map((e) => entityRow(e, areaName[e.area_id] || t("No room"))),
+        ...soon((e) => !addState.area || (addState.area === "-" ? !e.area_id : e.area_id === addState.area))], t("No other devices.")));
+    } else if (tab === "roomcards") {
       // The panel's rooms, as a card here: its picture, or its details.
       const rooms = L().pages.filter((p) => p.id !== page.id && hits(p.title));
       const roomCard = (p, type) => () => add((l) => ({ id: nextCardId(l), card: type, entities: [], options: { page: p.id } }));
       body.replaceChildren(listOf(rooms.map((p) => el("li", {},
         icon(p.icon || "mdi:floor-plan"), el("span", { class: "grow" }, p.title),
-        el("button", { onclick: roomCard(p, "room.card") }, "صورة الغرفة"),
-        el("button", { onclick: roomCard(p, "room.summary") }, "التفاصيل"))), "لا غرف أخرى على هذه الشاشة."));
-    } else if (t === "apps") {
+        el("button", { onclick: roomCard(p, "room.card") }, t("Room picture")),
+        el("button", { onclick: roomCard(p, "room.summary") }, t("Details")))), t("No other rooms on this panel.")));
+    } else if (tab === "apps") {
       const list = apps().filter((a) => hits(appName(a.package), a.package));
       body.replaceChildren(
         listOf(list.map((a) => {
           const there = page.cards.some((c) => c.options?.package === a.package);
-          return row_("mdi:apps", appName(a.package), there ? "على الصفحة" : "", () => add((l) => (
+          return row_("mdi:apps", appName(a.package), there ? t("On the page") : "", () => add((l) => (
             { id: nextCardId(l), card: "app.launch", entities: [], size: "1x1", options: { package: a.package } })), there);
-        }), "لا تطبيقات مسموحة لهذه الشاشة."),
-        el("p", { class: "muted small" }, "التطبيقات المسموحة تُضبط في إعدادات الشاشة."));
+        }), t("No apps allowed on this panel.")),
+        el("p", { class: "muted small" }, t("Allowed apps are set in the panel's settings.")));
     } else {
-      filters.append(chips([["", "الكل"], ["builtin", "ودجات الشاشة"], ["android", "ودجات أندرويد"]], addState.wkind, (v) => { addState.wkind = v; fillList(); }));
+      filters.append(chips([["", t("All")], ["builtin", t("Panel widgets")], ["android", t("Android widgets")]], addState.wkind, (v) => { addState.wkind = v; fillList(); }));
       const items = [];
       if (addState.wkind !== "android") {
         for (const w of builtins().filter((w) => hits(SHAPES[w.card]))) {
           const src = w.source ? sources()[w.source] : null;
           const missing = w.source && !src;
-          items.push(row_(w.icon, SHAPES[w.card], missing ? "حدّد مصدرها في المشروع ← الودجات" : src ? device(src).name : "",
+          items.push(row_(w.icon, SHAPES[w.card], missing ? t("Set its source in Project → Widgets") : src ? device(src).name : "",
             () => add((l) => ({ id: nextCardId(l), card: w.card, entities: src ? [src] : [], size: w.size })), missing));
         }
       }
       if (addState.wkind !== "builtin") {
         for (const w of androids().filter((w) => hits(w.label, w.provider))) {
-          items.push(row_("mdi:widgets-outline", w.label || w.provider, "تُربط على الشاشة",
+          items.push(row_("mdi:widgets-outline", w.label || w.provider, t("Bound on the panel"),
             () => add((l) => ({ id: nextCardId(l), card: "widget.android", entities: [], size: "2x2", options: { provider: w.provider } }))));
         }
       }
-      body.replaceChildren(listOf(items, "لا ودجات متاحة. ودجات أندرويد تأتي من التطبيقات المسموحة."));
+      body.replaceChildren(listOf(items, t("No widgets available. Android widgets come from the allowed apps.")));
     }
   }
 
   // Devices the panels have no card for yet: shown greyed, not added.
   function soon(where) {
     return (S.catalog.upcoming || []).filter((e) => where(e) && hits(e.name, e.entity_id))
-      .map((e) => row_("mdi:clock-outline", e.name, "قريباً", null, true));
+      .map((e) => row_("mdi:clock-outline", e.name, t("Coming soon"), null, true));
   }
 
   function controlToggle() {
-    return chips([["1", "أجهزة التحكم"], ["0", "مع الحساسات"]], addState.control ? "1" : "0", (v) => { addState.control = v === "1"; addState.kind = ""; draw(); });
+    return chips([["1", t("Controls")], ["0", t("With sensors")]], addState.control ? "1" : "0", (v) => { addState.control = v === "1"; addState.kind = ""; draw(); });
   }
 
   draw();
   sheet(el("div", { class: "addwin" },
-    el("div", { class: "addtop" }, el("h3", {}, "إضافة بطاقة"), search),
+    el("div", { class: "addtop" }, el("h3", {}, t("Add a card")), search),
     el("div", { class: "addmain" }, nav, el("div", { class: "addpane" }, filters, body)),
-    el("div", { class: "actions" }, el("span", { class: "spacer" }), el("button", { onclick: closeSheet }, "إغلاق"))));
+    el("div", { class: "actions" }, el("span", { class: "spacer" }), el("button", { onclick: closeSheet }, t("Close")))));
   $("veil").firstChild.classList.add("wide");
   search.focus();
 }
@@ -1002,7 +1002,7 @@ function roomGroups(l) {
     if (pages.length || shown.includes(f.id)) groups.push({ id: f.id, name: f.name, icon: f.icon, pages, also });
   }
   const rest = l.pages.map((_, i) => i).filter((i) => own(l.pages[i]) === null);
-  if (rest.length || !groups.length) groups.push({ id: null, name: groups.length ? "أخرى" : "الغرف", pages: rest, also: new Set() });
+  if (rest.length || !groups.length) groups.push({ id: null, name: groups.length ? t("Other") : t("Rooms"), pages: rest, also: new Set() });
   return groups;
 }
 
@@ -1014,8 +1014,8 @@ function tileHolder(l, g, i) {
 
 // A room as a card of the menu's grid: its shape, size and place on that floor (picture, 2x1).
 function menuCard(l, g, i) {
-  const t = tileHolder(l, g, i)?.tile || {};
-  return { id: l.pages[i].id, card: t.card || "room.card", size: t.size || "2x1", pos: t.pos, entities: [], _i: i };
+  const tile = tileHolder(l, g, i)?.tile || {};
+  return { id: l.pages[i].id, card: tile.card || "room.card", size: tile.size || "2x1", pos: tile.pos, entities: [], _i: i };
 }
 
 function setTile(l, g, i, values) {
@@ -1046,16 +1046,16 @@ function renderRoomsMenu(main) {
   main.append(el("div", { class: "ftabs" },
     groups.map((x) => el("div", { class: "ftab" + (x === g ? " on" : ""), onclick: () => { S.floorTab = x.id || ""; render(); } },
       x.icon ? icon(x.icon) : null, el("span", { class: "fname" }, x.name),
-      x.id ? el("span", { class: "fedit", title: "اسم الطابق وأيقونته، أو حذفه", onclick: (ev) => { ev.stopPropagation(); floorSheet(x.id, x.name, x.icon, false); } }, icon("mdi:pencil-outline")) : null)),
-    el("div", { class: "ftab add", title: "إضافة طابق", onclick: addFloorSheet }, icon("mdi:plus"))));
+      x.id ? el("span", { class: "fedit", title: t("The floor's name and icon, or delete it"), onclick: (ev) => { ev.stopPropagation(); floorSheet(x.id, x.name, x.icon, false); } }, icon("mdi:pencil-outline")) : null)),
+    el("div", { class: "ftab add", title: t("Add a floor"), onclick: addFloorSheet }, icon("mdi:plus"))));
 
   const cards = g.pages.map((i) => menuCard(l, g, i));
   const { placed, screens, grids } = pack(cards);
   const box = el("div", { class: "screens" });
   for (let s = 0; s <= screens; s++) {
     const grid = el("div", { class: "screen" });
-    if (s === screens) grid.append(el("span", { class: "screenlabel" }, `الشاشة ${screens + 1} (جديدة)`));
-    else if (screens > 1) grid.append(el("span", { class: "screenlabel" }, `الشاشة ${s + 1} من ${screens}`));
+    if (s === screens) grid.append(el("span", { class: "screenlabel" }, t("Screen {0} (new)", screens + 1)));
+    else if (screens > 1) grid.append(el("span", { class: "screenlabel" }, t("Screen {0} of {1}", s + 1, screens)));
     for (const pl of placed.filter((x) => x.screen === s)) grid.append(roomTile(pl, g));
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
       if (s < screens && grids[s][r][c]) continue;
@@ -1076,7 +1076,7 @@ function roomTile(pl, g) {
   const node = el("div", {
     class: ["cell", "rtile", picture ? "pic" : "", g.also.has(i) ? "also" : "", i === S.page ? "current" : ""].join(" "),
     draggable: "true",
-    title: g.also.has(i) ? "تظهر هنا أيضاً" : "",
+    title: g.also.has(i) ? t("Shown here too") : "",
     style: {
       gridColumn: `${pl.col + 1} / span ${pl.w}`, gridRow: `${pl.row + 1} / span ${pl.h}`,
       backgroundImage: picture ? `url("api/editor/area_picture/${enc(p.id)}?v=${enc(a.picture)}")` : "",
@@ -1090,15 +1090,15 @@ function roomTile(pl, g) {
   },
   picture ? null : icon(p.icon || "mdi:floor-plan", { class: "ricon" }),
   el("div", { class: "rname" }, el("b", {}, p.title),
-    el("span", {}, pl.card.card === "room.summary" || !picture ? `${devices} جهاز` : "")),
-  el("span", { class: "redit", title: "تعديل الغرفة", onclick: (ev) => { ev.stopPropagation(); roomTileSheet(i, g.id); } }, icon("mdi:pencil-outline")));
+    el("span", {}, pl.card.card === "room.summary" || !picture ? t("{0} devices", devices) : "")),
+  el("span", { class: "redit", title: t("Edit room"), onclick: (ev) => { ev.stopPropagation(); roomTileSheet(i, g.id); } }, icon("mdi:pencil-outline")));
   return node;
 }
 
 // An empty cell of the menu: + adds a room there; a dragged room goes there.
 function roomCell(g, placed, screen, col, row) {
   const node = el("div", {
-    class: "cell empty", title: "إضافة غرفة هنا",
+    class: "cell empty", title: t("Add a room here"),
     style: { gridColumn: `${col + 1}`, gridRow: `${row + 1}` },
     onclick: () => roomAddSheet(g, placed, screen, col, row),
     ondragover: (ev) => { if (roomDrag) { ev.preventDefault(); node.classList.add("over"); } },
@@ -1138,7 +1138,7 @@ function roomAddSheet(g, placed, screen, col, row) {
     const here = new Set(g.pages);
     const others = roomGroups(l).filter((x) => x.id !== g.id)
       .map((x) => [x.name, x.pages.filter((i) => !here.has(i) && !x.also.has(i))]).filter(([, ps]) => ps.length);
-    if (others.length) list.append(el("div", { class: "floorhead" }, el("h4", { class: "grow" }, "غرف هذه الشاشة في طوابق أخرى (تظهر هنا أيضاً)")));
+    if (others.length) list.append(el("div", { class: "floorhead" }, el("h4", { class: "grow" }, t("This panel's rooms on other floors (shown here too)"))));
     for (const [name, ps] of others) {
       list.append(el("div", { class: "muted", style: { margin: "6px 4px 2px" } }, name));
       for (const i of ps) {
@@ -1163,37 +1163,37 @@ function roomAddSheet(g, placed, screen, col, row) {
     closeSheet();
     if (one) roomTileSheet(L().pages.length - 1, g.id);
   };
-  const floors = [...S.catalog.floors, { id: null, name: "بدون طابق" }];
+  const floors = [...S.catalog.floors, { id: null, name: t("No floor") }];
   let haRooms = 0;
   for (const f of floors) {
     const areas = S.catalog.areas.filter((a) => (a.floor_id || null) === f.id && !have.has(a.id));
     if (!areas.length) continue;
     haRooms += areas.length;
     list.append(el("div", { class: "floorhead" }, el("h4", { class: "grow" }, `Home Assistant · ${f.name}`),
-      areas.length > 1 ? el("button", { onclick: () => addAreas(areas.map((a) => a.id), false) }, `+ الطابق كاملاً (${areas.length})`) : null));
+      areas.length > 1 ? el("button", { onclick: () => addAreas(areas.map((a) => a.id), false) }, t("+ Whole floor ({0})", areas.length)) : null));
     for (const a of areas) {
       list.append(el("li", { onclick: () => addAreas([a.id], true) },
-        icon(a.icon || "mdi:floor-plan"), el("span", { class: "grow" }, a.name), el("span", { class: "muted" }, `${controlsIn(a.id).length} جهاز`)));
+        icon(a.icon || "mdi:floor-plan"), el("span", { class: "grow" }, a.name), el("span", { class: "muted" }, t("{0} devices", controlsIn(a.id).length))));
     }
   }
   sheet(
-    el("h3", {}, `إضافة غرفة · ${g.name}`),
-    el("p", { class: "muted" }, "الغرفة من Home Assistant تُضاف بكل أجهزتها، في الخانة التي ضغطتها."),
+    el("h3", {}, t("Add a room · {0}", g.name)),
+    el("p", { class: "muted" }, t("A room of Home Assistant's comes with all its devices, in the cell you tapped.")),
     list.children.length ? list : null,
-    !haRooms ? el("p", { class: "muted" }, "كل غرف Home Assistant مضافة.") : null,
+    !haRooms ? el("p", { class: "muted" }, t("All of Home Assistant's rooms are added.")) : null,
     el("div", { class: "actions" },
       el("button", { onclick: () => {
         change((lay) => {
           pinGroup(lay, g);
-          const page = { id: pageId("room", new Set(lay.pages.map((p) => p.id))), title: "غرفة جديدة", cards: [], tile: spot };
+          const page = { id: pageId("room", new Set(lay.pages.map((p) => p.id))), title: t("New room"), cards: [], tile: spot };
           if (g.id) page.floor = g.id;
           lay.pages.push(page);
         });
         closeSheet();
         roomTileSheet(L().pages.length - 1, g.id);
-      } }, "+ غرفة فارغة"),
+      } }, t("+ Empty room")),
       el("span", { class: "spacer" }),
-      el("button", { onclick: closeSheet }, "إغلاق")),
+      el("button", { onclick: closeSheet }, t("Close"))),
   );
 }
 
@@ -1205,38 +1205,38 @@ function roomTileSheet(i, floorId) {
   if (!p) return;
   const g = roomGroups(l).find((x) => x.id === floorId && x.pages.includes(i)) || { id: null, also: new Set(), pages: [i] };
   const isAlso = g.also.has(i);
-  const t = tileHolder(l, g, i)?.tile || {};
-  const shape = t.card || "room.card", size = t.size || "2x1";
+  const tile = tileHolder(l, g, i)?.tile || {};
+  const shape = tile.card || "room.card", size = tile.size || "2x1";
   const edit = (fn) => { change((lay) => fn(lay)); roomTileSheet(i, floorId); };
   const sizes = shape === "room.summary" ? ["1x1", "2x1"] : ["1x1", "2x1", "2x2"];
   const ownFloor = roomGroups(l).find((x) => x.pages.includes(i) && !x.also.has(i))?.name;
   sheet(
     el("h3", {}, p.title),
-    isAlso ? el("p", { class: "muted" }, `تظهر هنا أيضاً. طابقها: ${ownFloor || "—"}`) : null,
-    field("الاسم", el("input", { value: p.title, onchange: (e) => { const v = e.target.value.trim(); if (v) edit((lay) => { lay.pages[i].title = v; }); } })),
-    field("الأيقونة", iconInput(p.icon, "mdi:floor-plan", (v) => edit((lay) => { v && validIcon(v) ? lay.pages[i].icon = v : delete lay.pages[i].icon; }))),
-    field("بطاقتها في قائمة الغرف", chips([["room.card", "صورة الغرفة"], ["room.summary", "التفاصيل"]], shape,
+    isAlso ? el("p", { class: "muted" }, t("Shown here too. Its floor: {0}", ownFloor || "—")) : null,
+    field(t("Name"), el("input", { value: p.title, onchange: (e) => { const v = e.target.value.trim(); if (v) edit((lay) => { lay.pages[i].title = v; }); } })),
+    field(t("Icon"), iconInput(p.icon, "mdi:floor-plan", (v) => edit((lay) => { v && validIcon(v) ? lay.pages[i].icon = v : delete lay.pages[i].icon; }))),
+    field(t("Its card in the rooms menu"), chips([["room.card", t("Room picture")], ["room.summary", t("Details")]], shape,
       (v) => edit((lay) => setTile(lay, g, i, { card: v, size: v === "room.summary" && size === "2x2" ? "2x1" : size })))),
-    field("الحجم", chips(sizes.map((v) => [v, SIZES[v] || v]), size, (v) => edit((lay) => setTile(lay, g, i, { size: v })))),
-    !isAlso && effFloors().length ? field("الطابق على الشاشة", (() => {
+    field(t("Size"), chips(sizes.map((v) => [v, SIZES[v] || v]), size, (v) => edit((lay) => setTile(lay, g, i, { size: v })))),
+    !isAlso && effFloors().length ? field(t("Floor on this panel"), (() => {
       const haFloor = effFloors().find((f) => (f.areas || []).includes(p.id))?.name;
-      const s = selectEl([["", `من HA (${haFloor || "بدون طابق"})`], ...effFloors().map((f) => [f.id, f.name])], p.floor || "");
+      const s = selectEl([["", t("From HA ({0})", haFloor || t("No floor"))], ...effFloors().map((f) => [f.id, f.name])], p.floor || "");
       s.onchange = () => { change((lay) => { s.value ? lay.pages[i].floor = s.value : delete lay.pages[i].floor; }); closeSheet(); };
       return s;
     })()) : null,
     el("div", { class: "actions" },
-      el("button", { class: "primary", onclick: closeSheet }, "تم"),
-      el("button", { onclick: () => { closeSheet(); S.page = i; S.menu = false; S.sel = null; render(); } }, "فتح الغرفة"),
+      el("button", { class: "primary", onclick: closeSheet }, t("Done")),
+      el("button", { onclick: () => { closeSheet(); S.page = i; S.menu = false; S.sel = null; render(); } }, t("Open room")),
       el("span", { class: "spacer" }),
       isAlso ? el("button", { onclick: () => {
         change((lay) => { lay.pages[i].also = lay.pages[i].also.filter((a) => a.floor !== g.id); if (!lay.pages[i].also.length) delete lay.pages[i].also; });
         closeSheet();
-      } }, "إزالة من هذا الطابق") : null,
+      } }, t("Remove from this floor")) : null,
       el("button", { class: "danger", onclick: () => {
-        if (!confirm(`حذف الغرفة "${p.title}" وكل بطاقاتها من هذه الشاشة؟`)) return;
+        if (!confirm(t("Delete the room \"{0}\" and all its cards from this panel?", p.title))) return;
         change((lay) => { lay.pages.splice(i, 1); S.page = DASH; S.sel = null; });
         closeSheet();
-      } }, "حذف الغرفة")),
+      } }, t("Delete room"))),
   );
 }
 
@@ -1248,9 +1248,9 @@ function floorSheet(id, name, iconName, isNew) {
   let text = isNew ? "" : name, chosen = iconName || "";
   const msg = el("div", { class: "msg error" });
   const save = async (all) => {
-    if (isNew && !text.trim()) { msg.textContent = "اكتب اسم الطابق."; return; }
+    if (isNew && !text.trim()) { msg.textContent = t("Enter the floor's name."); return; }
     const r = await post(`api/panels/${enc(pid)}/floor`, { floor_id: id, name: text.trim(), icon: chosen || null, all });
-    if (!r.ok) { msg.textContent = "لم يُحفظ: " + (r.body?.error || r.status); return; }
+    if (!r.ok) { msg.textContent = t("Not saved: ") + (r.body?.error || r.status); return; }
     await loadConfig(pid);
     if (isNew) { S.floorTab = id; change((l) => { l.floors = [...new Set([...(l.floors || []), id])]; }); }
     closeSheet();
@@ -1258,22 +1258,22 @@ function floorSheet(id, name, iconName, isNew) {
   };
   const g = roomGroups(L()).find((x) => x.id === id);
   sheet(
-    el("h3", {}, isNew ? "طابق جديد" : name),
-    field("اسم الطابق", el("input", { value: text, placeholder: isNew ? "مثلاً: الحديقة" : "فارغ: اسم Home Assistant", oninput: (e) => { text = e.target.value; } })),
-    field("الأيقونة", iconInput(chosen, "mdi:home-floor-l", (v) => { chosen = v && validIcon(v) ? v : ""; })),
+    el("h3", {}, isNew ? t("New floor") : name),
+    field(t("Floor name"), el("input", { value: text, placeholder: isNew ? t("Garden") : t("Blank: Home Assistant's name"), oninput: (e) => { text = e.target.value; } })),
+    field(t("Icon"), iconInput(chosen, "mdi:home-floor-l", (v) => { chosen = v && validIcon(v) ? v : ""; })),
     msg,
     el("div", { class: "actions" },
-      el("button", { class: "solid", onclick: () => save(false) }, "هذه الشاشة"),
-      el("button", { onclick: () => save(true) }, "نسخ إلى كل الشاشات"),
+      el("button", { class: "solid", onclick: () => save(false) }, t("This panel")),
+      el("button", { onclick: () => save(true) }, t("Copy to all panels")),
       el("span", { class: "spacer" }),
       !isNew ? el("button", { class: "danger", onclick: () => {
         const n = g ? g.pages.length : 0;
-        if (!confirm(`حذف الطابق من هذه الشاشة مع غرفه (${n}) وكل بطاقاتها؟`)) return;
+        if (!confirm(t("Delete the floor from this panel with its rooms ({0}) and all their cards?", n))) return;
         change((l) => deleteFloor(l, id));
         S.floorTab = "";
         closeSheet();
-      } }, "حذف الطابق") : null,
-      el("button", { onclick: closeSheet }, "إلغاء")),
+      } }, t("Delete floor")) : null,
+      el("button", { onclick: closeSheet }, t("Cancel"))),
   );
 }
 
@@ -1311,7 +1311,7 @@ function addFloorSheet() {
     const fresh = (f.areas || []).filter((a) => !have.has(a) && S.catalog.areas.some((x) => x.id === a));
     list.append(el("li", {}, icon(f.icon || "mdi:home-floor-l"), el("span", { class: "grow" }, f.name),
       // The floor added is the tab shown.
-      el("button", { onclick: () => { S.floorTab = f.id; change((lay) => { lay.floors = [...new Set([...(lay.floors || []), f.id])]; }); closeSheet(); } }, "فارغ"),
+      el("button", { onclick: () => { S.floorTab = f.id; change((lay) => { lay.floors = [...new Set([...(lay.floors || []), f.id])]; }); closeSheet(); } }, t("Empty")),
       fresh.length ? el("button", { class: "solid", onclick: () => {
         S.floorTab = f.id;
         change((lay) => {
@@ -1321,26 +1321,27 @@ function addFloorSheet() {
           for (const p of lay.pages.slice(at)) p.floor = f.id;
         });
         closeSheet();
-      } }, `مع غرفه (${fresh.length})`) : null));
+      } }, t("With its rooms ({0})", fresh.length)) : null));
   }
   sheet(
-    el("h3", {}, "إضافة طابق"),
-    list.children.length ? list : el("p", { class: "muted" }, "كل الطوابق ظاهرة."),
+    el("h3", {}, t("Add a floor")),
+    list.children.length ? list : el("p", { class: "muted" }, t("All floors are shown.")),
     el("div", { class: "actions" },
-      el("button", { class: "solid", onclick: () => floorSheet("wp_" + Math.random().toString(36).slice(2, 10), "", null, true) }, "+ طابق جديد"),
+      el("button", { class: "solid", onclick: () => floorSheet("wp_" + Math.random().toString(36).slice(2, 10), "", null, true) }, t("+ New floor")),
       el("span", { class: "spacer" }),
-      el("button", { onclick: closeSheet }, "إغلاق")),
+      el("button", { onclick: closeSheet }, t("Close"))),
   );
 }
 
 // ---------- settings and permissions ----------
 
-const LANGS = [["ar", "العربية"], ["fr", "Français"], ["en", "English"]];
-const THEMES = [["light", "فاتح"], ["dark", "داكن"]];
-const ROLES = [["guest", "بدون رمز"], ["user", "رمز المستخدم"], ["installer", "رمز المُركِّب"]];
-const CAPS = [["control", "التحكم"], ["apps", "التطبيقات"], ["edit_cards", "تعديل البطاقات"], ["reorder", "إعادة الترتيب"], ["dashboard", "تخصيص لوحتي"], ["add_widgets", "إضافة تطبيقات وودجات"],
-  ["connection", "صفحة الاتصال"], ["display", "صفحة الشاشة"], ["brightness", "السطوع"], ["system", "أزرار النظام"],
-  ["rooms", "الغرف"], ["devices", "الأجهزة"], ["panel", "إعدادات الشاشة"], ["project", "المشروع"]];
+// The panel app's languages, each in its own name.
+const PANEL_LANGS = [["en", "English"], ["ar", "العربية"], ["fr", "Français"]];
+const THEMES = [["light", t("Light")], ["dark", t("Dark")]];
+const ROLES = [["guest", t("No PIN")], ["user", t("User PIN")], ["installer", t("Installer PIN")]];
+const CAPS = [["control", t("Control")], ["apps", t("Apps")], ["edit_cards", t("Edit cards")], ["reorder", t("Rearrange")], ["dashboard", t("Customise my dashboard")], ["add_widgets", t("Add apps and widgets")],
+  ["connection", t("Connection page")], ["display", t("Display page")], ["brightness", t("Brightness")], ["system", t("System buttons")],
+  ["rooms", t("Rooms")], ["devices", t("Devices")], ["panel", t("Panel settings")], ["project", t("Project")]];
 // Pages of the panel's settings screen: the guest never opens it.
 const PAGE_CAPS = new Set(["connection", "display", "brightness", "system"]);
 const BUILT_IN = { lang: "en", theme: "light", screensaver: { idle_seconds: 60, dim_brightness: 10 }, app_return_seconds: 300, home_title: "" };
@@ -1356,20 +1357,20 @@ function displayFields(form, values, inherited, inheritLabel) {
   const ss = values.screensaver || {};
   const name = (list, v) => list.find(([k]) => k === v)?.[1] || v;
   const f = {
-    lang: selectEl([["", `${inheritLabel} (${name(LANGS, inherited.lang)})`], ...LANGS], values.lang || ""),
+    lang: selectEl([["", `${inheritLabel} (${name(PANEL_LANGS, inherited.lang)})`], ...PANEL_LANGS], values.lang || ""),
     theme: selectEl([["", `${inheritLabel} (${name(THEMES, inherited.theme)})`], ...THEMES], values.theme || ""),
     idle: el("input", { type: "number", min: 10, value: ss.idle_seconds ?? "", placeholder: inherited.screensaver.idle_seconds }),
     dim: el("input", { type: "number", min: 0, max: 100, value: ss.dim_brightness ?? "", placeholder: inherited.screensaver.dim_brightness }),
     ret: el("input", { type: "number", min: 30, max: 3600, value: values.app_return_seconds ?? "", placeholder: inherited.app_return_seconds }),
-    home: el("input", { maxlength: 40, value: values.home_title ?? "", placeholder: inherited.home_title || "لوحتي" }),
+    home: el("input", { maxlength: 40, value: values.home_title ?? "", placeholder: inherited.home_title || t("My dashboard") }),
   };
   form.append(
-    el("label", {}, "عنوان الصفحة الرئيسية"), f.home,
-    el("label", {}, "اللغة"), f.lang,
-    el("label", {}, "المظهر"), f.theme,
-    el("label", {}, "شاشة التوقف بعد (ثانية)"), f.idle,
-    el("label", {}, "سطوع التعتيم (%)"), f.dim,
-    el("label", {}, "العودة من تطبيق آخر بعد (ثانية)"), f.ret,
+    el("label", {}, t("Home page title")), f.home,
+    el("label", {}, t("Language")), f.lang,
+    el("label", {}, t("Theme")), f.theme,
+    el("label", {}, t("Screensaver after (seconds)")), f.idle,
+    el("label", {}, t("Dimmed brightness (%)")), f.dim,
+    el("label", {}, t("Back from another app after (seconds)")), f.ret,
   );
   return () => {
     const out = {};
@@ -1386,15 +1387,15 @@ function displayFields(form, values, inherited, inheritLabel) {
 }
 
 function pinRow(label, isSet, setText, onSet, onRemove, removeLabel) {
-  const input = el("input", { type: "password", inputmode: "numeric", maxlength: 8, placeholder: "4 إلى 8 أرقام", autocomplete: "new-password", style: { width: "140px" } });
+  const input = el("input", { type: "password", inputmode: "numeric", maxlength: 8, placeholder: t("4 to 8 digits"), autocomplete: "new-password", style: { width: "140px" } });
   return el("div", { class: "row", style: { margin: "6px 0" } },
     el("span", { style: { minWidth: "130px" } }, label),
     el("span", { class: isSet ? "dot on" : "dot off", style: { minWidth: "110px", fontSize: "13px" } }, setText),
     input,
     el("button", { class: "primary", onclick: async () => {
-      if (!/^[0-9]{4,8}$/.test(input.value)) { alert("الرمز من 4 إلى 8 أرقام."); return; }
+      if (!/^[0-9]{4,8}$/.test(input.value)) { alert(t("The PIN has 4 to 8 digits.")); return; }
       await onSet(input.value); input.value = "";
-    } }, isSet ? "تغيير" : "ضبط"),
+    } }, isSet ? t("Change") : t("Set")),
     isSet ? el("button", { class: "danger", onclick: onRemove }, removeLabel) : null,
   );
 }
@@ -1417,15 +1418,15 @@ function renderSettings(view, p) {
   const reload = async () => { await loadConfig(pid); render(); };
 
   const name = el("input", { value: p.name });
-  const place = selectEl([["", "— بدون —"], ...S.catalog.areas.map((a) => [a.id, a.name])], S.editor[pid]?.area_id || "");
-  const general = el("div", { class: "form" }, el("label", {}, "اسم الشاشة"), name, el("label", {}, "مكان تركيبها"), place,
-    el("label", {}, "نوع الجهاز"), el("div", { class: "muted" }, `${TYPES[p.type] || PLATFORMS[p.platform || "android"] || p.platform}${p.model ? " · " + p.model : ""}`));
+  const place = selectEl([["", t("— None —")], ...S.catalog.areas.map((a) => [a.id, a.name])], S.editor[pid]?.area_id || "");
+  const general = el("div", { class: "form" }, el("label", {}, t("Panel name")), name, el("label", {}, t("Where it is mounted")), place,
+    el("label", {}, t("Device type")), el("div", { class: "muted" }, `${TYPES[p.type] || PLATFORMS[p.platform || "android"] || p.platform}${p.model ? " · " + p.model : ""}`));
   const display = el("div", { class: "form" });
-  const readDisplay = displayFields(display, cfg.config.overrides || {}, inheritedDisplay(), "من المشروع");
+  const readDisplay = displayFields(display, cfg.config.overrides || {}, inheritedDisplay(), t("From the project"));
 
   view.append(
-    el("div", { class: "box" }, el("h3", {}, "الشاشة"), general,
-      el("h3", { style: { marginTop: "18px" } }, "العرض"), el("p", { class: "muted" }, "الحقول الفارغة تأخذ قيمة المشروع."), display,
+    el("div", { class: "box" }, el("h3", {}, t("Panel")), general,
+      el("h3", { style: { marginTop: "18px" } }, t("Display")), el("p", { class: "muted" }, t("Empty fields take the project's value.")), display,
       el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
         const newName = name.value.trim();
         if (newName && newName !== p.name) await post(`api/panels/${enc(pid)}/rename`, { name: newName });
@@ -1435,38 +1436,38 @@ function renderSettings(view, p) {
         }
         const keep = cfg.config.overrides?.floor_names ? { floor_names: cfg.config.overrides.floor_names } : {};
         const r = await put(`api/panels/${enc(pid)}/config`, { overrides: { ...keep, ...readDisplay() } });
-        if (!r.ok) { msg.className = "msg error"; msg.textContent = "لم يُحفظ: " + (r.body?.error || r.status); return; }
+        if (!r.ok) { msg.className = "msg error"; msg.textContent = t("Not saved: ") + (r.body?.error || r.status); return; }
         await refresh(); await loadConfig(pid);
-        toast(p.online ? "حُفظ ووصل للشاشة." : "حُفظ. ستستلمه الشاشة عند اتصالها.");
+        toast(p.online ? t("Saved and on the panel.") : t("Saved. The panel gets it when it connects."));
         render();
-      } }, "حفظ لهذه الشاشة"),
+      } }, t("Save for this panel")),
       el("button", { onclick: async () => {
         const display = readDisplay();
-        if (!Object.keys(display).length) { alert("لا إعداد خاص بهذه الشاشة لتطبيقه."); return; }
-        if (!confirm("تصبح هذه الإعدادات إعدادات المشروع، وتُستبدل الإعدادات الخاصة في كل الشاشات. متابعة؟")) return;
+        if (!Object.keys(display).length) { alert(t("This panel has no settings of its own to copy.")); return; }
+        if (!confirm(t("These become the project's settings, replacing every panel's own. Continue?"))) return;
         const r = await post("api/site/display_all", { display });
-        if (!r.ok) { msg.className = "msg error"; msg.textContent = "لم يُحفظ: " + (r.body?.error || r.status); return; }
+        if (!r.ok) { msg.className = "msg error"; msg.textContent = t("Not saved: ") + (r.body?.error || r.status); return; }
         await loadSite(); await loadConfig(pid);
-        toast(r.body.replaced ? `نُسخ إلى كل الشاشات، واستُبدل إعداد ${r.body.replaced} شاشة.` : "نُسخ إلى كل الشاشات.");
+        toast(r.body.replaced ? t("Copied to all panels; {0} panels' own settings replaced.", r.body.replaced) : t("Copied to all panels."));
         render();
-      } }, "نسخ إلى كل الشاشات")), msg),
+      } }, t("Copy to all panels"))), msg),
     appsBox(pid, p, cfg),
-    el("div", { class: "box" }, el("h3", {}, "رمز خاص بهذه الشاشة (اختياري)"),
-      el("p", { class: "muted" }, "بدونه تستعمل الشاشة رموز المشروع."),
-      pinRow("رمز المُركِّب", cfg.config.installer_pin_set, cfg.config.installer_pin_set ? "● خاص بالشاشة" : "من المشروع",
+    el("div", { class: "box" }, el("h3", {}, t("A PIN for this panel only (optional)")),
+      el("p", { class: "muted" }, t("Without it the panel uses the project's PINs.")),
+      pinRow(t("Installer PIN"), cfg.config.installer_pin_set, cfg.config.installer_pin_set ? t("● This panel only") : t("From the project"),
         async (pin) => { await post(`api/panels/${enc(pid)}/pin`, { role: "installer", pin }); reload(); },
-        async () => { await post(`api/panels/${enc(pid)}/pin`, { role: "installer", pin: null }); reload(); }, "استعمال رمز المشروع"),
-      pinRow("رمز المستخدم", cfg.config.user_pin_set, cfg.config.user_pin_set ? "● خاص بالشاشة" : "من المشروع",
+        async () => { await post(`api/panels/${enc(pid)}/pin`, { role: "installer", pin: null }); reload(); }, t("Use the project's PIN")),
+      pinRow(t("User PIN"), cfg.config.user_pin_set, cfg.config.user_pin_set ? t("● This panel only") : t("From the project"),
         async (pin) => { await post(`api/panels/${enc(pid)}/pin`, { role: "user", pin }); reload(); },
-        async () => { await post(`api/panels/${enc(pid)}/pin`, { role: "user", pin: null }); reload(); }, "استعمال رمز المشروع")),
-    el("div", { class: "box" }, el("h3", {}, "إلغاء الربط"),
-      el("p", { class: "muted" }, "تنقطع الشاشة عن Home Assistant فوراً، ويلزم ربطها من جديد."),
+        async () => { await post(`api/panels/${enc(pid)}/pin`, { role: "user", pin: null }); reload(); }, t("Use the project's PIN"))),
+    el("div", { class: "box" }, el("h3", {}, t("Unpair")),
+      el("p", { class: "muted" }, t("The panel is cut off from Home Assistant at once and must be paired again.")),
       el("button", { class: "danger", onclick: async () => {
-        if (!confirm(`إلغاء ربط "${p.name}"؟`)) return;
+        if (!confirm(t("Unpair \"{0}\"?", p.name))) return;
         await post(`api/panels/${enc(pid)}/revoke`);
         S.view = { kind: "home" };
         await refresh();
-      } }, "إلغاء ربط الشاشة")),
+      } }, t("Unpair the panel"))),
   );
 }
 
@@ -1482,38 +1483,38 @@ function appsBox(pid, p, cfg) {
       el("input", { value: a.label || "", placeholder: nameOf(a.package), style: { width: "180px" },
                     oninput: (e) => { a.label = e.target.value.trim() || undefined; } }),
       el("span", { class: "muted", style: { minWidth: "220px", direction: "ltr", fontSize: "13px" } }, a.package),
-      el("input", { type: "number", min: 30, max: 3600, value: a.return_seconds ?? "", placeholder: `${cfg.effective.app_return_seconds} ث`,
-                    style: { width: "110px" }, title: "العودة للوحة بعد (ثانية)",
+      el("input", { type: "number", min: 30, max: 3600, value: a.return_seconds ?? "", placeholder: t("{0} s", cfg.effective.app_return_seconds),
+                    style: { width: "110px" }, title: t("Back to the panel after (seconds)"),
                     oninput: (e) => { a.return_seconds = e.target.value === "" ? undefined : Number(e.target.value); } }),
-      el("button", { class: "danger", onclick: () => { apps.splice(i, 1); draw(); } }, "حذف"),
-    )) : [el("p", { class: "muted" }, "لا توجد تطبيقات مسموحة.")]));
+      el("button", { class: "danger", onclick: () => { apps.splice(i, 1); draw(); } }, t("Delete")),
+    )) : [el("p", { class: "muted" }, t("No allowed apps."))]));
   };
   draw();
   const free = () => installed.filter((a) => !apps.some((x) => x.package === a.package));
-  const pick = selectEl([["", installed.length ? "— اختر تطبيقاً مثبتاً —" : "— الشاشة لم ترسل تطبيقاتها بعد —"], ...free().map((a) => [a.package, a.label])], "");
-  const typed = el("input", { placeholder: "أو اسم الحزمة: com.example.app", style: { width: "240px", direction: "ltr" } });
+  const pick = selectEl([["", installed.length ? t("— Choose an installed app —") : t("— The panel has not sent its apps yet —")], ...free().map((a) => [a.package, a.label])], "");
+  const typed = el("input", { placeholder: t("or the package name: com.example.app"), style: { width: "240px", direction: "ltr" } });
   const add = () => {
     const pkg = pick.value || typed.value.trim();
     if (!pkg) return;
-    if (!/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/.test(pkg)) { alert("اسم الحزمة غير صالح."); return; }
+    if (!/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/.test(pkg)) { alert(t("Not a valid package name.")); return; }
     if (!apps.some((a) => a.package === pkg)) apps.push({ package: pkg });
     typed.value = "";
-    pick.replaceChildren(...[["", "— اختر تطبيقاً مثبتاً —"], ...free().map((a) => [a.package, a.label])]
+    pick.replaceChildren(...[["", t("— Choose an installed app —")], ...free().map((a) => [a.package, a.label])]
       .map(([v, l]) => el("option", { value: v }, l)));
     draw();
   };
-  return el("div", { class: "box" }, el("h3", {}, "التطبيقات المسموحة"),
-    el("p", { class: "muted" }, "تظهر في صفحة التطبيقات على الشاشة، وودجاتها تُضاف من +. الوقت الفارغ يأخذ مدة العودة العامة."),
+  return el("div", { class: "box" }, el("h3", {}, t("Allowed apps")),
+    el("p", { class: "muted" }, t("They show on the panel's apps page, and their widgets are added from +. A blank time takes the general return time.")),
     list,
-    el("div", { class: "row", style: { marginTop: "10px" } }, pick, typed, el("button", { onclick: add }, "إضافة")),
+    el("div", { class: "row", style: { marginTop: "10px" } }, pick, typed, el("button", { onclick: add }, t("Add"))),
     el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
       const clean = apps.map((a) => Object.fromEntries(Object.entries(a).filter(([, v]) => v !== undefined && v !== "")));
       const r = await put(`api/panels/${enc(pid)}/config`, { apps: clean });
-      if (!r.ok) { alert("لم يُحفظ: " + (r.body?.error || r.status)); return; }
+      if (!r.ok) { alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
       await loadConfig(pid);
-      toast(p.online ? "حُفظ ووصل للشاشة." : "حُفظ. ستستلمه الشاشة عند اتصالها.");
+      toast(p.online ? t("Saved and on the panel.") : t("Saved. The panel gets it when it connects."));
       render();
-    } }, "حفظ التطبيقات")));
+    } }, t("Save apps"))));
 }
 
 function renderAccess(view, p) {
@@ -1535,26 +1536,26 @@ function renderAccess(view, p) {
     table.append(tr);
   }
   view.append(el("div", { class: "box" },
-    el("h3", {}, "ما يُسمح به على هذه الشاشة"),
-    el("p", { class: "muted" }, "التحكم مسموح دائماً. الغرف والأجهزة وإعدادات الشاشة والمشروع تُعدَّل من هنا، ومن الشاشة نفسها لمن يملك صلاحيتها."),
-    el("p", { class: "muted" }, "الصفحات في إعدادات الشاشة تظهر حسب هذه الصلاحيات، وصفحة الأمان تظهر دائماً. بدون رمز لا تُفتح الإعدادات."),
+    el("h3", {}, t("What is allowed on this panel")),
+    el("p", { class: "muted" }, t("Control is always allowed. Rooms, devices, the panel's settings and the project are edited here, and on the panel itself by whoever has the permission.")),
+    el("p", { class: "muted" }, t("The panel's settings pages follow these permissions; the security page always shows. Without a PIN the settings do not open.")),
     table,
     el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
       const access = {};
       for (const [role] of ROLES) access[role] = CAPS.map(([c]) => c).filter((c) => boxes[role + ":" + c].checked);
       const r = await put(`api/panels/${enc(pid)}/config`, { access, access_known: CAPS.map(([c]) => c) });
-      if (!r.ok) { alert("لم يُحفظ: " + (r.body?.error || r.status)); return; }
+      if (!r.ok) { alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
       await loadConfig(pid);
-      toast(p.online ? "حُفظ ووصل للشاشة." : "حُفظ. ستستلمه الشاشة عند اتصالها.");
-    } }, "حفظ"))));
+      toast(p.online ? t("Saved and on the panel.") : t("Saved. The panel gets it when it connects."));
+    } }, t("Save")))));
 }
 
 // ---------- project ----------
 
 function renderProject(view) {
-  const tabs = [["general", "عام"], ["devices", "أنواع الأجهزة"], ["widgets", "الودجات"]];
+  const tabs = [["general", t("General")], ["devices", t("Device types")], ["widgets", t("Widgets")]];
   view.append(el("div", { class: "titlebar" },
-    el("h2", {}, S.site?.name || "المشروع"),
+    el("h2", {}, S.site?.name || t("Project")),
     el("div", { class: "tabs" }, tabs.map(([id, label]) =>
       el("button", { class: S.view.tab === id ? "active" : "", onclick: () => { S.view.tab = id; render(); } }, label)))));
   if (!S.site) { loadSite().then(render); return; }
@@ -1564,33 +1565,33 @@ function renderProject(view) {
   const site = S.site;
   const name = el("input", { value: site.name || "" });
   const display = el("div", { class: "form" });
-  const read = displayFields(display, site.defaults || {}, BUILT_IN, "الافتراضي");
+  const read = displayFields(display, site.defaults || {}, BUILT_IN, t("Default"));
   const reload = async () => { await loadSite(); await loadOverview(); render(); };
   view.append(
-    el("div", { class: "box" }, el("h3", {}, "المشروع"),
-      el("div", { class: "form" }, el("label", {}, "اسم المشروع"), name),
-      el("h3", { style: { marginTop: "18px" } }, "الإعدادات الافتراضية لكل الشاشات"), display,
+    el("div", { class: "box" }, el("h3", {}, t("Project")),
+      el("div", { class: "form" }, el("label", {}, t("Project name")), name),
+      el("h3", { style: { marginTop: "18px" } }, t("Default settings for all panels")), display,
       el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
         // Floor names are not on this form: kept as they are.
         const keep = site.defaults?.floor_names ? { floor_names: site.defaults.floor_names } : {};
         const r = await put("api/site", { name: name.value.trim(), defaults: { ...keep, ...read() } });
-        if (!r.ok) { alert("لم يُحفظ: " + (r.body?.error || r.status)); return; }
-        S.site = r.body; toast("حُفظ، ووصل لكل الشاشات المتصلة."); render();
-      } }, "حفظ"))),
-    el("div", { class: "box" }, el("h3", {}, "كلمات السر"),
-      el("p", { class: "muted" }, "رمز المُركِّب يعطي كل الصلاحيات المحلية على الشاشة، ورمز المستخدم يعطي ما تحدده في صلاحيات كل شاشة. يصل للشاشات مشفّراً فقط، ويعمل دون اتصال."),
-      pinRow("رمز المُركِّب", site.installer_pin_set, site.installer_pin_set ? "● مضبوط" : "○ غير مضبوط",
+        if (!r.ok) { alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
+        S.site = r.body; toast(t("Saved, and on every online panel.")); render();
+      } }, t("Save")))),
+    el("div", { class: "box" }, el("h3", {}, t("PINs")),
+      el("p", { class: "muted" }, t("The installer PIN gives every local permission on a panel; the user PIN gives what each panel's permissions allow. Panels only get them hashed, and they work offline.")),
+      pinRow(t("Installer PIN"), site.installer_pin_set, site.installer_pin_set ? t("● Set") : t("○ Not set"),
         async (pin) => { await post("api/site/pin", { role: "installer", pin }); reload(); },
-        async () => { if (confirm("إزالة رمز المُركِّب؟ تصبح إعدادات الشاشات مفتوحة.")) { await post("api/site/pin", { role: "installer", pin: null }); reload(); } }, "إزالة"),
-      pinRow("رمز المستخدم", site.user_pin_set, site.user_pin_set ? "● مضبوط" : "○ غير مضبوط",
+        async () => { if (confirm(t("Remove the installer PIN? The panels' settings become open."))) { await post("api/site/pin", { role: "installer", pin: null }); reload(); } }, t("Remove")),
+      pinRow(t("User PIN"), site.user_pin_set, site.user_pin_set ? t("● Set") : t("○ Not set"),
         async (pin) => { await post("api/site/pin", { role: "user", pin }); reload(); },
-        async () => { await post("api/site/pin", { role: "user", pin: null }); reload(); }, "إزالة")),
+        async () => { await post("api/site/pin", { role: "user", pin: null }); reload(); }, t("Remove"))),
   );
 }
 
 // Where the built-in widgets read from: set once, every panel's widgets use it.
 function renderSources(view) {
-  if (!S.catalog) { view.append(el("p", { class: "muted" }, "جارٍ تحميل أجهزة Home Assistant…")); loadCatalog().then(render); return; }
+  if (!S.catalog) { view.append(el("p", { class: "muted" }, t("Loading Home Assistant's devices…"))); loadCatalog().then(render); return; }
   const chosen = { ...sources() };
   const rows = WIDGETS.filter((w) => w.source).map((w) => {
     // Only sensors of the right kind (a temperature, a power in W or kW); the one chosen stays listed.
@@ -1599,18 +1600,18 @@ function renderSources(view) {
       .filter((e) => domainOf(e.entity_id) === w.domain && (fits(e) || e.entity_id === chosen[w.source]))
       .sort((a, b) => device(a.entity_id).name.localeCompare(device(b.entity_id).name));
     const reading = (e) => e.unit ? ` · ${e.state} ${e.unit}` : "";
-    const sel = selectEl([["", "— بدون —"], ...options.map((e) => [e.entity_id, `${device(e.entity_id).name} (${e.entity_id})${reading(e)}`])], chosen[w.source] || "");
+    const sel = selectEl([["", t("— None —")], ...options.map((e) => [e.entity_id, `${device(e.entity_id).name} (${e.entity_id})${reading(e)}`])], chosen[w.source] || "");
     sel.onchange = () => { if (sel.value) chosen[w.source] = sel.value; else delete chosen[w.source]; };
     return [el("label", {}, icon(w.icon), " ", SHAPES[w.card]), sel];
   });
-  view.append(el("div", { class: "box" }, el("h3", {}, "مصادر الودجات"),
-    el("p", { class: "muted" }, "تُحدَّد مرة واحدة للمشروع. الودجة المضافة من الشاشة أو من المصمم تقرأ من هنا، فلا تضيف جهازاً جديداً للشاشة. الودجة التي لا مصدر لها لا تظهر في قائمة +."),
+  view.append(el("div", { class: "box" }, el("h3", {}, t("Widget sources")),
+    el("p", { class: "muted" }, t("Set once for the project. A widget added on a panel or in the designer reads from here, so it adds no device to the panel. A widget with no source is not offered in +.")),
     el("div", { class: "form" }, rows.flat()),
     el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
       const r = await put("api/site", { sources: chosen });
-      if (!r.ok) { alert("لم يُحفظ: " + (r.body?.error || r.status)); return; }
-      S.site = r.body; toast("حُفظ، ووصل لكل الشاشات المتصلة."); render();
-    } }, "حفظ"))));
+      if (!r.ok) { alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
+      S.site = r.body; toast(t("Saved, and on every online panel.")); render();
+    } }, t("Save")))));
 }
 
 // Device types: set once, used by every panel (icons, names; special cards later).
@@ -1618,14 +1619,14 @@ let devFilter = "cover";
 function renderDevices(view) {
   const list = { ...devices() };
   const areaName = Object.fromEntries(S.catalog.areas.map((a) => [a.id, a.name]));
-  const domains = [["cover", "ستائر وأبواب"], ["switch", "مفاتيح ومقابس"], ["light", "إنارة"], ["binary_sensor", "حساسات"], ["climate", "مكيفات"]];
+  const domains = [["cover", t("Covers and doors")], ["switch", t("Switches and outlets")], ["light", t("Lights")], ["binary_sensor", t("Sensors")], ["climate", t("Climate")]];
   const rows = S.catalog.entities.filter((e) => domainOf(e.entity_id) === devFilter);
   const dirty = { value: false };
   const save = el("button", { class: "solid", onclick: async () => {
     const r = await put("api/site", { devices: list });
-    if (!r.ok) { alert("لم يُحفظ: " + (r.body?.error || r.status)); return; }
-    S.site = r.body; dirty.value = false; toast("حُفظ، ووصل لكل الشاشات."); render();
-  } }, "حفظ");
+    if (!r.ok) { alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
+    S.site = r.body; dirty.value = false; toast(t("Saved, and on every panel.")); render();
+  } }, t("Save"));
   const setField = (id, key, value) => {
     const d = { ...(list[id] || {}) };
     if (value) d[key] = value; else delete d[key];
@@ -1633,11 +1634,11 @@ function renderDevices(view) {
     dirty.value = true;
   };
   const table = el("table", { class: "devtable" },
-    el("tr", {}, el("th", {}, ""), el("th", {}, "الجهاز في HA"), el("th", {}, "الغرفة"), DEVICE_TYPES[devFilter] ? el("th", {}, "النوع") : null, el("th", {}, "الاسم على الشاشات"), el("th", {}, "الأيقونة")));
+    el("tr", {}, el("th", {}, ""), el("th", {}, t("Device in HA")), el("th", {}, t("Room")), DEVICE_TYPES[devFilter] ? el("th", {}, t("Type")) : null, el("th", {}, t("Name on the panels")), el("th", {}, t("Icon"))));
   for (const e of rows) {
     const d = list[e.entity_id] || {};
     const types = DEVICE_TYPES[devFilter];
-    const haType = types?.find(([v]) => v === e.device_class)?.[1] || e.device_class || "عام";
+    const haType = types?.find(([v]) => v === e.device_class)?.[1] || e.device_class || t("General");
     const probe = () => ({ card: R.kinds[kindOf(e.entity_id)]?.default || "sensor.value", entities: [e.entity_id] });
     const preview = icon(cardIcon(probe()), { style: { fontSize: "22px" } });
     const refreshIcon = () => preview.replaceWith(Object.assign(icon(cardIcon(probe()), { style: { fontSize: "22px" } })));
@@ -1646,50 +1647,50 @@ function renderDevices(view) {
       el("td", {}, e.name),
       el("td", { class: "muted" }, areaName[e.area_id] || "—"),
       types ? el("td", {}, (() => {
-        const s = selectEl([["", `من HA (${haType})`], ...types], d.type || "");
+        const s = selectEl([["", t("From HA ({0})", haType)], ...types], d.type || "");
         s.onchange = () => { setField(e.entity_id, "type", s.value); S.site.devices = list; };
         return s;
       })()) : null,
       el("td", {}, el("input", { value: d.name || "", placeholder: e.name, onchange: (ev) => { setField(e.entity_id, "name", ev.target.value.trim()); S.site.devices = list; } })),
       el("td", {}, el("input", { value: d.icon || "", placeholder: "mdi:...", dir: "ltr",
-        onchange: (ev) => { const v = ev.target.value.trim(); if (v && !validIcon(v)) { alert("أيقونة غير معروفة. مثال: mdi:garage"); return; } setField(e.entity_id, "icon", v); S.site.devices = list; } })),
+        onchange: (ev) => { const v = ev.target.value.trim(); if (v && !validIcon(v)) { alert(t("Unknown icon. For example: mdi:garage")); return; } setField(e.entity_id, "icon", v); S.site.devices = list; } })),
     ));
   }
   view.append(el("div", { class: "box", style: { maxWidth: "1100px" } },
-    el("h3", {}, "أنواع الأجهزة"),
-    el("p", { class: "muted" }, "حدّد نوع كل جهاز واسمه مرة واحدة، فتعرضه كل الشاشات بنفس الأيقونة والاسم. الحقل الفارغ يأخذ ما في Home Assistant."),
+    el("h3", {}, t("Device types")),
+    el("p", { class: "muted" }, t("Set each device's type and name once, and every panel shows it with the same icon and name. A blank field takes Home Assistant's.")),
     chips(domains.map(([v, l]) => [v, l]), devFilter, (v) => { devFilter = v; render(); }),
-    el("div", { style: { marginTop: "12px" } }, rows.length ? table : el("p", { class: "muted" }, "لا توجد أجهزة من هذا النوع.")),
+    el("div", { style: { marginTop: "12px" } }, rows.length ? table : el("p", { class: "muted" }, t("No devices of this kind."))),
     el("div", { class: "row", style: { marginTop: "14px" } }, save)));
 }
 
 // ---------- new panel setup: approve, rooms, send ----------
 
 function wizard(req) {
-  const st = { step: 1, pid: req.panel_id, name: req.name || "شاشة", area: "", rooms: new Set() };
+  const st = { step: 1, pid: req.panel_id, name: req.name || t("Panel"), area: "", rooms: new Set() };
   const bar = () => el("div", { class: "steps" }, [1, 2, 3].map((n) => el("span", { class: n <= st.step ? "done" : "" })));
   function show() {
     if (st.step === 1) {
-      sheet(bar(), el("h3", {}, "1. الموافقة"),
-        el("p", { class: "muted" }, "وافق فقط إذا كان هذا الرمز هو الظاهر على الشاشة."),
+      sheet(bar(), el("h3", {}, t("1. Approve")),
+        el("p", { class: "muted" }, t("Approve only if this code is the one on the panel.")),
         el("div", { class: "bigcode" }, req.code),
         el("p", { class: "muted", style: { textAlign: "center" } }, `${req.name || ""} ${req.model ? "· " + req.model : ""}`),
         el("div", { class: "actions" },
           el("button", { class: "solid", onclick: async () => {
             const r = await post(`api/pending/${enc(req.request_id)}/approve`);
-            if (!r.ok) { alert("انتهت صلاحية الطلب. ستطلب الشاشة الربط من جديد."); closeSheet(); refresh(); return; }
+            if (!r.ok) { alert(t("The request expired. The panel will ask to pair again.")); closeSheet(); refresh(); return; }
             st.pid = r.body.panel_id || st.pid;
             st.step = 2; show(); refresh();
-          } }, "الرمز مطابق، موافقة"),
-          el("button", { onclick: async () => { await post(`api/pending/${enc(req.request_id)}/reject`); closeSheet(); refresh(); } }, "رفض"),
-          el("span", { class: "spacer" }), el("button", { onclick: closeSheet }, "لاحقاً")));
+          } }, t("Code matches, approve")),
+          el("button", { onclick: async () => { await post(`api/pending/${enc(req.request_id)}/reject`); closeSheet(); refresh(); } }, t("Reject")),
+          el("span", { class: "spacer" }), el("button", { onclick: closeSheet }, t("Later"))));
       return;
     }
     if (st.step === 2) {
       const name = el("input", { value: st.name, oninput: (e) => { st.name = e.target.value; } });
-      const place = selectEl([["", "— اختر —"], ...S.catalog.areas.map((a) => [a.id, a.name])], st.area);
+      const place = selectEl([["", t("— Choose —")], ...S.catalog.areas.map((a) => [a.id, a.name])], st.area);
       place.onchange = () => { st.area = place.value; if (st.area) st.rooms.add(st.area); show(); };
-      const floors = [...S.catalog.floors, { id: null, name: S.catalog.floors.length ? "بدون طابق" : "الغرف" }];
+      const floors = [...S.catalog.floors, { id: null, name: S.catalog.floors.length ? t("No floor") : t("Rooms") }];
       const boxes = floors.map((f) => {
         const areas = S.catalog.areas.filter((a) => (a.floor_id || null) === f.id);
         if (!areas.length) return null;
@@ -1697,13 +1698,13 @@ function wizard(req) {
           el("label", {}, el("input", { type: "checkbox", checked: st.rooms.has(a.id), onchange: (e) => { e.target.checked ? st.rooms.add(a.id) : st.rooms.delete(a.id); } }),
             a.name, el("span", { class: "muted" }, `(${controlsIn(a.id).length})`)))));
       });
-      sheet(bar(), el("h3", {}, "2. الاسم والغرف"),
-        field("اسم الشاشة", name),
-        field("مكان تركيبها", place),
-        field("الغرف التي تظهر على الشاشة (كل غرفة بأجهزتها)", el("div", {}, boxes)),
+      sheet(bar(), el("h3", {}, t("2. Name and rooms")),
+        field(t("Panel name"), name),
+        field(t("Where it is mounted"), place),
+        field(t("Rooms on the panel (each with its devices)"), el("div", {}, boxes)),
         el("div", { class: "actions" },
-          el("button", { class: "solid", onclick: () => { if (!st.rooms.size) { alert("اختر غرفة واحدة على الأقل."); return; } st.step = 3; show(); } }, "التالي"),
-          el("span", { class: "spacer" }), el("button", { onclick: closeSheet }, "لاحقاً")));
+          el("button", { class: "solid", onclick: () => { if (!st.rooms.size) { alert(t("Choose at least one room.")); return; } st.step = 3; show(); } }, t("Next")),
+          el("span", { class: "spacer" }), el("button", { onclick: closeSheet }, t("Later"))));
       return;
     }
     // Step 3: build the layout and send it.
@@ -1712,10 +1713,10 @@ function wizard(req) {
     if (st.area && ordered.includes(st.area)) ordered.splice(ordered.indexOf(st.area), 1), ordered.unshift(st.area);
     addRoomPages(layout, ordered);
     const count = layout.pages.reduce((n, p) => n + p.cards.length, 0);
-    sheet(bar(), el("h3", {}, "3. الإرسال"),
-      el("p", {}, `${layout.pages.length} غرف، ${count} بطاقة.`),
+    sheet(bar(), el("h3", {}, t("3. Send")),
+      el("p", {}, t("{0} rooms, {1} cards.", layout.pages.length, count)),
       el("ul", {}, layout.pages.map((p) => el("li", {}, `${p.title}: ${p.cards.length}`))),
-      el("p", { class: "muted" }, "يمكنك تعديل كل شيء بعدها في التصميم."),
+      el("p", { class: "muted" }, t("You can change everything afterwards in Design.")),
       el("div", { class: "actions" },
         el("button", { class: "solid", onclick: async () => {
           const pid = st.pid;
@@ -1725,11 +1726,11 @@ function wizard(req) {
           const r = await post(`api/editor/panels/${enc(pid)}/send`, { force: true });
           closeSheet();
           await refresh(); await loadEditor();
-          if (!r.ok) { alert("لم يُرسل: " + (r.body?.error || r.status)); }
-          else toast(r.body.online ? "الشاشة جاهزة." : "أُرسل. ستستلمه الشاشة عند اتصالها.");
+          if (!r.ok) { alert(t("Not sent: ") + (r.body?.error || r.status)); }
+          else toast(r.body.online ? t("The panel is ready.") : t("Sent. The panel gets it when it connects."));
           openPanel(pid);
-        } }, "إرسال للشاشة"),
-        el("button", { onclick: () => { st.step = 2; show(); } }, "رجوع")));
+        } }, t("Send to panel")),
+        el("button", { onclick: () => { st.step = 2; show(); } }, t("Back"))));
   }
   show();
 }

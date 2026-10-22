@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.28.0
+
+- The add-on's pages in English (the default), Arabic, French and Spanish, picked in their
+  header and kept in the browser (static/i18n.js). Arabic pages read right to left.
+
 ## 0.27.1
 
 - The designer catches up with the panel's + window: room cards (a room's picture or its
