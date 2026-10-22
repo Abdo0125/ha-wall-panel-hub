@@ -171,7 +171,8 @@ class Store:
         req = PairRequest(
             request_id=secrets.token_urlsafe(16),
             panel_id=panel_id,
-            name=name[:60] or "Panel",
+            # A panel that only knows its model (an emulator, a plain tablet) gets a name to rename.
+            name=name[:60] if name and name != model and "built for" not in name else f"Panel {len(self.panels) + 1}",
             model=model[:60],
             code=f"{secrets.randbelow(1_000_000):06d}",
             platform=platform if platform in PLATFORMS else "android",

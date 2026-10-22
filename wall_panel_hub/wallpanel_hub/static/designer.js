@@ -72,7 +72,9 @@ const SHAPES = {
   "sensor.value": "قيمة", "sensor.multi": "عدة قيم", "sensor.binary": "حالة", "app.launch": "تطبيق", "room.card": "صورة الغرفة", "room.summary": "تفاصيل الغرفة", "widget.clock": "الساعة",
   "widget.weather": "الطقس", "widget.android": "ودجة أندرويد", "widget.temperature": "الحرارة الخارجية", "widget.power": "الاستهلاك الآن",
 };
-const SIZES = { "1x1": "صغيرة", "2x1": "عريضة", "2x2": "كبيرة", "3x2": "كبيرة عريضة", "4x2": "كبيرة جداً" };
+// Sizes in cells, columns × rows, as the panel names them.
+// Isolated left to right, so 2×1 reads 2×1 on an Arabic page too.
+const SIZES = Object.fromEntries(["1x1", "2x1", "2x2", "3x2", "4x2"].map((v) => [v, "⁦" + v.replace("x", "×") + "⁩"]));
 // Each kind of device pairs with its own app and has its own rules (docs/ui-plan.md, 5.3).
 const PLATFORMS = { android: "شاشة أندرويد", esp32: "شاشة ESP32", phone: "هاتف" };
 const TYPES = { android_11: 'أندرويد 11"', android_4: 'أندرويد 4"', esp32_4: 'ESP32 4"', phone: "هاتف" };
@@ -224,6 +226,8 @@ const S = {
   configs: {},         // pid -> { config, effective }
   view: { kind: "home" },  // home | panel {pid, tab} | project {tab}
   page: 0,
+  menu: false,         // the rooms menu open (over the page), as on the panel
+  floorTab: "",        // its floor tab, by floor id ("" for the rooms on no floor)
   sel: null,           // selected card index on the page
 };
 const W = () => S.work[S.view.pid];
@@ -493,7 +497,7 @@ function renderNav() {
 
 async function openPanel(pid, tab = "design") {
   S.view = { kind: "panel", pid, tab };
-  S.page = 0; S.sel = null;
+  S.page = 0; S.sel = null; S.menu = false; S.floorTab = "";
   if (!S.configs[pid]) await loadConfig(pid);
   render();
 }
@@ -575,36 +579,29 @@ function renderDesign(view) {
   if (!layout) return;
   if (S.catalogError) view.append(el("p", { class: "msg error" }, "تعذّرت قراءة الأجهزة من Home Assistant: " + S.catalogError));
   const eff = S.configs[S.view.pid]?.effective || {};
-  const rtl = (eff.lang || "ar") === "ar";
+  const rtl = eff.lang === "ar";
   if (S.page !== DASH) S.page = Math.min(S.page, Math.max(0, layout.pages.length - 1));
+  // No room yet: the rooms menu, where rooms are added.
+  if (!layout.pages.length && S.page !== DASH) S.menu = true;
   const page = curPage(layout);
 
-  // Sidebar: rooms, drag to reorder, pencil to rename.
-  const rooms = el("ul", {});
-  layout.pages.forEach((pg, i) => {
-    rooms.append(el("li", { class: "room" + (i === S.page ? " active" : ""), dataset: { index: i }, onclick: () => { S.page = i; S.sel = null; render(); } },
-      icon(pg.icon || "mdi:floor-plan"),
-      el("span", { class: "grow" }, pg.title),
-      floorOf(pg) ? el("span", { class: "muted" }, floorOf(pg)) : null,
-      el("span", { class: "edit mdi", title: "تعديل الغرفة", onclick: (ev) => { ev.stopPropagation(); pageSheet(i); } }, String.fromCodePoint(CODEPOINTS["pencil"] || 63))));
-  });
-  Sortable.create(rooms, {
-    animation: 120,
-    onEnd: (evt) => { if (evt.oldIndex !== evt.newIndex) change((l) => { l.pages.splice(evt.newIndex, 0, l.pages.splice(evt.oldIndex, 1)[0]); S.page = evt.newIndex; }); },
-  });
-  const dash = el("ul", { style: { flex: "none", borderBottom: "1px solid var(--divider, #d7dade)" } }, el("li", { class: "room" + (S.page === DASH ? " active" : ""), onclick: () => { S.page = DASH; S.sel = null; render(); } },
-    icon("mdi:view-dashboard-outline"), el("span", { class: "grow" }, "لوحتي")));
-  const side = el("div", { class: "dside" }, dash, rooms, el("button", { class: "addroom", onclick: roomSheet }, "+ غرفة"));
-
-  // Main: top bar and the page's screens.
+  // Top bar, as on the panel: the page's name with ▾ opens the rooms menu; ⌂ my dashboard.
   const now = new Date();
-  const top = el("div", { class: "dtop" }, icon(page?.icon || "mdi:home-outline", { style: { fontSize: "20px" } }), el("span", {}, page?.title || ""),
-    el("span", { class: "clock" }, `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`));
-  const screensBox = el("div", { class: "screens" });
-  if (!page) {
-    screensBox.append(el("div", { class: "screen" }, el("div", { class: "cell", style: { gridColumn: "1 / -1", gridRow: "1 / -1", flexDirection: "column", gap: "8px", color: "var(--dmuted)" } },
-      "لا توجد غرف بعد.", el("button", { onclick: roomSheet }, "+ أضف غرفة من Home Assistant"))));
+  const title = S.menu ? "الغرف" : page?.title || "";
+  const top = el("div", { class: "dtop" },
+    el("span", { class: "dtitle", title: "قائمة الغرف", onclick: () => { S.menu = !S.menu; S.sel = null; render(); } },
+      S.menu ? null : icon(page?.icon || "mdi:home-outline", { style: { fontSize: "20px" } }),
+      el("span", {}, title), icon(S.menu ? "mdi:chevron-up" : "mdi:chevron-down", { style: { fontSize: "20px" } })),
+    el("span", { class: "clock" }, `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`),
+    S.page !== DASH || S.menu
+      ? el("span", { class: "dhome", title: "لوحتي", onclick: () => { S.page = DASH; S.menu = false; S.sel = null; render(); } }, icon("mdi:home-outline"))
+      : null);
+
+  const main = el("div", { class: "dmain" }, top);
+  if (S.menu) {
+    renderRoomsMenu(main);
   } else {
+    const screensBox = el("div", { class: "screens" });
     const { placed, screens, grids } = pack(page.cards);
     for (let s = 0; s < screens; s++) {
       const grid = el("div", { class: "screen" });
@@ -617,20 +614,18 @@ function renderDesign(view) {
       }
       screensBox.append(grid);
     }
-    // Room for one more screen when the last is full.
-    const last = grids[screens - 1];
-    if (last.every((row) => row.every(Boolean))) {
-      const grid = el("div", { class: "screen" });
-      grid.append(el("span", { class: "screenlabel" }, `الشاشة ${screens + 1}`));
-      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) grid.append(emptyCell(screens, c, r, true));
-      screensBox.append(grid);
-    }
+    // Room for one more screen after the last, as on the panel in edit mode.
+    const grid = el("div", { class: "screen" });
+    grid.append(el("span", { class: "screenlabel" }, `الشاشة ${screens + 1} (جديدة، تُحفظ عند إضافة بطاقة)`));
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) grid.append(emptyCell(screens, c, r, true));
+    screensBox.append(grid);
+    main.append(screensBox);
   }
-  const main = el("div", { class: "dmain" }, top, screensBox);
-  const device = el("div", { class: "device" + (eff.theme === "dark" ? " dark" : ""), dir: rtl ? "rtl" : "ltr" }, side, main);
+  const device = el("div", { class: "device" + (eff.theme === "dark" ? " dark" : ""), dir: rtl ? "rtl" : "ltr" }, main);
   view.append(device);
-  view.append(el("p", { class: "muted" },
-    "اضغط + لإضافة غرفة أو جهاز أو تطبيق أو ودجة، واضغط بطاقة لتغيير شكلها وحجمها واسمها. اسحب البطاقة إلى أي خلية فارغة لتضعها هناك، أو فوق بطاقة أخرى لتبديل مكانيهما، واسحب الغرف لترتيبها."));
+  view.append(el("p", { class: "muted" }, S.menu
+    ? "الطوابق تبويبات: القلم للاسم والأيقونة والحذف، و+ لإضافة طابق. اسحب الغرفة إلى أي خانة أو فوق غرفة أخرى لتبديل مكانيهما، و+ في الخانة الفارغة يضيف غرفة. القلم على الغرفة لاسمها وشكلها وحجمها، والضغط عليها يفتحها."
+    : "اضغط اسم الصفحة لقائمة الغرف. اضغط + لإضافة جهاز أو تطبيق أو ودجة، واضغط بطاقة لتغيير شكلها وحجمها واسمها. اسحب البطاقة إلى أي خلية فارغة لتضعها هناك، أو فوق بطاقة أخرى لتبديل مكانيهما."));
   const issues = problems(layout).filter((x) => x !== "لا توجد غرف.");
   for (const m of issues) view.append(el("div", { class: "msg error" }, m));
 }
@@ -929,65 +924,360 @@ function addSheet(screen, col, row) {
   search.focus();
 }
 
-// The floor a room shows under on the panel: its own, else its HA area's (the rooms menu has a tab per floor).
-function floorOf(page) {
-  const id = page.floor || S.catalog.areas.find((a) => a.id === page.id)?.floor_id;
-  return id ? S.catalog.floors.find((f) => f.id === id)?.name || "" : "";
+// ---------- the rooms menu, as on the panel: floors as tabs, rooms as cards ----------
+
+// The panel's floors: HA's under the names given to them, then those added on the panels.
+function effFloors() {
+  const f = S.configs[S.view.pid]?.effective?.floors;
+  if (f) return f;
+  return S.catalog.floors.map((x) => ({ ...x, areas: S.catalog.areas.filter((a) => a.floor_id === x.id).map((a) => a.id) }));
 }
 
-// Add a room: from HA's areas (with its devices), by floor or a whole floor at once, or an empty one.
-function roomSheet() {
-  const layout = L();
-  const have = new Set(layout.pages.map((p) => p.id));
+// The tabs (as RoomGroups on the panel): a floor's rooms, its own or shown there too (also),
+// the floors shown empty (layout floors), then the rooms on no floor.
+function roomGroups(l) {
+  const floors = effFloors();
+  const ids = new Set(floors.map((f) => f.id));
+  const own = (p) => (p.floor && ids.has(p.floor) ? p.floor : floors.find((f) => (f.areas || []).includes(p.id))?.id) || null;
+  const shown = l.floors || [];
+  const groups = [];
+  for (const f of floors) {
+    const pages = [], also = new Set();
+    l.pages.forEach((p, i) => {
+      if (own(p) === f.id) pages.push(i);
+      else if ((p.also || []).some((a) => a.floor === f.id)) { pages.push(i); also.add(i); }
+    });
+    if (pages.length || shown.includes(f.id)) groups.push({ id: f.id, name: f.name, icon: f.icon, pages, also });
+  }
+  const rest = l.pages.map((_, i) => i).filter((i) => own(l.pages[i]) === null);
+  if (rest.length || !groups.length) groups.push({ id: null, name: groups.length ? "أخرى" : "الغرف", pages: rest, also: new Set() });
+  return groups;
+}
+
+// What holds a room's card on a floor: the room itself, or its "shown here too" entry.
+function tileHolder(l, g, i) {
+  const p = l.pages[i];
+  return g.also.has(i) ? p.also.find((a) => a.floor === g.id) : p;
+}
+
+// A room as a card of the menu's grid: its shape, size and place on that floor (picture, 2x1).
+function menuCard(l, g, i) {
+  const t = tileHolder(l, g, i)?.tile || {};
+  return { id: l.pages[i].id, card: t.card || "room.card", size: t.size || "2x1", pos: t.pos, entities: [], _i: i };
+}
+
+function setTile(l, g, i, values) {
+  const h = tileHolder(l, g, i);
+  h.tile = { card: "room.card", size: "2x1", ...(h.tile || {}), ...values };
+  if (!h.tile.pos) delete h.tile.pos;
+  // On its own floor the default (picture at 2x1, in order) is left out, as the panel does.
+  if (h === l.pages[i] && h.tile.card === "room.card" && h.tile.size === "2x1" && !h.tile.pos) delete h.tile;
+}
+
+// Every room of the tab fixed where it shows, so what is added or moved moves no other.
+function pinGroup(l, g) {
+  const { placed } = pack(g.pages.map((i) => menuCard(l, g, i)));
+  for (const pl of placed) if (!pl.card.pos) setTile(l, g, pl.card._i, { pos: { screen: pl.screen, col: pl.col, row: pl.row } });
+}
+
+function currentGroup(l) {
+  const groups = roomGroups(l);
+  return { groups, g: groups.find((x) => (x.id || "") === S.floorTab) || groups[0] };
+}
+
+let roomDrag = null;
+
+function renderRoomsMenu(main) {
+  const l = L();
+  const { groups, g } = currentGroup(l);
+  S.floorTab = g.id || "";
+  main.append(el("div", { class: "ftabs" },
+    groups.map((x) => el("div", { class: "ftab" + (x === g ? " on" : ""), onclick: () => { S.floorTab = x.id || ""; render(); } },
+      x.icon ? icon(x.icon) : null, el("span", { class: "fname" }, x.name),
+      x.id ? el("span", { class: "fedit", title: "اسم الطابق وأيقونته، أو حذفه", onclick: (ev) => { ev.stopPropagation(); floorSheet(x.id, x.name, x.icon, false); } }, icon("mdi:pencil-outline")) : null)),
+    el("div", { class: "ftab add", title: "إضافة طابق", onclick: addFloorSheet }, icon("mdi:plus"))));
+
+  const cards = g.pages.map((i) => menuCard(l, g, i));
+  const { placed, screens, grids } = pack(cards);
+  const box = el("div", { class: "screens" });
+  for (let s = 0; s <= screens; s++) {
+    const grid = el("div", { class: "screen" });
+    if (s === screens) grid.append(el("span", { class: "screenlabel" }, `الشاشة ${screens + 1} (جديدة)`));
+    else if (screens > 1) grid.append(el("span", { class: "screenlabel" }, `الشاشة ${s + 1} من ${screens}`));
+    for (const pl of placed.filter((x) => x.screen === s)) grid.append(roomTile(pl, g));
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      if (s < screens && grids[s][r][c]) continue;
+      grid.append(roomCell(g, placed, s, c, r));
+    }
+    box.append(grid);
+  }
+  main.append(box);
+}
+
+function roomTile(pl, g) {
+  const l = L();
+  const i = pl.card._i;
+  const p = l.pages[i];
+  const a = S.catalog.areas.find((x) => x.id === p.id);
+  const picture = pl.card.card === "room.card" && a?.picture;
+  const devices = p.cards.filter((c) => kindOfCard(c.card) !== "app" && kindOfCard(c.card) !== "widget").length;
+  const node = el("div", {
+    class: ["cell", "rtile", picture ? "pic" : "", g.also.has(i) ? "also" : "", i === S.page ? "current" : ""].join(" "),
+    draggable: "true",
+    title: g.also.has(i) ? "تظهر هنا أيضاً" : "",
+    style: {
+      gridColumn: `${pl.col + 1} / span ${pl.w}`, gridRow: `${pl.row + 1} / span ${pl.h}`,
+      backgroundImage: picture ? `url("api/editor/area_picture/${enc(p.id)}?v=${enc(a.picture)}")` : "",
+    },
+    onclick: () => { S.page = i; S.menu = false; S.sel = null; render(); },
+    ondragstart: (ev) => { roomDrag = p.id; ev.dataTransfer.effectAllowed = "move"; ev.dataTransfer.setData("text/plain", p.id); node.classList.add("dragging"); },
+    ondragend: () => { roomDrag = null; node.classList.remove("dragging"); },
+    ondragover: (ev) => { if (roomDrag && roomDrag !== p.id) { ev.preventDefault(); node.classList.add("over"); } },
+    ondragleave: () => node.classList.remove("over"),
+    ondrop: (ev) => { ev.preventDefault(); moveRoom(g, roomDrag, pl.screen, pl.col, pl.row); },
+  },
+  picture ? null : icon(p.icon || "mdi:floor-plan", { class: "ricon" }),
+  el("div", { class: "rname" }, el("b", {}, p.title),
+    el("span", {}, pl.card.card === "room.summary" || !picture ? `${devices} جهاز` : "")),
+  el("span", { class: "redit", title: "تعديل الغرفة", onclick: (ev) => { ev.stopPropagation(); roomTileSheet(i, g.id); } }, icon("mdi:pencil-outline")));
+  return node;
+}
+
+// An empty cell of the menu: + adds a room there; a dragged room goes there.
+function roomCell(g, placed, screen, col, row) {
+  const node = el("div", {
+    class: "cell empty", title: "إضافة غرفة هنا",
+    style: { gridColumn: `${col + 1}`, gridRow: `${row + 1}` },
+    onclick: () => roomAddSheet(g, placed, screen, col, row),
+    ondragover: (ev) => { if (roomDrag) { ev.preventDefault(); node.classList.add("over"); } },
+    ondragleave: () => node.classList.remove("over"),
+    ondrop: (ev) => { ev.preventDefault(); moveRoom(g, roomDrag, screen, col, row); },
+  }, "+");
+  return node;
+}
+
+// Onto a room the two swap places; onto empty cells it goes there (as cards do).
+function moveRoom(g, id, screen, col, row) {
+  if (!id) return;
+  const l = L();
+  const cards = g.pages.map((i) => menuCard(l, g, i));
+  const index = cards.findIndex((c) => c.id === id);
+  if (index < 0 || !placeCard(cards, index, screen, col, row)) return;
+  change((lay) => { for (const c of cards) setTile(lay, g, c._i, { pos: c.pos }); });
+}
+
+// + in an empty cell: a room of this panel on another floor (shown here too), one of HA's,
+// a whole floor of HA's, or an empty one. One room goes in the cell touched: its picture at
+// 2x1, or 1x1 where 2x1 does not fit.
+function roomAddSheet(g, placed, screen, col, row) {
+  const fits = (size) => {
+    const [w, h] = spanOf(size);
+    return col + w <= COLS && row + h <= ROWS && !placed.some((p) =>
+      p.screen === screen && p.col < col + w && col < p.col + p.w && p.row < row + h && row < p.row + p.h);
+  };
+  const size = fits("2x1") ? "2x1" : "1x1";
+  const spot = { card: "room.card", size, pos: { screen, col, row } };
+  const l = L();
+  const have = new Set(l.pages.map((p) => p.id));
   const list = el("ul", { class: "picklist" });
+
+  // The panel's rooms on other floors: the same room, shown on this floor too.
+  if (g.id) {
+    const here = new Set(g.pages);
+    const others = roomGroups(l).filter((x) => x.id !== g.id)
+      .map((x) => [x.name, x.pages.filter((i) => !here.has(i) && !x.also.has(i))]).filter(([, ps]) => ps.length);
+    if (others.length) list.append(el("div", { class: "floorhead" }, el("h4", { class: "grow" }, "غرف هذه الشاشة في طوابق أخرى (تظهر هنا أيضاً)")));
+    for (const [name, ps] of others) {
+      list.append(el("div", { class: "muted", style: { margin: "6px 4px 2px" } }, name));
+      for (const i of ps) {
+        const p = l.pages[i];
+        list.append(el("li", { onclick: () => {
+          change((lay) => { pinGroup(lay, g); (lay.pages[i].also ||= []).push({ floor: g.id, tile: spot }); });
+          closeSheet();
+        } }, icon(p.icon || "mdi:floor-plan"), el("span", { class: "grow" }, p.title), icon("mdi:layers-plus")));
+      }
+    }
+  }
+
+  // HA's rooms not on the panel, by floor: one, or a whole floor.
+  const addAreas = (ids, one) => {
+    change((lay) => {
+      pinGroup(lay, g);
+      const at = lay.pages.length;
+      addRoomPages(lay, ids);
+      for (const p of lay.pages.slice(at)) if (g.id) p.floor = g.id;
+      if (one && lay.pages.length > at) lay.pages[at].tile = spot;
+    });
+    closeSheet();
+    if (one) roomTileSheet(L().pages.length - 1, g.id);
+  };
   const floors = [...S.catalog.floors, { id: null, name: "بدون طابق" }];
+  let haRooms = 0;
   for (const f of floors) {
     const areas = S.catalog.areas.filter((a) => (a.floor_id || null) === f.id && !have.has(a.id));
     if (!areas.length) continue;
-    if (S.catalog.floors.length) {
-      list.append(el("div", { class: "floorhead" }, el("h4", { class: "grow" }, f.name),
-        areas.length > 1 ? el("button", { onclick: () => { change((l) => { const at = l.pages.length; addRoomPages(l, areas.map((a) => a.id)); S.page = at; }); closeSheet(); } },
-          `+ الطابق كاملاً (${areas.length})`) : null));
-    }
+    haRooms += areas.length;
+    list.append(el("div", { class: "floorhead" }, el("h4", { class: "grow" }, `Home Assistant · ${f.name}`),
+      areas.length > 1 ? el("button", { onclick: () => addAreas(areas.map((a) => a.id), false) }, `+ الطابق كاملاً (${areas.length})`) : null));
     for (const a of areas) {
-      const n = controlsIn(a.id).length;
-      list.append(el("li", { onclick: () => { change((l) => { addRoomPages(l, [a.id]); S.page = l.pages.length - 1; }); closeSheet(); } },
-        icon(a.icon || "mdi:floor-plan"), el("span", { class: "grow" }, a.name), el("span", { class: "muted" }, `${n} جهاز`)));
+      list.append(el("li", { onclick: () => addAreas([a.id], true) },
+        icon(a.icon || "mdi:floor-plan"), el("span", { class: "grow" }, a.name), el("span", { class: "muted" }, `${controlsIn(a.id).length} جهاز`)));
     }
   }
   sheet(
-    el("h3", {}, "إضافة غرفة"),
-    el("p", { class: "muted" }, "الغرفة تُضاف بكل أجهزتها. يمكنك بعدها حذف أو تعديل أي بطاقة."),
-    list.children.length ? list : el("p", { class: "muted" }, "كل غرف Home Assistant مضافة."),
+    el("h3", {}, `إضافة غرفة · ${g.name}`),
+    el("p", { class: "muted" }, "الغرفة من Home Assistant تُضاف بكل أجهزتها، في الخانة التي ضغطتها."),
+    list.children.length ? list : null,
+    !haRooms ? el("p", { class: "muted" }, "كل غرف Home Assistant مضافة.") : null,
     el("div", { class: "actions" },
-      el("button", { onclick: () => { change((l) => { l.pages.push({ id: pageId("page", have), title: "صفحة جديدة", cards: [] }); S.page = l.pages.length - 1; }); closeSheet(); pageSheet(S.page); } }, "+ صفحة فارغة"),
+      el("button", { onclick: () => {
+        change((lay) => {
+          pinGroup(lay, g);
+          const page = { id: pageId("room", new Set(lay.pages.map((p) => p.id))), title: "غرفة جديدة", cards: [], tile: spot };
+          if (g.id) page.floor = g.id;
+          lay.pages.push(page);
+        });
+        closeSheet();
+        roomTileSheet(L().pages.length - 1, g.id);
+      } }, "+ غرفة فارغة"),
       el("span", { class: "spacer" }),
       el("button", { onclick: closeSheet }, "إغلاق")),
   );
 }
 
-function pageSheet(i) {
-  const p = L().pages[i];
+// A room's pencil, on a floor: name, icon, its card there (shape, size), its own floor, or
+// taking it off a floor it is shown on too; deleting it.
+function roomTileSheet(i, floorId) {
+  const l = L();
+  const p = l.pages[i];
   if (!p) return;
-  const edit = (fn) => { change(() => fn()); pageSheet(i); };
+  const g = roomGroups(l).find((x) => x.id === floorId && x.pages.includes(i)) || { id: null, also: new Set(), pages: [i] };
+  const isAlso = g.also.has(i);
+  const t = tileHolder(l, g, i)?.tile || {};
+  const shape = t.card || "room.card", size = t.size || "2x1";
+  const edit = (fn) => { change((lay) => fn(lay)); roomTileSheet(i, floorId); };
+  const sizes = shape === "room.summary" ? ["1x1", "2x1"] : ["1x1", "2x1", "2x2"];
+  const ownFloor = roomGroups(l).find((x) => x.pages.includes(i) && !x.also.has(i))?.name;
   sheet(
     el("h3", {}, p.title),
-    field("الاسم", el("input", { value: p.title, onchange: (e) => { const v = e.target.value.trim(); if (v) edit(() => { p.title = v; }); } })),
-    field("الأيقونة", iconInput(p.icon, "mdi:floor-plan", (v) => edit(() => { v && validIcon(v) ? p.icon = v : delete p.icon; }))),
-    S.catalog.floors.length ? field("الطابق على الشاشة", (() => {
-      const haFloor = S.catalog.floors.find((f) => f.id === S.catalog.areas.find((a) => a.id === p.id)?.floor_id)?.name;
-      const s = selectEl([["", `من HA (${haFloor || "بدون طابق"})`], ...S.catalog.floors.map((f) => [f.id, f.name])], p.floor || "");
-      s.onchange = () => edit(() => { s.value ? p.floor = s.value : delete p.floor; });
+    isAlso ? el("p", { class: "muted" }, `تظهر هنا أيضاً. طابقها: ${ownFloor || "—"}`) : null,
+    field("الاسم", el("input", { value: p.title, onchange: (e) => { const v = e.target.value.trim(); if (v) edit((lay) => { lay.pages[i].title = v; }); } })),
+    field("الأيقونة", iconInput(p.icon, "mdi:floor-plan", (v) => edit((lay) => { v && validIcon(v) ? lay.pages[i].icon = v : delete lay.pages[i].icon; }))),
+    field("بطاقتها في قائمة الغرف", chips([["room.card", "صورة الغرفة"], ["room.summary", "التفاصيل"]], shape,
+      (v) => edit((lay) => setTile(lay, g, i, { card: v, size: v === "room.summary" && size === "2x2" ? "2x1" : size })))),
+    field("الحجم", chips(sizes.map((v) => [v, SIZES[v] || v]), size, (v) => edit((lay) => setTile(lay, g, i, { size: v })))),
+    !isAlso && effFloors().length ? field("الطابق على الشاشة", (() => {
+      const haFloor = effFloors().find((f) => (f.areas || []).includes(p.id))?.name;
+      const s = selectEl([["", `من HA (${haFloor || "بدون طابق"})`], ...effFloors().map((f) => [f.id, f.name])], p.floor || "");
+      s.onchange = () => { change((lay) => { s.value ? lay.pages[i].floor = s.value : delete lay.pages[i].floor; }); closeSheet(); };
       return s;
     })()) : null,
     el("div", { class: "actions" },
       el("button", { class: "primary", onclick: closeSheet }, "تم"),
+      el("button", { onclick: () => { closeSheet(); S.page = i; S.menu = false; S.sel = null; render(); } }, "فتح الغرفة"),
       el("span", { class: "spacer" }),
+      isAlso ? el("button", { onclick: () => {
+        change((lay) => { lay.pages[i].also = lay.pages[i].also.filter((a) => a.floor !== g.id); if (!lay.pages[i].also.length) delete lay.pages[i].also; });
+        closeSheet();
+      } }, "إزالة من هذا الطابق") : null,
       el("button", { class: "danger", onclick: () => {
         if (!confirm(`حذف الغرفة "${p.title}" وكل بطاقاتها من هذه الشاشة؟`)) return;
-        change((l) => { l.pages.splice(i, 1); S.page = Math.max(0, Math.min(S.page, l.pages.length - 1)); S.sel = null; });
+        change((lay) => { lay.pages.splice(i, 1); S.page = DASH; S.sel = null; });
         closeSheet();
       } }, "حذف الغرفة")),
+  );
+}
+
+// A floor's name and icon, saved at once for this panel or for all panels (as on the panel);
+// a new floor (not in HA) shows on this panel once named. Deleting it takes its rooms off
+// this panel; a room shown on another floor too stays there.
+function floorSheet(id, name, iconName, isNew) {
+  const pid = S.view.pid;
+  let text = isNew ? "" : name, chosen = iconName || "";
+  const msg = el("div", { class: "msg error" });
+  const save = async (all) => {
+    if (isNew && !text.trim()) { msg.textContent = "اكتب اسم الطابق."; return; }
+    const r = await post(`api/panels/${enc(pid)}/floor`, { floor_id: id, name: text.trim(), icon: chosen || null, all });
+    if (!r.ok) { msg.textContent = "لم يُحفظ: " + (r.body?.error || r.status); return; }
+    await loadConfig(pid);
+    if (isNew) { S.floorTab = id; change((l) => { l.floors = [...new Set([...(l.floors || []), id])]; }); }
+    closeSheet();
+    render();
+  };
+  const g = roomGroups(L()).find((x) => x.id === id);
+  sheet(
+    el("h3", {}, isNew ? "طابق جديد" : name),
+    field("اسم الطابق", el("input", { value: text, placeholder: isNew ? "مثلاً: الحديقة" : "فارغ: اسم Home Assistant", oninput: (e) => { text = e.target.value; } })),
+    field("الأيقونة", iconInput(chosen, "mdi:home-floor-l", (v) => { chosen = v && validIcon(v) ? v : ""; })),
+    msg,
+    el("div", { class: "actions" },
+      el("button", { class: "solid", onclick: () => save(false) }, "هذه الشاشة"),
+      el("button", { onclick: () => save(true) }, "نسخ إلى كل الشاشات"),
+      el("span", { class: "spacer" }),
+      !isNew ? el("button", { class: "danger", onclick: () => {
+        const n = g ? g.pages.length : 0;
+        if (!confirm(`حذف الطابق من هذه الشاشة مع غرفه (${n}) وكل بطاقاتها؟`)) return;
+        change((l) => deleteFloor(l, id));
+        S.floorTab = "";
+        closeSheet();
+      } }, "حذف الطابق") : null,
+      el("button", { onclick: closeSheet }, "إلغاء")),
+  );
+}
+
+function deleteFloor(l, id) {
+  const g = roomGroups(l).find((x) => x.id === id);
+  const rooms = new Set(g ? g.pages : []);
+  const also = g ? g.also : new Set();
+  const out = [];
+  l.pages.forEach((p, i) => {
+    const rest = (p.also || []).filter((a) => a.floor !== id);
+    if (!rooms.has(i) || also.has(i)) { out.push(Object.assign(p, { also: rest })); }
+    else if (rest.length) {
+      // Its own floor goes: it stays on the next floor it shows on.
+      const [next, ...more] = rest;
+      p.floor = next.floor;
+      if (next.tile) p.tile = next.tile; else delete p.tile;
+      out.push(Object.assign(p, { also: more }));
+    }
+  });
+  for (const p of out) if (!p.also?.length) delete p.also;
+  l.pages = out;
+  l.floors = (l.floors || []).filter((f) => f !== id);
+  if (!l.floors.length) delete l.floors;
+  S.page = DASH;
+}
+
+// + after the floor tabs: one of the floors not shown yet, empty or with its rooms of HA's,
+// or a new floor.
+function addFloorSheet() {
+  const l = L();
+  const shown = new Set(roomGroups(l).map((x) => x.id).filter(Boolean));
+  const have = new Set(l.pages.map((p) => p.id));
+  const list = el("ul", { class: "picklist" });
+  for (const f of effFloors().filter((x) => !shown.has(x.id))) {
+    const fresh = (f.areas || []).filter((a) => !have.has(a) && S.catalog.areas.some((x) => x.id === a));
+    list.append(el("li", {}, icon(f.icon || "mdi:home-floor-l"), el("span", { class: "grow" }, f.name),
+      // The floor added is the tab shown.
+      el("button", { onclick: () => { S.floorTab = f.id; change((lay) => { lay.floors = [...new Set([...(lay.floors || []), f.id])]; }); closeSheet(); } }, "فارغ"),
+      fresh.length ? el("button", { class: "solid", onclick: () => {
+        S.floorTab = f.id;
+        change((lay) => {
+          lay.floors = [...new Set([...(lay.floors || []), f.id])];
+          const at = lay.pages.length;
+          addRoomPages(lay, fresh);
+          for (const p of lay.pages.slice(at)) p.floor = f.id;
+        });
+        closeSheet();
+      } }, `مع غرفه (${fresh.length})`) : null));
+  }
+  sheet(
+    el("h3", {}, "إضافة طابق"),
+    list.children.length ? list : el("p", { class: "muted" }, "كل الطوابق ظاهرة."),
+    el("div", { class: "actions" },
+      el("button", { class: "solid", onclick: () => floorSheet("wp_" + Math.random().toString(36).slice(2, 10), "", null, true) }, "+ طابق جديد"),
+      el("span", { class: "spacer" }),
+      el("button", { onclick: closeSheet }, "إغلاق")),
   );
 }
 

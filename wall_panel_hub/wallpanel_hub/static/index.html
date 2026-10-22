@@ -67,7 +67,7 @@
 
   /* ---- the panel, as it looks on the wall ---- */
   .device { --cell: #fff; --divider: #d7dade; --icon: #5f656c; --active: #f2b300; --text: #2b2f33; --dmuted: #8c9298; --side: #f1f2f4;
-            display: grid; grid-template-columns: 170px 1fr; width: 100%; max-width: 1080px; aspect-ratio: 16 / 10;
+            display: grid; grid-template-columns: 1fr; width: 100%; max-width: 1080px; aspect-ratio: 16 / 10;
             border: 10px solid #222; border-radius: 18px; overflow: hidden; background: var(--divider); color: var(--text);
             box-shadow: 0 8px 30px rgba(0,0,0,.25); }
   .device.dark { --cell: #1b1e22; --divider: #2b2f35; --icon: #a9afb6; --active: #ffc72c; --text: #e9ebee; --dmuted: #8a9097; --side: #15181b; }
@@ -81,10 +81,34 @@
   .room:hover .edit { opacity: .7; }
   .room .grow { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .addroom { margin: 6px; border: 1px dashed var(--dmuted); color: var(--dmuted); font-size: 12px; padding: 6px; }
-  .dmain { display: grid; grid-template-rows: 44px 1fr; min-height: 0; background: var(--divider); }
-  .dtop { background: var(--cell); display: flex; align-items: center; padding: 0 14px; gap: 10px; font-size: 15px; border-bottom: 1px solid var(--divider); }
+  .dmain { display: flex; flex-direction: column; min-height: 0; background: var(--divider); }
+  .dtop { flex: none; height: 44px; background: var(--cell); display: flex; align-items: center; padding: 0 10px; gap: 10px; font-size: 15px; border-bottom: 1px solid var(--divider); }
   .dtop .clock { margin-inline-start: auto; color: var(--dmuted); }
-  .screens { overflow: auto; min-height: 0; }
+  .dtitle { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
+  .dtitle:hover { background: color-mix(in srgb, var(--dmuted) 15%, transparent); }
+  .dhome { cursor: pointer; font-size: 22px; color: var(--icon); display: flex; }
+  .ftabs { flex: none; display: flex; height: 40px; background: var(--cell); border-bottom: 1px solid var(--divider); }
+  .ftab { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; cursor: pointer; position: relative; border-inline-end: .5px solid var(--divider); }
+  .ftab .fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ftab.on { background: color-mix(in srgb, var(--active) 12%, var(--cell)); font-weight: 600; box-shadow: inset 0 -3px var(--active); }
+  .ftab .mdi { font-size: 18px; color: var(--icon); }
+  .ftab.on > .mdi { color: var(--active); }
+  .ftab .fedit { position: absolute; inset-inline-end: 6px; opacity: .45; display: flex; }
+  .ftab .fedit:hover { opacity: 1; }
+  .ftab.add { flex: 0 0 48px; }
+  .screens { flex: 1; overflow: auto; min-height: 0; }
+  .rtile { position: relative; flex-direction: column; align-items: flex-start; justify-content: flex-end; padding: 10px; cursor: grab; background-size: cover; background-position: center; overflow: hidden; }
+  .rtile.pic { color: #fff; }
+  .rtile.pic::before { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 45%, rgba(0,0,0,.65)); }
+  .rtile > * { position: relative; }
+  .rtile .ricon { position: absolute; top: 10px; inset-inline-start: 10px; font-size: 32px; color: var(--icon); }
+  .rtile .rname b { display: block; font-size: 13px; text-transform: uppercase; }
+  .rtile .rname span { font-size: 11px; opacity: .8; }
+  .rtile .redit { position: absolute; top: 6px; inset-inline-end: 6px; width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,.45); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; }
+  .rtile .redit .mdi { color: #fff; font-size: 16px; }
+  .rtile.also { outline: 1px dashed var(--dmuted); outline-offset: -4px; }
+  .rtile.current { box-shadow: inset 0 0 0 3px var(--active); }
+  .rtile.dragging { opacity: .3; }
   .screen { display: grid; gap: 0; grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(4, 1fr); height: 100%; position: relative; }
   .screen + .screen { border-top: 3px dashed var(--dmuted); }
   .screenlabel { position: absolute; top: 4px; inset-inline-end: 8px; font-size: 11px; color: var(--dmuted); z-index: 2; pointer-events: none; }

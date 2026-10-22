@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.27.0
+
+- The designer's Design tab works as the panel: the page's name with ▾ opens the rooms
+  menu (floors as tabs, rooms as cards with HA's pictures), ⌂ my dashboard. Rooms are
+  dragged to any cell or onto another (swap), added from + in an empty cell (from HA, a
+  whole floor, an empty room, or a room of another floor shown there too), and set from
+  their pencil (name, icon, picture or details card, size, floor, off this floor, delete).
+  Floors added (HA's not shown, or a new one), named for this panel or all, and deleted.
+- An empty screen after the last on every page, as on the panel in edit mode.
+- Sizes named by number (2×1).
+- A panel that only reports its model (an emulator) is named "Panel N" when it asks to pair.
+
 ## 0.26.0
 
 - A room shown on more than one floor of a panel's rooms menu (layout page `also`: the other

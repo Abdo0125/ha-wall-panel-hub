@@ -5,6 +5,7 @@
   accepted only from the Supervisor's ingress proxy, so the LAN cannot reach it.
 """
 
+import base64
 import ipaddress
 import logging
 import re
@@ -330,6 +331,31 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     async def get_layout(request: web.Request):
         return web.json_response({"layout": store.get_layout(request.match_info["pid"])})
 
+    async def area_picture(request: web.Request):
+        """HA's picture of a room, for the designer's room cards (the page has no HA token)."""
+        try:
+            picture = await gateway.area_picture(request.match_info["aid"])
+        except Exception as e:  # HA restarting...
+            log.warning("area picture failed: %s", e)
+            picture = None
+        if not picture:
+            raise web.HTTPNotFound()
+        return web.Response(body=base64.b64decode(picture["data"]), content_type=picture["type"].split(";")[0],
+                            headers={"Cache-Control": "max-age=86400"})
+
+    async def panel_floor(request: web.Request):
+        """A floor's name and icon on this panel, or for all panels (all); a new floor (wp_ id) too."""
+        pid = _panel(request)
+        body = await _body(request)
+        try:
+            icon = body.get("icon")
+            store.name_floor(pid, str(body.get("floor_id") or ""), str(body.get("name") or ""), bool(body.get("all")),
+                             None if icon is None else str(icon))
+        except ConfigInvalid as e:
+            return _invalid(e)
+        await gateway.notify_config(None if body.get("all") else pid)
+        return web.json_response({"ok": True})
+
     # Paths are relative in the page, so they work behind the ingress prefix.
     app.router.add_get("/", index)
     app.router.add_get("/editor", editor)
@@ -337,6 +363,8 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     app.router.add_get("/api/editor/catalog", editor_catalog)
     app.router.add_get("/api/editor/state", editor_state)
     app.router.add_get("/api/editor/cards", editor_cards)
+    app.router.add_get("/api/editor/area_picture/{aid}", area_picture)
+    app.router.add_post("/api/panels/{pid}/floor", panel_floor)
     app.router.add_put("/api/editor/panels/{pid}/draft", put_draft)
     app.router.add_delete("/api/editor/panels/{pid}/draft", delete_draft)
     app.router.add_post("/api/editor/panels/{pid}/send", send_draft)
