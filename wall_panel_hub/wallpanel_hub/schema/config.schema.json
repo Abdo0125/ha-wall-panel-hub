@@ -254,7 +254,8 @@
       "enum": [
         "ar",
         "fr",
-        "en"
+        "en",
+        "es"
       ]
     },
     "theme": {

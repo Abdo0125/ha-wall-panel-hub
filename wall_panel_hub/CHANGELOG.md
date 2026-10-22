@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.29.0
+
+- Spanish (es) as a panel language, in the panel's settings and the add-on's.
+- Panel app 0.27.0: the panel in Spanish too (all its text).
+
 ## 0.28.2
 
 - The old advanced editor (/editor) is removed: the designer does all it did.

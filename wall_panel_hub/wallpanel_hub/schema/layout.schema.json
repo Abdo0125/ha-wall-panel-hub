@@ -72,9 +72,10 @@
           "enum": [
             "ar",
             "fr",
-            "en"
+            "en",
+            "es"
           ],
-          "default": "ar"
+          "default": "en"
         },
         "theme": {
           "enum": [

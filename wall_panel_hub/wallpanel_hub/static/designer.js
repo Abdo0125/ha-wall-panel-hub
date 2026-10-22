@@ -1337,7 +1337,7 @@ function addFloorSheet() {
 // ---------- settings and permissions ----------
 
 // The panel app's languages, each in its own name.
-const PANEL_LANGS = [["en", "English"], ["ar", "العربية"], ["fr", "Français"]];
+const PANEL_LANGS = [["en", "English"], ["ar", "العربية"], ["fr", "Français"], ["es", "Español"]];
 const THEMES = [["light", t("Light")], ["dark", t("Dark")]];
 const ROLES = [["guest", t("No PIN")], ["user", t("User PIN")], ["installer", t("Installer PIN")]];
 const CAPS = [["control", t("Control")], ["apps", t("Apps")], ["edit_cards", t("Edit cards")], ["reorder", t("Rearrange")], ["dashboard", t("Customise my dashboard")], ["add_widgets", t("Add apps and widgets")],
