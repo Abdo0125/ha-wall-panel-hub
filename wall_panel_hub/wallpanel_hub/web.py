@@ -103,8 +103,6 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     async def index(_):
         return _page("index.html")
 
-    async def editor(_):
-        return _page("editor.html")
 
     # ---- layout editor ----
 
@@ -358,7 +356,6 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
 
     # Paths are relative in the page, so they work behind the ingress prefix.
     app.router.add_get("/", index)
-    app.router.add_get("/editor", editor)
     app.router.add_static("/static/", STATIC)
     app.router.add_get("/api/editor/catalog", editor_catalog)
     app.router.add_get("/api/editor/state", editor_state)

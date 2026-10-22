@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.28.2
+
+- The old advanced editor (/editor) is removed: the designer does all it did.
+
 ## 0.28.1
 
 - Numbers in the add-on's fields always in 0-9: a number field showed the system's digits
