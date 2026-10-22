@@ -23,7 +23,7 @@ from aiohttp import WSMsgType, web
 
 from .access import EditRefused, role_caps
 from .cards import REGISTRY
-from . import panel_settings
+from . import panel_settings, project_settings
 from .config import ConfigInvalid
 from .pins import PinInvalid
 from .migrate import SCHEMA, downgrade
@@ -103,6 +103,34 @@ class PanelConnection:
     @property
     def allowed(self) -> set[str]:
         return layout_entities(self.gateway.store.get_layout(self.panel_id))
+
+    async def project_settings(self, mid, kind: str, msg: dict) -> None:
+        store = self.gateway.store
+        try:
+            project_settings.allowed(store, self.panel_id, msg.get("pin"))
+            if kind == "wallpanel/project/get":
+                entities = []
+                if self.gateway.catalog is not None:
+                    try:
+                        entities = (await self.gateway.catalog.get())["entities"]
+                    except Exception:  # HA restarting: the names and PINs still show
+                        pass
+                result = project_settings.get(store, entities)
+            elif kind == "wallpanel/project/update":
+                project_settings.update(store, msg.get("changes") or {})
+                result = None
+            else:
+                project_settings.set_pin(store, str(msg.get("role") or ""), msg.get("new_pin"))
+                result = None
+        except project_settings.Refused as e:
+            await self.send(_error(mid, "forbidden", str(e)))
+            return
+        except (ConfigInvalid, PinInvalid, ValueError, TypeError) as e:
+            await self.send(_error(mid, "invalid_config", str(e)))
+            return
+        await self.send({"id": mid, "type": "result", "success": True, "result": result})
+        if kind != "wallpanel/project/get":
+            await self.gateway.notify_config()
 
     async def panel_settings(self, mid, kind: str, msg: dict) -> None:
         store = self.gateway.store
@@ -187,6 +215,9 @@ class PanelConnection:
         elif kind in ("wallpanel/panel/get", "wallpanel/panel/update", "wallpanel/panel/pin", "wallpanel/panel/unpair"):
             # This panel's own settings, from the panel itself (panel permission; docs/parity.md 4a).
             await self.panel_settings(mid, kind, msg)
+        elif kind in ("wallpanel/project/get", "wallpanel/project/update", "wallpanel/project/pin"):
+            # The project's settings, from a panel (project permission; docs/parity.md 4b).
+            await self.project_settings(mid, kind, msg)
         elif kind == "wallpanel/config/floor":
             # A floor's name: on this panel with the rooms permission, for all with project.
             everywhere = msg.get("scope") == "all"

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.31.0
+
+- The project edited from a panel with the project permission (docs/parity.md 4b), through
+  wallpanel/project/get, update and pin: its name, the widgets' sources (with what each can
+  be in HA) and its PINs (hashed in the hub). Every panel gets them at once.
+- Panel app 0.29.0: a "Project" page in the settings for it.
+
 ## 0.30.0
 
 - A panel edits its own settings with the panel permission (docs/parity.md 4a), through
