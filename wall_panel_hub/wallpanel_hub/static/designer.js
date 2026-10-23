@@ -70,7 +70,7 @@ const SHAPES = {
   "climate.compact": t("Compact"), "climate.thermostat": t("Thermostat"),
   "fan.toggle": t("Switch"), "fan.speed": t("Speeds"), "lock.lock": t("Lock"),
   "scene.action": t("Button"), "scene.bar": t("Scene bar"), "script.action": t("Button"), "button.action": t("Button"),
-  "sensor.value": t("Value"), "sensor.multi": t("Several values"), "sensor.binary": t("State"), "app.launch": t("App"), "room.card": t("Room picture"), "room.summary": t("Room details"), "widget.clock": t("Clock"),
+  "sensor.value": t("Value"), "sensor.multi": t("Several values"), "sensor.binary": t("State"), "app.launch": t("App"), "camera.view": t("Picture every few seconds"), "camera.live": t("Live"), "room.card": t("Room picture"), "room.summary": t("Room details"), "widget.clock": t("Clock"),
   "widget.weather": t("Weather"), "widget.android": t("Android widget"), "widget.temperature": t("Outdoor temperature"), "widget.power": t("Power now"),
 };
 // Sizes in cells, columns × rows, as the panel names them.
@@ -85,7 +85,7 @@ const OPTION_NAMES = {
 };
 const KIND_NAMES = {
   light: t("Lights"), switch: t("Switches"), cover: t("Covers"), climate: t("Climate"), fan: t("Fans"), lock: t("Locks"),
-  scene: t("Scenes"), script: t("Scripts"), button: t("Buttons"), sensor: t("Sensors"),
+  scene: t("Scenes"), script: t("Scripts"), button: t("Buttons"), sensor: t("Sensors"), camera: t("Cameras"),
 };
 
 // Device types per domain (HA's device_class names), set once for the project.
@@ -285,7 +285,7 @@ function cardIcon(c) {
     cover: { blind: "blinds", curtain: "curtains-closed", garage: "garage", gate: "gate", door: "door-closed", window: "window-closed",
              awning: "awning-outline", shade: "roller-shade-closed", damper: "valve-closed" }[type] || "window-shutter",
     climate: "thermostat", fan: "fan", lock: "lock", scene: "palette-outline", script: "script-text-outline",
-    button: "gesture-tap-button",
+    button: "gesture-tap-button", camera: "cctv",
     sensor: domainOf(c.entities[0] || "") === "binary_sensor"
       ? ({ door: "door-closed", garage_door: "garage", window: "window-closed-variant", motion: "motion-sensor", smoke: "smoke-detector-variant", moisture: "water-off", gas: "gas-cylinder" }[type] || "checkbox-blank-circle-outline")
       : ({ temperature: "thermometer", humidity: "water-percent", power: "flash", energy: "lightning-bolt", illuminance: "brightness-5", battery: "battery" }[type] || "gauge"),
@@ -673,6 +673,12 @@ function cardCell(pl, page) {
     roomCls = " rtile" + (picture ? " pic" : "");
     roomBg = picture ? `url("api/editor/area_picture/${enc(room.id)}?v=${enc(a.picture)}")` : "";
   }
+  if (kindOfCard(c.card) === "camera" && known && c.entities[0]) {
+    // The camera's picture now, as the panel shows it; again at most once a minute.
+    body.splice(0, body.length, el("div", { class: "rname" }, el("b", {}, cardLabel(c)), el("span", {}, c.card === "camera.live" ? t("Live") : "")));
+    roomCls = " rtile pic";
+    roomBg = `url("api/editor/camera/${enc(c.entities[0])}?m=${Math.floor(Date.now() / 60000)}"), linear-gradient(#3a3f44, #3a3f44)`;
+  }
   const node = el("div", {
     class: cls + roomCls, draggable: "true", title: known ? "" : t("Device not in Home Assistant"),
     style: { gridColumn: `${pl.col + 1} / span ${pl.w}`, gridRow: `${pl.row + 1} / span ${pl.h}`, backgroundImage: roomBg },
@@ -787,7 +793,8 @@ function cardSheet(index) {
     field(t("Name on the panel"), el("input", { value: c.label || "", placeholder: d?.name || "",
       onchange: (e) => edit(() => { const v = e.target.value.trim(); v ? c.label = v : delete c.label; }) })),
     field(t("Icon"), iconInput(c.icon, cardIcon({ ...c, icon: undefined }), (v) => edit(() => { v && validIcon(v) ? c.icon = v : delete c.icon; }))),
-    field(t("Ask before acting"), chips([["", t("Automatic")], ["true", t("Yes")], ["false", t("No")]], c.confirm === undefined ? "" : String(c.confirm),
+    // A camera does nothing to confirm.
+    kindOfCard(c.card) === "camera" ? null : field(t("Ask before acting"), chips([["", t("Automatic")], ["true", t("Yes")], ["false", t("No")]], c.confirm === undefined ? "" : String(c.confirm),
       (v) => edit(() => { v === "" ? delete c.confirm : c.confirm = v === "true"; }))),
     ...optionFields,
     // A device's card to another room, as on the panel: in its first free cell there.

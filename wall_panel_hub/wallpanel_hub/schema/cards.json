@@ -88,6 +88,13 @@
       "default": "sensor.value",
       "controllable": false
     },
+    "camera": {
+      "domains": [
+        "camera"
+      ],
+      "default": "camera.view",
+      "controllable": true
+    },
     "app": {
       "domains": [],
       "default": "app.launch",
@@ -499,6 +506,40 @@
       "targets": [
         "android",
         "esp32",
+        "phone"
+      ]
+    },
+    "camera.view": {
+      "entities": {
+        "min": 1,
+        "max": 1
+      },
+      "sizes": [
+        "2x1",
+        "2x2",
+        "3x2",
+        "4x2"
+      ],
+      "default_size": "2x2",
+      "targets": [
+        "android",
+        "phone"
+      ]
+    },
+    "camera.live": {
+      "entities": {
+        "min": 1,
+        "max": 1
+      },
+      "sizes": [
+        "2x1",
+        "2x2",
+        "3x2",
+        "4x2"
+      ],
+      "default_size": "2x2",
+      "targets": [
+        "android",
         "phone"
       ]
     },

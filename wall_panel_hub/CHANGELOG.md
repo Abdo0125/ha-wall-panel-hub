@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.33.0
+
+- Camera cards (panel app 0.33.0): HA's cameras can be added like any device, in two shapes,
+  a picture every few seconds or live; a tap on the panel shows the camera live on the whole
+  screen. The hub fetches the pictures from Home Assistant (the panels have no HA token), for
+  the cameras of each panel's own layout only, at most 4 live at once per panel.
+- The designer shows each camera card with the camera's picture.
+
 ## 0.32.2
 
 - The designer opens a panel on my dashboard, as the panel does, not on its first room.

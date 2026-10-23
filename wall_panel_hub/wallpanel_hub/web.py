@@ -341,6 +341,21 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         return web.Response(body=base64.b64decode(picture["data"]), content_type=picture["type"].split(";")[0],
                             headers={"Cache-Control": "max-age=86400"})
 
+    async def camera_picture(request: web.Request):
+        """A camera's picture now, for the designer's camera cards (the page has no HA token)."""
+        eid = request.match_info["eid"]
+        if not eid.startswith("camera."):
+            raise web.HTTPNotFound()
+        try:
+            picture = await gateway.camera_snapshot(eid, 640)
+        except Exception as e:  # HA restarting, camera offline...
+            log.warning("camera picture failed: %s", e)
+            picture = None
+        if not picture:
+            raise web.HTTPNotFound()
+        return web.Response(body=base64.b64decode(picture["data"]), content_type=picture["type"],
+                            headers={"Cache-Control": "no-store"})
+
     async def panel_floor(request: web.Request):
         """A floor's name and icon on this panel, or for all panels (all); a new floor (wp_ id) too."""
         pid = _panel(request)
@@ -361,6 +376,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     app.router.add_get("/api/editor/state", editor_state)
     app.router.add_get("/api/editor/cards", editor_cards)
     app.router.add_get("/api/editor/area_picture/{aid}", area_picture)
+    app.router.add_get("/api/editor/camera/{eid}", camera_picture)
     app.router.add_post("/api/panels/{pid}/floor", panel_floor)
     app.router.add_put("/api/editor/panels/{pid}/draft", put_draft)
     app.router.add_delete("/api/editor/panels/{pid}/draft", delete_draft)

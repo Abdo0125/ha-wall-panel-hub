@@ -24,7 +24,7 @@ COMMANDS = {
 
 
 # Device domains the panels will get cards for.
-UPCOMING = ("media_player", "camera", "alarm_control_panel", "vacuum", "water_heater", "humidifier", "valve",
+UPCOMING = ("media_player", "alarm_control_panel", "vacuum", "water_heater", "humidifier", "valve",
             "siren", "remote", "number", "input_number", "select", "input_select")
 
 
