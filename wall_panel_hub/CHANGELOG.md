@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.32.0
+
+- An add palette beside the panel in the designer: the rooms, devices, room cards, apps and
+  widgets lists, each row dragged onto an empty cell (or tapped: the first free one), to set
+  up a page quickly. Hidden on narrow windows; + in a cell still opens the add window.
+- Choices as on the panel: a few in a joined bar; more folded to the chosen one, opening to a
+  list with a search when long (the panel's place, sources, floors, device types, apps).
+- Square switches for the permissions; the last rounded corners squared.
+- Card ids in use count my dashboard's too.
+
 ## 0.31.0
 
 - The project edited from a panel with the project permission (docs/parity.md 4b), through

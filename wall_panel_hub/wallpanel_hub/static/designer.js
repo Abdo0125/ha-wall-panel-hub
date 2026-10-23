@@ -631,7 +631,7 @@ function renderDesign(view) {
     main.append(screensBox);
   }
   const device = el("div", { class: "device" + (eff.theme === "dark" ? " dark" : ""), dir: rtl ? "rtl" : "ltr" }, main);
-  view.append(device);
+  view.append(S.menu ? device : el("div", { class: "stage" }, device, addPalette()));
   view.append(el("p", { class: "muted" }, S.menu
     ? t("Floors are tabs: the pencil for name, icon and deleting, + to add a floor. Drag a room to any cell, or onto another to swap them; + in an empty cell adds a room. A room's pencil sets its name, shape and size; tapping it opens it.")
     : t("Tap the page's name for the rooms menu. Tap + to add a device, an app or a widget, and a card to change its shape, size and name. Drag a card to any empty cell to put it there, or onto another to swap them.")));
@@ -694,10 +694,17 @@ function emptyCell(screen, col, row, open) {
     class: "cell" + (open ? " empty" : ""), title: open ? t("Add a card") : "",
     style: { gridColumn: `${col + 1}`, gridRow: `${row + 1}` },
     onclick: () => { if (open) addSheet(screen, col, row); },
-    ondragover: (ev) => { if (dragFrom !== null && open) { ev.preventDefault(); node.classList.add("over"); } },
+    ondragover: (ev) => { if ((dragFrom !== null || paletteMake) && open) { ev.preventDefault(); node.classList.add("over"); } },
     ondragleave: () => node.classList.remove("over"),
     ondrop: (ev) => {
       ev.preventDefault();
+      // A new card from the palette: in this cell, settings left for later.
+      if (paletteMake) {
+        const make = paletteMake;
+        paletteMake = null;
+        addCards(make, screen, col, row);
+        return;
+      }
       const from = dragFrom;
       if (from === null) return;
       change((l) => {
@@ -812,48 +819,91 @@ function appName(pkg) {
     || (cfg?.installed_apps || []).find((a) => a.package === pkg)?.label || pkg;
 }
 
+// New cards made by [make] into the cell (screen, col, row), the next ones in the first free
+// spots after; without a cell, in the first free spots. True when it made one card.
+function addCards(make, screen, col, row) {
+  let single = false;
+  change((l) => {
+    const cards = pageCards(l);
+    let last = null;
+    const made = [].concat(make(l, cards));
+    single = made.length === 1;
+    for (const m of made) {
+      // Added by hand: its smallest size, so it stays in the cell chosen.
+      m.size = smallestSize(m.card);
+      cards.push(m);
+      if (screen !== null) placeCard(cards, cards.length - 1, screen, col, row);
+      last = m;
+    }
+    S.sel = last ? cards.indexOf(last) : null;
+  });
+  return single;
+}
+
+// What is being dragged from the side palette: how to make its card(s), else null.
+let paletteMake = null;
+
+// + in a cell: the add lists in a window; a pick goes in that cell, then its settings.
 function addSheet(screen, col, row) {
+  const browser = addBrowser({
+    pick: (make) => {
+      const single = addCards(make, screen, col, row);
+      closeSheet();
+      // One card: its settings next, as on the panel.
+      if (single && S.sel !== null) cardSheet(S.sel);
+    },
+  });
+  sheet(el("div", { class: "addwin" },
+    el("div", { class: "addtop" }, el("h3", {}, t("Add a card")), browser.search),
+    browser.main,
+    el("div", { class: "actions" }, el("span", { class: "spacer" }), el("button", { onclick: closeSheet }, t("Close")))));
+  $("veil").firstChild.classList.add("wide");
+  browser.search.focus();
+}
+
+// Beside the panel: the same lists, each row dragged onto an empty cell (or tapped: the
+// first free one). Speeds up setting up a page; settings are changed after, by a tap.
+function addPalette() {
+  const browser = addBrowser({
+    docked: true,
+    pick: (make) => addCards(make, null),
+  });
+  return el("aside", { class: "palette addwin" },
+    el("div", { class: "addtop" }, el("h3", {}, t("Add")), browser.search),
+    browser.main,
+    el("p", { class: "muted small" }, t("Drag onto an empty cell, or tap to add in the first free one.")));
+}
+
+// The add lists (rooms, devices, room cards, apps, widgets) with their search and filters.
+function addBrowser({ pick, docked = false }) {
   const page = curPage(L());
   const cfg = S.configs[S.view.pid];
-  if (!cfg) loadConfig(S.view.pid).then(() => { if (!$("veil").hidden) draw(); });
+  if (!cfg) loadConfig(S.view.pid).then(() => draw());
   const areaName = Object.fromEntries(S.catalog.areas.map((a) => [a.id, a.name]));
   if (addState.room === null || !areaName[addState.room]) addState.room = areaName[page.id] ? page.id : (S.catalog.areas[0]?.id || "");
-  const search = el("input", { placeholder: "", oninput: () => fillList() });
+  // Docked, the search outlives the page being drawn again after each change.
+  const search = el("input", { placeholder: "", value: docked ? addState.q || "" : "", oninput: () => { if (docked) addState.q = search.value; fillList(); } });
   const nav = el("ul", { class: "addnav" });
   const filters = el("div", { class: "addfilters" });
   const body = el("div", { class: "addbody" });
 
-  // Puts new cards in the chosen cell, the next ones in the first free spots.
-  const add = (make) => {
-    let single = false;
-    change((l) => {
-      const cards = pageCards(l);
-      let last = null;
-      const made = [].concat(make(l, cards));
-      single = made.length === 1;
-      for (const m of made) {
-        // Added by hand: its smallest size, so it stays in the cell chosen.
-        m.size = smallestSize(m.card);
-        cards.push(m);
-        placeCard(cards, cards.length - 1, screen, col, row);
-        last = m;
-      }
-      S.sel = last ? cards.indexOf(last) : null;
-    });
-    closeSheet();
-    // One card: its settings next, as on the panel.
-    if (single && S.sel !== null) cardSheet(S.sel);
-  };
+  const add = (make) => pick(make);
+  // A row that adds a card: tapped, or dragged from the palette onto a cell.
+  const drag = (make) => docked ? {
+    draggable: "true",
+    ondragstart: (ev) => { paletteMake = make; ev.dataTransfer.effectAllowed = "copy"; ev.dataTransfer.setData("text/plain", "new"); },
+    ondragend: () => { paletteMake = null; },
+  } : {};
   const entityCard = (e) => (l, cards) => newCard(l, e.entity_id, cards);
   const onPage = () => new Set(page.cards.flatMap((c) => c.entities));
   const q = () => search.value.trim().toLowerCase();
   const hits = (...texts) => !q() || texts.some((t) => (t || "").toLowerCase().includes(q()));
 
-  const row_ = (iconName, name, note, onPick, off) => el("li", { class: off ? "off" : "", onclick: off ? null : onPick },
+  const row_ = (iconName, name, note, make, off) => el("li", { class: off ? "off" : "", onclick: off || !make ? null : () => add(make), ...(off || !make ? {} : drag(make)) },
     icon(iconName), el("span", { class: "grow" }, name), el("span", { class: "muted" }, note || ""));
   const listOf = (items, empty) => items.length ? el("ul", { class: "picklist" }, items) : el("p", { class: "muted" }, q() ? t("No results.") : empty);
   const entityRow = (e, note) => row_(cardIcon({ card: R.kinds[kindOf(e.entity_id)].default, entities: [e.entity_id] }),
-    device(e.entity_id).name, note, () => add(entityCard(e)));
+    device(e.entity_id).name, note, entityCard(e));
   const kinds = (list) => {
     const n = {};
     for (const e of list) { const k = kindOf(e.entity_id); n[k] = (n[k] || 0) + 1; }
@@ -923,18 +973,18 @@ function addSheet(screen, col, row) {
     } else if (tab === "roomcards") {
       // The panel's rooms, as a card here: its picture, or its details.
       const rooms = L().pages.filter((p) => p.id !== page.id && hits(p.title));
-      const roomCard = (p, type) => () => add((l) => ({ id: nextCardId(l), card: type, entities: [], options: { page: p.id } }));
+      const roomCard = (p, type) => (l) => ({ id: nextCardId(l), card: type, entities: [], options: { page: p.id } });
       body.replaceChildren(listOf(rooms.map((p) => el("li", {},
         icon(p.icon || "mdi:floor-plan"), el("span", { class: "grow" }, p.title),
-        el("button", { onclick: roomCard(p, "room.card") }, t("Room picture")),
-        el("button", { onclick: roomCard(p, "room.summary") }, t("Details")))), t("No other rooms on this panel.")));
+        el("button", { onclick: () => add(roomCard(p, "room.card")), ...drag(roomCard(p, "room.card")) }, t("Room picture")),
+        el("button", { onclick: () => add(roomCard(p, "room.summary")), ...drag(roomCard(p, "room.summary")) }, t("Details")))), t("No other rooms on this panel.")));
     } else if (tab === "apps") {
       const list = apps().filter((a) => hits(appName(a.package), a.package));
       body.replaceChildren(
         listOf(list.map((a) => {
           const there = page.cards.some((c) => c.options?.package === a.package);
-          return row_("mdi:apps", appName(a.package), there ? t("On the page") : "", () => add((l) => (
-            { id: nextCardId(l), card: "app.launch", entities: [], size: "1x1", options: { package: a.package } })), there);
+          return row_("mdi:apps", appName(a.package), there ? t("On the page") : "", (l) => (
+            { id: nextCardId(l), card: "app.launch", entities: [], size: "1x1", options: { package: a.package } }), there);
         }), t("No apps allowed on this panel.")),
         el("p", { class: "muted small" }, t("Allowed apps are set in the panel's settings.")));
     } else {
@@ -945,13 +995,13 @@ function addSheet(screen, col, row) {
           const src = w.source ? sources()[w.source] : null;
           const missing = w.source && !src;
           items.push(row_(w.icon, SHAPES[w.card], missing ? t("Set its source in Project → Widgets") : src ? device(src).name : "",
-            () => add((l) => ({ id: nextCardId(l), card: w.card, entities: src ? [src] : [], size: w.size })), missing));
+            (l) => ({ id: nextCardId(l), card: w.card, entities: src ? [src] : [], size: w.size }), missing));
         }
       }
       if (addState.wkind !== "builtin") {
         for (const w of androids().filter((w) => hits(w.label, w.provider))) {
           items.push(row_("mdi:widgets-outline", w.label || w.provider, t("Bound on the panel"),
-            () => add((l) => ({ id: nextCardId(l), card: "widget.android", entities: [], size: "2x2", options: { provider: w.provider } }))));
+            (l) => ({ id: nextCardId(l), card: "widget.android", entities: [], size: "2x2", options: { provider: w.provider } })));
         }
       }
       body.replaceChildren(listOf(items, t("No widgets available. Android widgets come from the allowed apps.")));
@@ -969,12 +1019,7 @@ function addSheet(screen, col, row) {
   }
 
   draw();
-  sheet(el("div", { class: "addwin" },
-    el("div", { class: "addtop" }, el("h3", {}, t("Add a card")), search),
-    el("div", { class: "addmain" }, nav, el("div", { class: "addpane" }, filters, body)),
-    el("div", { class: "actions" }, el("span", { class: "spacer" }), el("button", { onclick: closeSheet }, t("Close")))));
-  $("veil").firstChild.classList.add("wide");
-  search.focus();
+  return { search, main: el("div", { class: "addmain" }, nav, el("div", { class: "addpane" }, filters, body)) };
 }
 
 // ---------- the rooms menu, as on the panel: floors as tabs, rooms as cards ----------
@@ -1347,10 +1392,41 @@ const CAPS = [["control", t("Control")], ["apps", t("Apps")], ["edit_cards", t("
 const PAGE_CAPS = new Set(["connection", "display", "brightness", "system"]);
 const BUILT_IN = { lang: "en", theme: "light", screensaver: { idle_seconds: 60, dim_brightness: 10 }, app_return_seconds: 300, home_title: "" };
 
+// A choice, as on the panel: a few in a joined bar; more folded to the chosen one, opening
+// to a list with a search when long. Read and set as a <select> is: .value and "change".
 function selectEl(options, value) {
-  const s = el("select");
-  for (const [v, label] of options) s.append(el("option", { value: v, selected: v === value }, label));
-  return s;
+  const box = el("div", { class: options.length > 4 ? "fold" : "seg" });
+  let current = value;
+  let open = false;
+  Object.defineProperty(box, "value", { get: () => current, set: (v) => { current = v; draw(); } });
+  const choose = (v) => {
+    open = false;
+    if (v !== current) { current = v; box.dispatchEvent(new Event("change")); }
+    draw();
+  };
+  function draw() {
+    if (box.className === "seg") {
+      box.replaceChildren(...options.map(([v, label]) => el("button", { type: "button", class: v === current ? "on" : "", onclick: () => choose(v) }, label)));
+      return;
+    }
+    const chosen = options.find(([v]) => v === current) || options[0];
+    const head = el("div", { class: "foldhead", onclick: () => { open = !open; draw(); } },
+      el("span", { class: "grow" + (current ? " on" : "") }, chosen ? chosen[1] : ""), icon(open ? "mdi:chevron-up" : "mdi:chevron-down"));
+    if (!open) { box.replaceChildren(head); return; }
+    const list = el("ul", { class: "foldlist" });
+    const search = options.length > 8 ? el("input", { placeholder: t("Search {0}", options.length), oninput: () => fill() }) : null;
+    const fill = () => {
+      const q = (search?.value || "").trim().toLowerCase();
+      const shown = options.filter(([, label]) => !q || String(label).toLowerCase().includes(q));
+      list.replaceChildren(...(shown.length ? shown.map(([v, label]) => el("li", { class: v === current ? "on" : "", onclick: () => choose(v) },
+        icon(v === current ? "mdi:check" : "mdi:circle-small"), el("span", {}, label))) : [el("li", { class: "off" }, t("No results."))]));
+    };
+    fill();
+    box.replaceChildren(head, search, list);
+    search?.focus();
+  }
+  draw();
+  return box;
 }
 
 // Display settings: blank means "inherit".
@@ -1492,7 +1568,7 @@ function appsBox(pid, p, cfg) {
   };
   draw();
   const free = () => installed.filter((a) => !apps.some((x) => x.package === a.package));
-  const pick = selectEl([["", installed.length ? t("— Choose an installed app —") : t("— The panel has not sent its apps yet —")], ...free().map((a) => [a.package, a.label])], "");
+  let pick = selectEl([["", installed.length ? t("— Choose an installed app —") : t("— The panel has not sent its apps yet —")], ...free().map((a) => [a.package, a.label])], "");
   const typed = el("input", { placeholder: t("or the package name: com.example.app"), style: { width: "240px", direction: "ltr" } });
   const add = () => {
     const pkg = pick.value || typed.value.trim();
@@ -1500,8 +1576,9 @@ function appsBox(pid, p, cfg) {
     if (!/^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/.test(pkg)) { alert(t("Not a valid package name.")); return; }
     if (!apps.some((a) => a.package === pkg)) apps.push({ package: pkg });
     typed.value = "";
-    pick.replaceChildren(...[["", t("— Choose an installed app —")], ...free().map((a) => [a.package, a.label])]
-      .map(([v, l]) => el("option", { value: v }, l)));
+    const fresh = selectEl([["", t("— Choose an installed app —")], ...free().map((a) => [a.package, a.label])], "");
+    pick.replaceWith(fresh);
+    pick = fresh;
     draw();
   };
   return el("div", { class: "box" }, el("h3", {}, t("Allowed apps")),

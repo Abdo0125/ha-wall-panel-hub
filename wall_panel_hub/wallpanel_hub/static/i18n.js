@@ -10,6 +10,8 @@ const LANG = (() => {
 })();
 const I18N = {
  "ar": {
+  "Search {0}": "بحث في {0}",
+  "Drag onto an empty cell, or tap to add in the first free one.": "اسحب إلى خانة فارغة، أو اضغط للإضافة في أول خانة فارغة.",
   "Switch": "مفتاح",
   "Dimmer": "تعتيم",
   "Colour": "ألوان",
@@ -384,6 +386,8 @@ const I18N = {
   "Properties": "الخصائص"
  },
  "fr": {
+  "Search {0}": "Rechercher parmi {0}",
+  "Drag onto an empty cell, or tap to add in the first free one.": "Glissez sur une case vide, ou touchez pour ajouter dans la première case libre.",
   "Switch": "Interrupteur",
   "Dimmer": "Variateur",
   "Colour": "Couleur",
@@ -758,6 +762,8 @@ const I18N = {
   "Properties": "Propriétés"
  },
  "es": {
+  "Search {0}": "Buscar entre {0}",
+  "Drag onto an empty cell, or tap to add in the first free one.": "Arrastra a una celda vacía, o toca para añadir en la primera libre.",
   "Switch": "Interruptor",
   "Dimmer": "Regulador",
   "Colour": "Color",

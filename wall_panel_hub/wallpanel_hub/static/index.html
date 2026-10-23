@@ -179,6 +179,42 @@
   .addhead h4 { margin: 4px 0; }
   .sheet.wide .actions { margin: 0; padding: 10px 18px; border-top: 1px solid var(--line); }
   .muted.small { font-size: 12px; margin: 8px 0 0; }
+  /* ---- choices, as on the panel: a joined bar, or folded with a search; square switches ---- */
+  .seg { display: inline-flex; border: 1px solid var(--line); flex-wrap: wrap; }
+  .seg button { border: none; border-inline-end: 1px solid var(--line); padding: 7px 14px; }
+  .seg button:last-child { border-inline-end: none; }
+  .seg button.on { background: var(--accent); color: #2b2f33; font-weight: 600; }
+  .fold { border: 1px solid var(--line); min-width: 240px; background: var(--bg); }
+  .foldhead { display: flex; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; }
+  .foldhead .on { color: var(--accent); }
+  .foldhead .mdi { color: var(--muted); font-size: 20px; }
+  .fold input { width: calc(100% - 16px); margin: 0 8px 6px; }
+  .foldlist { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow: auto; border-top: 1px solid var(--line); }
+  .foldlist li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: pointer; border-bottom: 1px solid var(--line); }
+  .foldlist li:hover { background: var(--accent-bg); }
+  .foldlist li.on { color: var(--accent); }
+  .foldlist li.off { cursor: default; color: var(--muted); }
+  input[type=checkbox] { appearance: none; width: 40px; height: 22px; background: var(--line); position: relative; cursor: pointer; vertical-align: middle; border: none; padding: 0; }
+  input[type=checkbox]::before { content: ""; position: absolute; top: 3px; inset-inline-start: 3px; width: 16px; height: 16px; background: #fff; transition: inset-inline-start .15s; }
+  input[type=checkbox]:checked { background: var(--accent); }
+  input[type=checkbox]:checked::before { inset-inline-start: 21px; }
+  input[type=checkbox]:disabled { opacity: .45; cursor: default; }
+  /* ---- the add palette beside the panel: rows dragged onto empty cells ---- */
+  .stage { display: grid; grid-template-columns: minmax(0, 1080px) 340px; gap: 16px; align-items: stretch; }
+  /* As high as the panel beside it, whatever its lists hold. */
+  .palette { background: var(--pane); border: 1px solid var(--line); contain: size; }
+  .palette .addtop { padding: 10px 12px; gap: 10px; }
+  .palette .addtop input { min-width: 0; }
+  .palette .addmain { flex-direction: column; }
+  .palette .addnav { width: auto; display: flex; overflow-x: auto; border-inline-end: none; border-bottom: 1px solid var(--line); }
+  .palette .addnav li { flex: none; padding: 10px 12px; border-bottom: none; }
+  .palette .addnav li .grow { display: none; }
+  .palette .addpane { padding: 8px 10px; }
+  .palette .addsplit { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .palette .picklist.rooms { border-inline-end: none; max-height: 28%; border-bottom: 1px solid var(--line); }
+  .palette li[draggable] { cursor: grab; }
+  .palette .muted.small { padding: 6px 12px 10px; margin: 0; }
+  @media (max-width: 1150px) { .stage { grid-template-columns: minmax(0, 1fr); } .palette { display: none; } }
   @media (max-width: 700px) {
     .addmain { flex-direction: column; }
     .addnav { width: auto; display: flex; overflow-x: auto; border-inline-end: none; border-bottom: 1px solid var(--line); }
@@ -202,7 +238,8 @@
 
   /* ---- ETS look: square corners, flat buttons, lists in ruled rows, a bar on the chosen one.
      Colours stay; the panel preview (.device) keeps the panel's own look. ---- */
-  button, input, select, .chip, .box, .sheet, .navitem, .request, .picklist li, .addnav li, .tabs button { border-radius: 0; }
+  button, input, select, .chip, .box, .sheet, .navitem, .request, .picklist li, .addnav li, .tabs button,
+  .room, .dtitle, .steps span, .toast { border-radius: 0; }
   button { padding: 6px 16px; transition: background .1s; }
   button:hover:not(:disabled) { background: var(--accent-bg); }
   button.solid:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 85%, #000); }

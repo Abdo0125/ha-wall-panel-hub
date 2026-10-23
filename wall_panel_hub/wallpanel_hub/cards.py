@@ -47,7 +47,10 @@ def next_card_id(taken: set[str]) -> str:
 
 
 def card_ids(layout: dict) -> set[str]:
-    return {c.get("id") for p in layout.get("pages", []) for c in p.get("cards", [])}
+    """Every card id in use: the pages' and my dashboard's (unique across both)."""
+    cards = [c for p in layout.get("pages", []) for c in p.get("cards", [])]
+    cards += (layout.get("dashboard") or {}).get("cards", [])
+    return {c.get("id") for c in cards}
 
 
 def card_entities(card: dict) -> list[str]:
