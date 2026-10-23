@@ -518,7 +518,14 @@ function openProject(tab) {
 
 function renderView() {
   const view = $("view");
+  // Where each scrolled part was, by name: drawn again, it stays there.
+  const kept = Object.fromEntries([...view.querySelectorAll("[data-scroll]")].map((n) => [n.dataset.scroll, n.scrollTop]));
+  const pageY = window.scrollY;
   view.replaceChildren();
+  queueMicrotask(() => {
+    for (const n of view.querySelectorAll("[data-scroll]")) if (kept[n.dataset.scroll] !== undefined) n.scrollTop = kept[n.dataset.scroll];
+    window.scrollTo(0, pageY);
+  });
   if (S.view.kind === "panel" && S.overview.panels.some((p) => p.id === S.view.pid)) return renderPanel(view);
   if (S.view.kind === "project") return renderProject(view);
   view.append(el("div", { class: "box" },
@@ -610,7 +617,7 @@ function renderDesign(view) {
   if (S.menu) {
     renderRoomsMenu(main);
   } else {
-    const screensBox = el("div", { class: "screens" });
+    const screensBox = el("div", { class: "screens", "data-scroll": `screens:${S.view.pid}:${S.page}` });
     const { placed, screens, grids } = pack(page.cards);
     for (let s = 0; s < screens; s++) {
       const grid = el("div", { class: "screen" });
@@ -885,7 +892,7 @@ function addBrowser({ pick, docked = false }) {
   const search = el("input", { placeholder: "", value: docked ? addState.q || "" : "", oninput: () => { if (docked) addState.q = search.value; fillList(); } });
   const nav = el("ul", { class: "addnav" });
   const filters = el("div", { class: "addfilters" });
-  const body = el("div", { class: "addbody" });
+  const body = el("div", { class: "addbody", "data-scroll": docked ? "palette" : null });
 
   const add = (make) => pick(make);
   // A row that adds a card: tapped, or dragged from the palette onto a cell.
@@ -944,7 +951,7 @@ function addBrowser({ pick, docked = false }) {
       const inRoom = (id) => ents.filter((e) => e.area_id === id);
       const rooms = S.catalog.areas.filter((a) => hits(a.name) || inRoom(a.id).some((e) => hits(device(e.entity_id).name)));
       if (rooms.length && !rooms.some((a) => a.id === addState.room)) addState.room = rooms[0].id;
-      const roomList = el("ul", { class: "picklist rooms" }, rooms.map((a) => el("li", { class: a.id === addState.room ? "on" : "", onclick: () => { addState.room = a.id; addState.kind = ""; fillList(); } },
+      const roomList = el("ul", { class: "picklist rooms", "data-scroll": docked ? "palette-rooms" : null }, rooms.map((a) => el("li", { class: a.id === addState.room ? "on" : "", onclick: () => { addState.room = a.id; addState.kind = ""; fillList(); } },
         icon(/^mdi:[a-z0-9-]+$/.test(a.icon || "") ? a.icon : "mdi:floor-plan"), el("span", { class: "grow" }, a.name),
         el("span", { class: "muted" }, a.id === page.id ? t("This room") : String(inRoom(a.id).filter((e) => !addState.control || e.controllable).length)))));
       const all = inRoom(addState.room).filter((e) => !addState.control || e.controllable);

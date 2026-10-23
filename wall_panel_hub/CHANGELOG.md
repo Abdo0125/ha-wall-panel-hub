@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.32.1
+
+- The designer stays where it was scrolled when a card is added, dropped or moved.
+- The add palette: its lists in one column (rooms over their devices, which fill the rest),
+  its tabs in one row without a scrollbar.
+- A screen's label sits on the line between screens, over no cell.
+
 ## 0.32.0
 
 - An add palette beside the panel in the designer: the rooms, devices, room cards, apps and

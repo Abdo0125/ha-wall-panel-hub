@@ -111,7 +111,8 @@
   .rtile.dragging { opacity: .3; }
   .screen { display: grid; gap: 0; grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(4, 1fr); height: 100%; position: relative; }
   .screen + .screen { border-top: 3px dashed var(--dmuted); }
-  .screenlabel { position: absolute; top: 4px; inset-inline-end: 8px; font-size: 11px; color: var(--dmuted); z-index: 2; pointer-events: none; }
+  .screenlabel { position: absolute; top: -10px; inset-inline-end: 12px; font-size: 11px; line-height: 16px; padding: 0 6px; background: var(--divider); color: var(--dmuted); z-index: 2; pointer-events: none; }
+  .screen:first-child .screenlabel { top: 0; }
   .cell { background: var(--cell); border: .5px solid var(--divider); display: flex; align-items: center; justify-content: center; min-height: 0; }
   .cell.empty { cursor: pointer; color: color-mix(in srgb, var(--dmuted) 35%, transparent); font-size: 26px; }
   .cell.empty:hover { color: var(--dmuted); }
@@ -206,12 +207,15 @@
   .palette .addtop { padding: 10px 12px; gap: 10px; }
   .palette .addtop input { min-width: 0; }
   .palette .addmain { flex-direction: column; }
-  .palette .addnav { width: auto; display: flex; overflow-x: auto; border-inline-end: none; border-bottom: 1px solid var(--line); }
-  .palette .addnav li { flex: none; padding: 10px 12px; border-bottom: none; }
+  .palette .addnav { width: auto; display: grid; grid-template-columns: repeat(5, 1fr); overflow: hidden; border-inline-end: none; border-bottom: 1px solid var(--line); }
+  .palette .addnav li { padding: 9px 4px; border-bottom: none; justify-content: center; gap: 4px; min-width: 0; }
   .palette .addnav li .grow { display: none; }
   .palette .addpane { padding: 8px 10px; }
-  .palette .addsplit { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .palette .picklist.rooms { border-inline-end: none; max-height: 28%; border-bottom: 1px solid var(--line); }
+  .palette .addbody { display: flex; flex-direction: column; overflow: hidden; }
+  .palette .addbody > .picklist { overflow: auto; }
+  .palette .addsplit { display: flex; flex-direction: column; gap: 8px; height: 100%; }
+  .palette .addsplit > .picklist.rooms { flex: 0 1 auto; max-height: 38%; overflow: auto; border-inline-end: none; padding-inline-end: 0; border-bottom: 1px solid var(--line); }
+  .palette .addsplit > div { flex: 1; min-height: 0; overflow: auto; }
   .palette li[draggable] { cursor: grab; }
   .palette .muted.small { padding: 6px 12px 10px; margin: 0; }
   @media (max-width: 1150px) { .stage { grid-template-columns: minmax(0, 1fr); } .palette { display: none; } }
