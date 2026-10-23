@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.32.2
+
+- The designer opens a panel on my dashboard, as the panel does, not on its first room.
+
 ## 0.32.1
 
 - The designer stays where it was scrolled when a card is added, dropped or moved.

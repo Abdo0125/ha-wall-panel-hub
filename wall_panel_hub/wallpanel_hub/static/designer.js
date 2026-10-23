@@ -226,7 +226,7 @@ const S = {
   work: {},            // pid -> { layout, base, unsent, undo, redo }
   configs: {},         // pid -> { config, effective }
   view: { kind: "home" },  // home | panel {pid, tab} | project {tab}
-  page: 0,
+  page: -1,            // my dashboard (DASH), as the panel opens
   menu: false,         // the rooms menu open (over the page), as on the panel
   floorTab: "",        // its floor tab, by floor id ("" for the rooms on no floor)
   sel: null,           // selected card index on the page
@@ -422,7 +422,7 @@ async function discard(noAsk) {
   await api(`api/editor/panels/${enc(pid)}/draft`, { method: "DELETE" });
   delete S.work[pid];
   await loadEditor();
-  S.page = 0; S.sel = null;
+  S.page = DASH; S.sel = null;
   render();
 }
 
@@ -506,7 +506,8 @@ function renderNav() {
 
 async function openPanel(pid, tab = "design") {
   S.view = { kind: "panel", pid, tab };
-  S.page = 0; S.sel = null; S.menu = false; S.floorTab = "";
+  // The panel's home page first, as on the panel.
+  S.page = DASH; S.sel = null; S.menu = false; S.floorTab = "";
   if (!S.configs[pid]) await loadConfig(pid);
   render();
 }
