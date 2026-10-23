@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.33.2
+
+- A camera HA gives no live stream for (HA's ffmpeg failing on its RTSP, the stream staying
+  silent) is shown live from its pictures, one after the other, as fast as the camera gives
+  them, at the size the panel shows (panel app 0.33.3).
+
 ## 0.33.1
 
 - Live cameras: the hub reads the pictures out of HA's stream itself. HA's stream names a

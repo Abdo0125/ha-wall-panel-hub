@@ -200,14 +200,16 @@ class PanelConnection:
             fps = min(max(float(msg.get("fps") or 5), 0.2), 10.0)
         except (TypeError, ValueError):
             fps = 5.0
+        width = msg.get("width")
+        width = width if isinstance(width, int) and 16 <= width <= 4096 else None
         await self.send({"id": mid, "type": "result", "success": True, "result": None})
-        self.streams[mid] = asyncio.create_task(self.stream_camera(mid, eid, fps))
+        self.streams[mid] = asyncio.create_task(self.stream_camera(mid, eid, fps, width))
 
-    async def stream_camera(self, sub: int, eid: str, fps: float) -> None:
+    async def stream_camera(self, sub: int, eid: str, fps: float, width: int | None) -> None:
         """Sends the camera's frames until stopped; then an event with "end" (the panel may ask again)."""
         reason = "ended"
         try:
-            async for ctype, data in self.gateway.camera_frames(eid, fps):
+            async for ctype, data in self.gateway.camera_frames(eid, fps, width):
                 # Taken off the panel meanwhile: no more pictures.
                 if not self.camera_allowed(eid):
                     reason = "not a camera of this panel"
@@ -389,6 +391,10 @@ async def _areas(gateway) -> list[dict]:
         return []
 
 
+class NoStream(Exception):
+    """HA has no live stream for the camera."""
+
+
 class MjpegFrames:
     """The JPEG pictures in an MJPEG stream, whatever its part boundary: HA announces
     "boundary=--frameboundary" but writes "--frameboundary", and cameras passed through
@@ -477,29 +483,61 @@ class Gateway:
     def ha_auth(self) -> dict:
         return {"Authorization": f"Bearer {self.settings.ha_token}"}
 
-    async def camera_snapshot(self, entity_id: str, width: int | None = None) -> dict | None:
-        """{"type", "data" (base64)} of a camera's picture now (about [width] wide when the camera can), or None."""
+    async def camera_still(self, entity_id: str, width: int | None = None) -> tuple[str, bytes] | None:
+        """(type, bytes) of a camera's picture now (about [width] wide when the camera can), or None."""
         query = f"?width={width}" if width else ""
         async with self.session.get(f"{self.ha_http}/api/camera_proxy/{entity_id}{query}", headers=self.ha_auth,
                                     timeout=aiohttp.ClientTimeout(total=20)) as resp:
             if resp.status != 200:
                 return None
-            data = await resp.read()
-            return {"type": resp.headers.get("Content-Type", "image/jpeg").split(";")[0],
-                    "data": base64.b64encode(data).decode()}
+            return resp.headers.get("Content-Type", "image/jpeg").split(";")[0], await resp.read()
 
-    async def camera_frames(self, entity_id: str, fps: float):
-        """A camera's live picture from HA's MJPEG stream: (type, bytes), at most [fps] a second."""
-        timeout = aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=30)
+    async def camera_snapshot(self, entity_id: str, width: int | None = None) -> dict | None:
+        """{"type", "data" (base64)} of a camera's picture now, or None."""
+        still = await self.camera_still(entity_id, width)
+        return {"type": still[0], "data": base64.b64encode(still[1]).decode()} if still else None
+
+    # A live stream that gives no picture this long is given up for the camera's pictures.
+    FIRST_FRAME_S = 10
+
+    async def camera_frames(self, entity_id: str, fps: float, width: int | None = None):
+        """A camera's live picture: (type, bytes), at most [fps] a second. From HA's MJPEG stream;
+        when that gives nothing (HA's ffmpeg failing on the camera's RTSP...), from the
+        camera's pictures one after the other, about [width] wide."""
+        got = False
+        try:
+            async for frame in self._mjpeg_frames(entity_id, fps):
+                got = True
+                yield frame
+            return
+        except (asyncio.TimeoutError, aiohttp.ServerTimeoutError, aiohttp.ClientPayloadError, NoStream) as e:
+            if got:
+                raise
+            log.info("camera %s: no live stream from HA (%s), its pictures instead", entity_id, e or type(e).__name__)
+        loop = asyncio.get_running_loop()
+        while True:
+            began = loop.time()
+            still = await self.camera_still(entity_id, width)
+            if still is None:
+                raise RuntimeError("no picture from the camera")
+            yield still
+            await asyncio.sleep(max(0.0, 1 / fps - (loop.time() - began)))
+
+    async def _mjpeg_frames(self, entity_id: str, fps: float):
+        timeout = aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=self.FIRST_FRAME_S)
         async with self.session.get(f"{self.ha_http}/api/camera_proxy_stream/{entity_id}", headers=self.ha_auth,
                                     timeout=timeout) as resp:
             if resp.status != 200:
-                raise RuntimeError(f"Home Assistant answered {resp.status}")
+                raise NoStream(f"Home Assistant answered {resp.status}")
             loop = asyncio.get_running_loop()
+            began = loop.time()
             last = None
             frames = MjpegFrames()
             async for chunk in resp.content.iter_any():
-                for frame in frames.feed(chunk):
+                found = frames.feed(chunk)
+                if last is None and not found and loop.time() - began > self.FIRST_FRAME_S:
+                    raise NoStream("no picture in the stream")
+                for frame in found:
                     now = loop.time()
                     # Frames in between are read and dropped: the panel gets the newest at its pace.
                     if last is not None and now - last < 1 / fps:
