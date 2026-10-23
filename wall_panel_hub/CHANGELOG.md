@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.34.0
+
+- Camera video (panel app 0.34.0): live cameras play as real video. On the home network over
+  WebRTC through HA's go2rtc (the lowest delay); else, or when that fails, as HLS from HA's
+  stream; pictures one after the other stay the last resort. A panel may ask HA for the video
+  of its own cameras only (camera/stream, camera/webrtc/*).
+- The hub passes HA's HLS video on to panels on its network (/api/hls/...); panels connected
+  through HA's address fetch it from HA itself.
+
 ## 0.33.2
 
 - A camera HA gives no live stream for (HA's ffmpeg failing on its RTSP, the stream staying

@@ -5,6 +5,7 @@
   accepted only from the Supervisor's ingress proxy, so the LAN cannot reach it.
 """
 
+import asyncio
 import base64
 import ipaddress
 import logging
@@ -12,6 +13,7 @@ import re
 import time
 from pathlib import Path
 
+import aiohttp
 from aiohttp import web
 
 from .cards import REGISTRY
@@ -45,7 +47,29 @@ def panel_api(store: Store, gateway: Gateway) -> web.Application:
     async def pair_status(request: web.Request):
         return web.json_response(store.pairing_status(request.match_info["rid"]))
 
+    async def hls(request: web.Request):
+        """HA's HLS video of a camera (camera/stream), for panels on the add-on's network.
+
+        The address carries HA's own token for the stream, handed out to a panel for its own
+        cameras only; HA serves these without a login too. Panels connected through HA's
+        address fetch them from HA itself."""
+        url = f"{gateway.ha_http}/api/hls/{request.match_info['token']}/{request.match_info['tail']}"
+        timeout = aiohttp.ClientTimeout(total=60, sock_connect=10)
+        try:
+            async with gateway.session.get(url, params=request.query, timeout=timeout) as upstream:
+                resp = web.StreamResponse(status=upstream.status, headers={
+                    k: v for k, v in upstream.headers.items() if k in ("Content-Type", "Cache-Control")})
+                await resp.prepare(request)
+                async for chunk in upstream.content.iter_any():
+                    await resp.write(chunk)
+                await resp.write_eof()
+                return resp
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            log.warning("camera video failed: %s", e)
+            raise web.HTTPBadGateway()
+
     app.router.add_get("/api/info", info)
+    app.router.add_get(r"/api/hls/{token:[a-f0-9]+}/{tail:[A-Za-z0-9_./-]+}", hls)
     app.router.add_post("/api/pair", pair)
     app.router.add_get("/api/pair/{rid}", pair_status)
     app.router.add_get("/api/websocket", gateway.handle)

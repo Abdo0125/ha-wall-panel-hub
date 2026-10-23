@@ -48,6 +48,10 @@ READ_ONLY = {
 # the device again changes nothing.
 READS = {("homeassistant", "update_entity")}
 
+# A camera's video from HA, for the panel's own cameras: its HLS address (camera/stream)
+# and a WebRTC session through HA's go2rtc (offer, candidates, ICE servers).
+CAMERA_VIDEO = {"camera/stream", "camera/webrtc/offer", "camera/webrtc/candidate", "camera/webrtc/get_client_config"}
+
 # Targets that would reach entities beyond the ones listed.
 WIDE_TARGETS = ("area_id", "device_id", "floor_id", "label_id")
 
@@ -72,6 +76,13 @@ def check_command(msg: dict, allowed: set[str]) -> tuple[dict | None, str | None
         if not ids:
             return None, "empty"
         return {**msg, "entity_ids": ids}, None
+
+    if kind in CAMERA_VIDEO:
+        eid = msg.get("entity_id")
+        if not (isinstance(eid, str) and eid.startswith("camera.") and eid in allowed):
+            return None, "not a camera of this panel"
+        # HLS only: the panel plays nothing else, and other formats would open other paths.
+        return ({**msg, "format": "hls"} if kind == "camera/stream" else msg), None
 
     if kind == "call_service":
         target = msg.get("target") or {}
