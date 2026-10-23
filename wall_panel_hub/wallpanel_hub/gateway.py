@@ -389,6 +389,43 @@ async def _areas(gateway) -> list[dict]:
         return []
 
 
+class MjpegFrames:
+    """The JPEG pictures in an MJPEG stream, whatever its part boundary: HA announces
+    "boundary=--frameboundary" but writes "--frameboundary", and cameras passed through
+    have their own. A picture runs from its start marker for the part's Content-Length,
+    or else to its end marker."""
+
+    START, END = b"\xff\xd8", b"\xff\xd9"
+    LIMIT = 8 * 1024 * 1024
+    LENGTH = re.compile(rb"content-length:\s*(\d+)", re.I)
+
+    def __init__(self) -> None:
+        self.buf = b""
+
+    def feed(self, chunk: bytes) -> list[bytes]:
+        self.buf += chunk
+        frames = []
+        while True:
+            start = self.buf.find(self.START)
+            if start < 0:  # the part's headers so far: kept for its length
+                break
+            length = self.LENGTH.findall(self.buf[:start])
+            if length:
+                end = start + int(length[-1])
+                if len(self.buf) < end:
+                    break
+            else:
+                found = self.buf.find(self.END, start + 2)
+                if found < 0:
+                    break
+                end = found + 2
+            frames.append(self.buf[start:end])
+            self.buf = self.buf[end:]
+        if len(self.buf) > self.LIMIT:  # not a picture stream: start again
+            self.buf = b""
+        return frames
+
+
 # Live cameras one panel may watch at once (each is a stream from HA).
 MAX_STREAMS = 4
 
@@ -458,20 +495,17 @@ class Gateway:
                                     timeout=timeout) as resp:
             if resp.status != 200:
                 raise RuntimeError(f"Home Assistant answered {resp.status}")
-            reader = aiohttp.MultipartReader(resp.headers, resp.content)
             loop = asyncio.get_running_loop()
             last = None
-            while True:
-                part = await reader.next()
-                if part is None:
-                    return
-                data = await part.read()
-                now = loop.time()
-                # Frames in between are read and dropped: the panel gets the newest at its pace.
-                if last is not None and now - last < 1 / fps:
-                    continue
-                last = now
-                yield part.headers.get("Content-Type", "image/jpeg").split(";")[0], bytes(data)
+            frames = MjpegFrames()
+            async for chunk in resp.content.iter_any():
+                for frame in frames.feed(chunk):
+                    now = loop.time()
+                    # Frames in between are read and dropped: the panel gets the newest at its pace.
+                    if last is not None and now - last < 1 / fps:
+                        continue
+                    last = now
+                    yield "image/jpeg", frame
 
     def online(self, panel_id: str) -> bool:
         return bool(self.connections.get(panel_id))

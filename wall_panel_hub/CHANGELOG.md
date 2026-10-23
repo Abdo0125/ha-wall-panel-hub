@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.33.1
+
+- Live cameras: the hub reads the pictures out of HA's stream itself. HA's stream names a
+  part boundary it does not write, so no frame got through before.
+
 ## 0.33.0
 
 - Camera cards (panel app 0.33.0): HA's cameras can be added like any device, in two shapes,
