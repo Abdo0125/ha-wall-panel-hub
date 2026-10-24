@@ -66,6 +66,14 @@ def _domains(card_type: str) -> list[str]:
     return spec["entities"].get("domains") or KINDS[kind_of_card(card_type)]["domains"]
 
 
+FREE_SIZE = re.compile(r"^[1-6]x[1-4]$")
+
+
+def size_allowed(spec: dict, size) -> bool:
+    """One of the card type's sizes; for a free-size type (free_size) any WxH up to the 6x4 grid."""
+    return size in spec["sizes"] or (spec.get("free_size", False) and isinstance(size, str) and bool(FREE_SIZE.match(size)))
+
+
 def check_card(card: dict) -> str | None:
     """What makes the card invalid against the registry, or None."""
     card_type = card.get("card")
@@ -80,7 +88,7 @@ def check_card(card: dict) -> str | None:
     for e in ents:
         if "*" not in domains and domain_of(e) not in domains:
             return f"{card_type} cannot show {e}"
-    if "size" in card and card["size"] not in spec["sizes"]:
+    if "size" in card and not size_allowed(spec, card["size"]):
         return f"{card_type} has no size {card['size']}"
 
     options = card.get("options") or {}

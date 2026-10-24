@@ -141,7 +141,7 @@
             },
             "size": {
               "type": "string",
-              "pattern": "^[1-4]x[1-4]$"
+              "pattern": "^[1-6]x[1-4]$"
             },
             "pos": {
               "description": "Its place in its floor's grid in the rooms menu (screen, column, row, from the reading side). Omitted: laid out in order after the placed rooms.",
@@ -198,7 +198,7 @@
                   },
                   "size": {
                     "type": "string",
-                    "pattern": "^[1-4]x[1-4]$"
+                    "pattern": "^[1-6]x[1-4]$"
                   },
                   "pos": {
                     "description": "Its place in its floor's grid in the rooms menu (screen, column, row, from the reading side). Omitted: laid out in order after the placed rooms.",
@@ -268,14 +268,9 @@
           "uniqueItems": true
         },
         "size": {
-          "description": "Grid cells, columns x rows. Omitted: the card type's default size.",
-          "enum": [
-            "1x1",
-            "2x1",
-            "2x2",
-            "3x2",
-            "4x2"
-          ]
+          "description": "Grid cells, columns x rows, up to the 6x4 grid; the card type's sizes, or any for a free-size type (cards.json). Omitted: the card type's default size.",
+          "type": "string",
+          "pattern": "^[1-6]x[1-4]$"
         },
         "label": {
           "type": "string"

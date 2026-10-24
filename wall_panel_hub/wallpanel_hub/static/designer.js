@@ -58,6 +58,8 @@ const domainOf = (id) => id.split(".")[0];
 const kindOf = (entityId) => Object.keys(R.kinds).find((k) => R.kinds[k].domains.includes(domainOf(entityId)));
 const kindOfCard = (type) => type.split(".")[0];
 const cardDomains = (type) => R.cards[type]?.entities.domains || R.kinds[kindOfCard(type)]?.domains || [];
+// A size a card type takes: one of its sizes, or any WxH up to the grid for a free-size type.
+const sizeOk = (spec, size) => spec.sizes.includes(size) || (!!spec.free_size && /^[1-6]x[1-4]$/.test(size || ""));
 const sizeOf = (c) => c.size || R.cards[c.card]?.default_size || "1x1";
 const area = (s) => s.split("x").reduce((x, y) => x * y, 1);
 const smallestSize = (type) => [...(R.cards[type]?.sizes || ["1x1"])].sort((a, b) => area(a) - area(b))[0];
@@ -80,7 +82,7 @@ const SIZES = Object.fromEntries(["1x1", "2x1", "2x2", "3x2", "4x2"].map((v) => 
 const PLATFORMS = { android: t("Android panel"), esp32: t("ESP32 panel"), phone: t("Phone") };
 const TYPES = { android_11: t("Android 11\""), android_4: t("Android 4\""), esp32_4: 'ESP32 4"', phone: t("Phone") };
 const OPTION_NAMES = {
-  min_brightness: t("Minimum brightness (%)"), show_percent: t("Show percentage"), dimmer: t("Group dimming"),
+  enlarge: t("Tap to enlarge"), min_brightness: t("Minimum brightness (%)"), show_percent: t("Show percentage"), dimmer: t("Group dimming"),
   power_entity: t("Power sensor"), step: t("Temperature step"), package: t("App (package name)"), return_seconds: t("Return after (seconds)"),
 };
 const KIND_NAMES = {
@@ -116,7 +118,7 @@ function cardProblem(c) {
   if (c.entities.length < min || c.entities.length > max) return t("Takes {0} to {1} devices.", min, max);
   const domains = cardDomains(c.card);
   if (c.entities.some((e) => !domains.includes("*") && !domains.includes(domainOf(e)))) return t("A device does not fit this shape.");
-  if (c.size && !spec.sizes.includes(c.size)) return t("Size not allowed for this shape.");
+  if (c.size && !sizeOk(spec, c.size)) return t("Size not allowed for this shape.");
   for (const [key, opt] of Object.entries(spec.options || {})) {
     if (opt.required && (c.options?.[key] === undefined || c.options[key] === "")) return t("{0} is required.", OPTION_NAMES[key] || key);
   }
@@ -126,7 +128,7 @@ function cardProblem(c) {
 function setCardType(c, type) {
   const spec = R.cards[type];
   c.card = type;
-  if (!spec.sizes.includes(c.size)) c.size = spec.default_size;
+  if (!sizeOk(spec, c.size)) c.size = spec.default_size;
   for (const key of Object.keys(c.options || {})) if (!spec.options?.[key]) delete c.options[key];
   if (c.options && !Object.keys(c.options).length) delete c.options;
 }
@@ -753,6 +755,15 @@ function iconInput(value, placeholder, onCommit) {
   return el("div", { class: "row", style: { flexWrap: "nowrap" } }, input, preview);
 }
 
+// A free size: width and height in cells, each up to the grid's.
+function freeSizeFields(size, set) {
+  const [w, h] = spanOf(size);
+  const n = (count) => Array.from({ length: count }, (_, i) => [String(i + 1), String(i + 1)]);
+  return el("div", {},
+    field(t("Width"), chips(n(COLS), String(w), (v) => set(`${v}x${h}`))),
+    field(t("Height"), chips(n(ROWS), String(h), (v) => set(`${w}x${v}`))));
+}
+
 // A card: shape, size, name, icon, confirmation, options, remove.
 function cardSheet(index) {
   ensureDashboard();
@@ -789,7 +800,8 @@ function cardSheet(index) {
     el("p", { class: "muted" }, d ? `${KIND_NAMES[kindOfCard(c.card)] || ""} · ${S.catalog.areas.find((a) => a.id === d.area)?.name || t("No room")}` : SHAPES[c.card]),
     // Widgets are each their own thing: no shape to switch to.
     variants.length > 1 && kindOfCard(c.card) !== "widget" ? field(t("Shape"), chips(variants.map((v) => [v, SHAPES[v] || v]), c.card, (v) => edit(() => setCardType(c, v)))) : null,
-    field(t("Size"), chips(R.sizes.map((v) => [v, SIZES[v], !spec.sizes.includes(v)]), sizeOf(c), (v) => edit(() => { c.size = v; }))),
+    spec.free_size ? freeSizeFields(sizeOf(c), (v) => edit(() => { c.size = v; }))
+      : field(t("Size"), chips(R.sizes.map((v) => [v, SIZES[v], !spec.sizes.includes(v)]), sizeOf(c), (v) => edit(() => { c.size = v; }))),
     field(t("Name on the panel"), el("input", { value: c.label || "", placeholder: d?.name || "",
       onchange: (e) => edit(() => { const v = e.target.value.trim(); v ? c.label = v : delete c.label; }) })),
     field(t("Icon"), iconInput(c.icon, cardIcon({ ...c, icon: undefined }), (v) => edit(() => { v && validIcon(v) ? c.icon = v : delete c.icon; }))),
@@ -1277,8 +1289,9 @@ function roomTileSheet(i, floorId) {
     field(t("Name"), el("input", { value: p.title, onchange: (e) => { const v = e.target.value.trim(); if (v) edit((lay) => { lay.pages[i].title = v; }); } })),
     field(t("Icon"), iconInput(p.icon, "mdi:floor-plan", (v) => edit((lay) => { v && validIcon(v) ? lay.pages[i].icon = v : delete lay.pages[i].icon; }))),
     field(t("Its card in the rooms menu"), chips([["room.card", t("Room picture")], ["room.summary", t("Details")]], shape,
-      (v) => edit((lay) => setTile(lay, g, i, { card: v, size: v === "room.summary" && size === "2x2" ? "2x1" : size })))),
-    field(t("Size"), chips(sizes.map((v) => [v, SIZES[v] || v]), size, (v) => edit((lay) => setTile(lay, g, i, { size: v })))),
+      (v) => edit((lay) => setTile(lay, g, i, { card: v, size: v === "room.summary" && !["1x1", "2x1"].includes(size) ? "2x1" : size })))),
+    shape === "room.card" ? freeSizeFields(size, (v) => edit((lay) => setTile(lay, g, i, { size: v })))
+      : field(t("Size"), chips(sizes.map((v) => [v, SIZES[v] || v]), size, (v) => edit((lay) => setTile(lay, g, i, { size: v })))),
     !isAlso && effFloors().length ? field(t("Floor on this panel"), (() => {
       const haFloor = effFloors().find((f) => (f.areas || []).includes(p.id))?.name;
       const s = selectEl([["", t("From HA ({0})", haFloor || t("No floor"))], ...effFloors().map((f) => [f.id, f.name])], p.floor || "");

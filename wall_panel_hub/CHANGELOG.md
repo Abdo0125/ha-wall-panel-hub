@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.35.0
+
+- Free card sizes (panel app 0.36.0): cameras, Android widgets and room pictures take any
+  width and height up to the 6x4 grid, set cell by cell in the designer and on the panel.
+- A camera card's "Tap to enlarge" option: off, a tap on it does nothing.
+
 ## 0.34.0
 
 - Camera video (panel app 0.34.0): live cameras play as real video. On the home network over

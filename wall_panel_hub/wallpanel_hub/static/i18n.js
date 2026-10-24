@@ -10,6 +10,9 @@ const LANG = (() => {
 })();
 const I18N = {
  "ar": {
+  "Tap to enlarge": "اللمس للتكبير",
+  "Width": "العرض",
+  "Height": "الارتفاع",
   "Picture every few seconds": "صورة كل بضع ثوانٍ",
   "Live": "بث مباشر",
   "Cameras": "كاميرات",
@@ -389,6 +392,9 @@ const I18N = {
   "Properties": "الخصائص"
  },
  "fr": {
+  "Tap to enlarge": "Toucher pour agrandir",
+  "Width": "Largeur",
+  "Height": "Hauteur",
   "Picture every few seconds": "Image toutes les quelques secondes",
   "Live": "En direct",
   "Cameras": "Caméras",
@@ -768,6 +774,9 @@ const I18N = {
   "Properties": "Propriétés"
  },
  "es": {
+  "Tap to enlarge": "Tocar para ampliar",
+  "Width": "Ancho",
+  "Height": "Alto",
   "Picture every few seconds": "Imagen cada pocos segundos",
   "Live": "En directo",
   "Cameras": "Cámaras",
