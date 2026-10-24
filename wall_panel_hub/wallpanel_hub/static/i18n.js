@@ -10,6 +10,11 @@ const LANG = (() => {
 })();
 const I18N = {
  "ar": {
+  "Show": "إظهار",
+  "Not available": "غير متاح",
+  "Home Assistant integration": "تكامل Home Assistant",
+  "Secret": "السرّ",
+  "Home Assistant gets this secret from the add-on on its own. Enter it only when adding the Wall Panel Hub integration by hand. With it, each panel is a speaker in Home Assistant.": "يأخذ Home Assistant هذا السرّ من الـ add-on تلقائياً. أدخله فقط عند إضافة تكامل Wall Panel Hub يدوياً. به تصبح كل شاشة مكبّر صوت في Home Assistant.",
   "Tap to enlarge": "اللمس للتكبير",
   "Width": "العرض",
   "Height": "الارتفاع",
@@ -392,6 +397,11 @@ const I18N = {
   "Properties": "الخصائص"
  },
  "fr": {
+  "Show": "Afficher",
+  "Not available": "Non disponible",
+  "Home Assistant integration": "Intégration Home Assistant",
+  "Secret": "Secret",
+  "Home Assistant gets this secret from the add-on on its own. Enter it only when adding the Wall Panel Hub integration by hand. With it, each panel is a speaker in Home Assistant.": "Home Assistant reçoit ce secret de l'add-on de lui-même. Saisissez-le seulement en ajoutant l'intégration Wall Panel Hub à la main. Avec lui, chaque panneau est un haut-parleur dans Home Assistant.",
   "Tap to enlarge": "Toucher pour agrandir",
   "Width": "Largeur",
   "Height": "Hauteur",
@@ -774,6 +784,11 @@ const I18N = {
   "Properties": "Propriétés"
  },
  "es": {
+  "Show": "Mostrar",
+  "Not available": "No disponible",
+  "Home Assistant integration": "Integración de Home Assistant",
+  "Secret": "Secreto",
+  "Home Assistant gets this secret from the add-on on its own. Enter it only when adding the Wall Panel Hub integration by hand. With it, each panel is a speaker in Home Assistant.": "Home Assistant recibe este secreto del add-on por sí solo. Introdúzcalo solo al añadir la integración Wall Panel Hub a mano. Con él, cada pantalla es un altavoz en Home Assistant.",
   "Tap to enlarge": "Tocar para ampliar",
   "Width": "Ancho",
   "Height": "Alto",

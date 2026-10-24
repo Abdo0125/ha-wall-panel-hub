@@ -7,7 +7,8 @@ The hub opens its own connection to HA and forwards only what the panel may do:
 - state subscriptions limited to those entities;
 - read-only registry and state lists (for the layout editor on the panel);
 - wallpanel/* commands (layout, configuration, card registry), answered by the hub itself;
-- the pictures of its cameras (wallpanel/camera/*), fetched from HA's HTTP API by the hub.
+- the pictures of its cameras (wallpanel/camera/*), fetched from HA's HTTP API by the hub;
+- its speaker (wallpanel/speaker/*): its state for HA's integration, HA's commands to it.
 
 Layouts are stored in format v2 (cards). A panel asks for it with "schema": 2 in
 wallpanel/layout/subscribe or /get; an older app, which does not, gets format v1.
@@ -113,6 +114,8 @@ class PanelConnection:
         self.schema = 1
         # Live cameras the panel watches, by the id of its wallpanel/camera/stream.
         self.streams: dict[int, asyncio.Task] = {}
+        # wallpanel/speaker/subscribe: HA's commands to the panel's speaker go there.
+        self.speaker_subs: set[int] = set()
 
     @property
     def allowed(self) -> set[str]:
@@ -386,6 +389,15 @@ class PanelConnection:
             await self.send({"id": mid, "type": "result", "success": True, "result": picture})
         elif kind in ("wallpanel/camera/snapshot", "wallpanel/camera/stream", "wallpanel/camera/stop"):
             await self.camera(mid, kind, msg)
+        elif kind in ("wallpanel/speaker/subscribe", "wallpanel/speaker/state"):
+            # The panel as a speaker in HA (speakers.py): its state, and HA's commands as events.
+            speakers = self.gateway.speakers
+            if speakers is None or not await speakers.report(self.panel_id, msg.get("state")):
+                await self.send(_error(mid, "invalid_state", "a speaker state is needed"))
+                return
+            if kind == "wallpanel/speaker/subscribe":
+                self.speaker_subs.add(mid)
+            await self.send({"id": mid, "type": "result", "success": True, "result": None})
         elif kind == "wallpanel/registry/get":
             await self.send({"id": mid, "type": "result", "success": True, "result": REGISTRY})
         else:
@@ -464,6 +476,16 @@ class Gateway:
         self.catalog = None
         # Rooms' pictures from HA, by area, until HA's picture changes.
         self.pictures: dict[str, dict] = {}
+        # Panels as speakers in HA (speakers.Speakers).
+        self.speakers = None
+
+    async def speaker_command(self, panel_id: str, command: dict) -> bool:
+        """HA's command to a panel's speaker, to its connection that listens. False if none."""
+        for conn in list(self.connections.get(panel_id, ())):
+            for sub in list(conn.speaker_subs):
+                await conn.send({"id": sub, "type": "event", "event": {"command": command}})
+                return True
+        return False
 
     async def area_picture(self, area_id: str) -> dict | None:
         """{"picture": HA's path, "type", "data" (base64)} of an area's picture, or None."""
@@ -610,6 +632,8 @@ class Gateway:
         self.store.seen(panel.id)
         log.info("panel %s (%s) connected", panel.name, panel.id)
         await ws.send_json({"type": "auth_ok", "ha_version": ok.get("ha_version")})
+        if self.speakers is not None:
+            await self.speakers.changed()
 
         # get_states asked by the panel: HA answers with every entity; the panel gets its own.
         state_requests: set = set()
@@ -662,4 +686,9 @@ class Gateway:
             self.connections.get(panel.id, set()).discard(conn)
             self.store.seen(panel.id)
             log.info("panel %s disconnected", panel.id)
+            if self.speakers is not None:
+                if not any(c.speaker_subs for c in self.connections.get(panel.id, ())):
+                    await self.speakers.gone(panel.id)
+                else:
+                    await self.speakers.changed()
         return ws

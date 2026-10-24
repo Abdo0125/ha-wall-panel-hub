@@ -47,6 +47,35 @@ def panel_api(store: Store, gateway: Gateway) -> web.Application:
     async def pair_status(request: web.Request):
         return web.json_response(store.pairing_status(request.match_info["rid"]))
 
+    async def media(request: web.Request):
+        """A sound HA keeps (TTS, its media folder), handed to a panel on the add-on's network
+        for HA's command to its speaker (speakers.py): only the paths handed out."""
+        path = gateway.speakers.media_path(request.match_info["token"]) if gateway.speakers else None
+        if path is None:
+            raise web.HTTPNotFound()
+        timeout = aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=60)
+        headers = dict(gateway.ha_auth)
+        if "Range" in request.headers:
+            headers["Range"] = request.headers["Range"]
+        try:
+            async with gateway.session.get(gateway.ha_http + path, headers=headers, timeout=timeout) as upstream:
+                resp = web.StreamResponse(status=upstream.status, headers={
+                    k: v for k, v in upstream.headers.items()
+                    if k in ("Content-Type", "Content-Length", "Content-Range", "Accept-Ranges", "Cache-Control")})
+                await resp.prepare(request)
+                async for chunk in upstream.content.iter_any():
+                    await resp.write(chunk)
+                await resp.write_eof()
+                return resp
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            log.warning("sound for a panel failed: %s", e)
+            raise web.HTTPBadGateway()
+
+    async def integration(request: web.Request):
+        if gateway.speakers is None:
+            raise web.HTTPServiceUnavailable()
+        return await gateway.speakers.handle(request)
+
     async def hls(request: web.Request):
         """HA's HLS video of a camera (camera/stream), for panels on the add-on's network.
 
@@ -73,6 +102,8 @@ def panel_api(store: Store, gateway: Gateway) -> web.Application:
     app.router.add_post("/api/pair", pair)
     app.router.add_get("/api/pair/{rid}", pair_status)
     app.router.add_get("/api/websocket", gateway.handle)
+    app.router.add_get(r"/api/media/{token:[a-f0-9]{32}}", media)
+    app.router.add_get("/api/integration", integration)
     return app
 
 
@@ -220,6 +251,10 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
             ],
         })
 
+    async def integration_secret(_):
+        # For setting the integration up by hand: the Supervisor hands it over otherwise.
+        return web.json_response({"secret": gateway.speakers.secret if gateway.speakers else None})
+
     async def approve(request: web.Request):
         try:
             panel = store.approve(request.match_info["rid"])
@@ -235,6 +270,8 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         pid = request.match_info["pid"]
         store.revoke(pid)
         await gateway.disconnect(pid)
+        if gateway.speakers:
+            await gateway.speakers.gone(pid)
         return web.json_response({"ok": True})
 
     async def rename(request: web.Request):
@@ -243,6 +280,8 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
             raise web.HTTPNotFound()
         store.rename(pid, str((await request.json()).get("name", "")).strip() or "Panel")
         await gateway.notify_config(pid)
+        if gateway.speakers:
+            await gateway.speakers.changed()
         return web.json_response({"ok": True})
 
     async def place(request: web.Request):
@@ -406,6 +445,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     app.router.add_delete("/api/editor/panels/{pid}/draft", delete_draft)
     app.router.add_post("/api/editor/panels/{pid}/send", send_draft)
     app.router.add_get("/api/overview", overview)
+    app.router.add_get("/api/integration/secret", integration_secret)
     app.router.add_post("/api/pending/{rid}/approve", approve)
     app.router.add_post("/api/pending/{rid}/reject", reject)
     app.router.add_post("/api/panels/{pid}/revoke", revoke)

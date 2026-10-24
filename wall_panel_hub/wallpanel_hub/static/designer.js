@@ -1692,7 +1692,23 @@ function renderProject(view) {
       pinRow(t("User PIN"), site.user_pin_set, site.user_pin_set ? t("● Set") : t("○ Not set"),
         async (pin) => { await post("api/site/pin", { role: "user", pin }); reload(); },
         async () => { await post("api/site/pin", { role: "user", pin: null }); reload(); }, t("Remove"))),
+    integrationBox(),
   );
+}
+
+// The integration's secret, hidden until asked: Home Assistant gets it on its own, this is
+// for setting the integration up by hand.
+function integrationBox() {
+  const value = el("code", { style: { userSelect: "all", wordBreak: "break-all" } }, "••••••••");
+  const show = el("button", { onclick: async () => {
+    const r = await api("api/integration/secret");
+    if (!r.ok || !r.body?.secret) { alert(t("Not available")); return; }
+    value.textContent = r.body.secret;
+    show.remove();
+  } }, t("Show"));
+  return el("div", { class: "box" }, el("h3", {}, t("Home Assistant integration")),
+    el("p", { class: "muted" }, t("Home Assistant gets this secret from the add-on on its own. Enter it only when adding the Wall Panel Hub integration by hand. With it, each panel is a speaker in Home Assistant.")),
+    el("div", { class: "row" }, el("label", {}, t("Secret")), value, show));
 }
 
 // Where the built-in widgets read from: set once, every panel's widgets use it.

@@ -8,6 +8,7 @@ from . import companion, discovery, settings
 from .catalog import CatalogCache
 from .catalog import fetch as fetch_catalog
 from .gateway import Gateway
+from .speakers import Speakers, load_secret
 from .store import Store
 from .web import management_ui, panel_api
 
@@ -22,6 +23,8 @@ async def main() -> None:
     browser = discovery.PanelBrowser()
     async with aiohttp.ClientSession() as session:
         gateway = Gateway(cfg, store, session)
+        secret = load_secret(cfg.data_dir)
+        gateway.speakers = Speakers(store, gateway, secret)
 
         async def floors_changed(cat: dict) -> None:
             if store.save_floors(cat):
@@ -55,7 +58,7 @@ async def main() -> None:
             browser.start(zc)
         if not cfg.dev:
             restart = companion.install(cfg.ha_config)
-            await companion.announce(session, cfg.ha_token, cfg.panel_port, restart)
+            await companion.announce(session, cfg.ha_token, cfg.panel_port, restart, secret)
         try:
             await asyncio.Event().wait()
         finally:

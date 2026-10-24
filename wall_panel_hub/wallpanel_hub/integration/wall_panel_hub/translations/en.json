@@ -10,7 +10,11 @@
         "description": "Address of the Wall Panel Hub add-on as seen from Home Assistant.",
         "data": {
           "host": "Host",
-          "port": "Panel port"
+          "port": "Panel port",
+          "secret": "Secret"
+        },
+        "data_description": {
+          "secret": "Shown in the add-on's page. Needed for panels to be speakers in Home Assistant."
         }
       }
     },
@@ -19,6 +23,19 @@
     },
     "abort": {
       "already_configured": "Wall Panel Hub is already set up."
+    }
+  },
+  "entity": {
+    "select": {
+      "audio_output": {
+        "name": "Sound output",
+        "state": {
+          "auto": "Automatic",
+          "speaker": "Panel speaker",
+          "usb": "USB-C",
+          "bluetooth": "Bluetooth"
+        }
+      }
     }
   }
 }

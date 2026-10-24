@@ -6,6 +6,10 @@ then pair and connect through whatever address already reaches Home Assistant.
 
 These views need no Home Assistant login: panels authenticate to the hub with their
 own key, and pairing still needs the installer's approval in the add-on.
+
+With the add-on's secret (handed over in its Supervisor discovery) it also links to the
+add-on (hub.HubLink): each panel is a device here, with its speaker (media_player) and its
+sound output (select).
 """
 
 from __future__ import annotations
@@ -17,10 +21,15 @@ from aiohttp import ClientError, WSMsgType, web
 
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import CONF_HOST, CONF_PORT, DOMAIN, URL_BASE
+from .const import CONF_HOST, CONF_PORT, CONF_SECRET, DOMAIN, URL_BASE
+from .hub import HubLink
+
+PLATFORMS = [Platform.MEDIA_PLAYER, Platform.SELECT]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,11 +42,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         for view in (InfoView, PairView, PairStatusView, SocketView):
             hass.http.register_view(view(hass))
         data["views"] = True
+    if entry.data.get(CONF_SECRET):
+        link = HubLink(hass, entry.data[CONF_HOST], entry.data[CONF_PORT], entry.data[CONF_SECRET])
+        data["link"] = link
+        devices = dr.async_get(hass)
+
+        @callback
+        def follow_panels() -> None:
+            # A panel unpaired in the add-on goes from here too, with its entities; a panel
+            # renamed there is renamed here.
+            if not link.synced:
+                return
+            for device in dr.async_entries_for_config_entry(devices, entry.entry_id):
+                ids = {i[1] for i in device.identifiers if i[0] == DOMAIN}
+                panel = next((link.panels[i] for i in ids if i in link.panels), None)
+                if ids and panel is None:
+                    devices.async_remove_device(device.id)
+                elif panel and panel.get("name") and device.name != panel["name"]:
+                    devices.async_update_device(device.id, name=panel["name"])
+
+        entry.async_on_unload(link.listen(follow_panels))
+        link.start()
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    hass.data[DOMAIN]["base"] = None
+    data = hass.data[DOMAIN]
+    link = data.pop("link", None)
+    if link is not None:
+        if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+            data["link"] = link
+            return False
+        await link.stop()
+    data["base"] = None
     return True
 
 

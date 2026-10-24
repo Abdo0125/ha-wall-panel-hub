@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.36.0
+
+- Panels as speakers in Home Assistant (panel app 0.37.0, companion integration 0.3.0):
+  each paired panel is a device with a media_player (TTS, HA's media and radio, any sound
+  address; play, pause, stop, volume, mute; announcements lower the music while they speak)
+  and a "Sound output" select (automatic, the panel's speaker, USB-C, Bluetooth).
+- The integration links to the add-on at /api/integration with a secret the add-on makes and
+  hands over in its Supervisor discovery; without it nothing is answered. Shown under
+  Project → General for setting the integration up by hand. Restart Home Assistant once
+  after updating, for the new integration.
+- HA's own sounds reach panels on the add-on's network through the hub (/api/media/<token>,
+  for the sounds handed out only); panels through HA's address fetch them from HA.
+
 ## 0.35.0
 
 - Free card sizes (panel app 0.36.0): cameras, Android widgets and room pictures take any

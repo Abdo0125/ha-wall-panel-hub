@@ -42,13 +42,16 @@ def install(ha_config: Path) -> bool:
     return True
 
 
-async def announce(session: aiohttp.ClientSession, token: str, port: int, restart_needed: bool) -> None:
+async def announce(session: aiohttp.ClientSession, token: str, port: int, restart_needed: bool,
+                   secret: str) -> None:
     headers = {"Authorization": f"Bearer {token}"}
     try:
         # Home Assistant runs on the host network like this add-on, so it reaches us on 127.0.0.1.
         async with session.post(f"{SUPERVISOR}/discovery", headers=headers, json={
             "service": "wall_panel_hub",
-            "config": {"host": "127.0.0.1", "port": port},
+            # The secret lets the integration in at /api/integration (speakers.py): the
+            # Supervisor hands it to Home Assistant only, never over the network.
+            "config": {"host": "127.0.0.1", "port": port, "secret": secret},
         }) as resp:
             if resp.status >= 400:
                 log.warning("Supervisor discovery refused: %s %s", resp.status, await resp.text())

@@ -9,7 +9,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import CONF_HOST, CONF_PORT, DEFAULT_HOST, DEFAULT_PORT, DOMAIN
+from .const import CONF_HOST, CONF_PORT, CONF_SECRET, DEFAULT_HOST, DEFAULT_PORT, DOMAIN
 
 try:  # Moved in Home Assistant 2025.x
     from homeassistant.helpers.service_info.hassio import HassioServiceInfo
@@ -37,6 +37,9 @@ class WallPanelHubFlow(ConfigFlow, domain=DOMAIN):
             CONF_HOST: discovery_info.config.get(CONF_HOST, DEFAULT_HOST),
             CONF_PORT: int(discovery_info.config.get(CONF_PORT, DEFAULT_PORT)),
         }
+        # An add-on from 0.36 on hands its secret over; an entry set up before gets it here.
+        if discovery_info.config.get(CONF_SECRET):
+            self._data[CONF_SECRET] = str(discovery_info.config[CONF_SECRET])
         await self.async_set_unique_id(DOMAIN)
         self._abort_if_unique_id_configured(updates=self._data)
         return await self.async_step_hassio_confirm()
@@ -57,5 +60,7 @@ class WallPanelHubFlow(ConfigFlow, domain=DOMAIN):
         schema = vol.Schema({
             vol.Required(CONF_HOST, default=DEFAULT_HOST): str,
             vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
+            # Shown in the add-on's page; without it panels are not speakers in HA.
+            vol.Optional(CONF_SECRET): str,
         })
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
