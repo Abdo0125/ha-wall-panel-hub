@@ -132,7 +132,10 @@ class Speakers:
         state = clean_state(raw)
         if state is None:
             return False
-        if self.states.get(panel_id) != state:
+        before = self.states.get(panel_id)
+        if before != state:
+            if (before or {}).get("state") != state["state"]:
+                log.info("speaker %s is %s", panel_id, state["state"])
             self.states[panel_id] = state
             await self.changed()
         return True

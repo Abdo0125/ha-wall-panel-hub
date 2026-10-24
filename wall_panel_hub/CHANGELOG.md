@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.36.2
+
+- Panel app 0.37.2: an announcement whose sound stops going on is ended after 15 s; it left
+  the panel "playing" for ever, the music lowered, and Pause, the volume and Mute seemed to
+  do nothing. Pause also stops an announcement.
+- The add-on's log shows each panel speaker's state as it changes, with the commands.
+
 ## 0.36.1
 
 - Integration 0.3.1: playing a sound on a panel failed (a wrong argument for HA's address of
