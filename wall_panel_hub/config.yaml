@@ -1,5 +1,5 @@
 name: Wall Panel Hub
-version: "0.36.2"
+version: "0.37.0"
 slug: wall_panel_hub
 description: Unified management for wall panels (Android and ESP32) - pairing, layouts, secure gateway to Home Assistant
 url: https://github.com/Abdo0125/ha-wall-panel-hub
@@ -27,5 +27,8 @@ panel_icon: mdi:tablet-dashboard
 panel_title: Wall Panels
 options:
   panel_port: 8765
+  sip_port: 5060
 schema:
   panel_port: port
+  # The intercom's SIP port; audio uses UDP 10000-10199.
+  sip_port: port

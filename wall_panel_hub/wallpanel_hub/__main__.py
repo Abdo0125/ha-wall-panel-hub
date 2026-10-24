@@ -8,6 +8,7 @@ from . import companion, discovery, settings
 from .catalog import CatalogCache
 from .catalog import fetch as fetch_catalog
 from .gateway import Gateway
+from .intercom import Intercom
 from .speakers import Speakers, load_secret
 from .store import Store
 from .web import management_ui, panel_api
@@ -25,6 +26,8 @@ async def main() -> None:
         gateway = Gateway(cfg, store, session)
         secret = load_secret(cfg.data_dir)
         gateway.speakers = Speakers(store, gateway, secret)
+        intercom = Intercom(cfg.data_dir, cfg.sip_port)
+        await intercom.apply()
 
         async def floors_changed(cat: dict) -> None:
             if store.save_floors(cat):
@@ -46,7 +49,7 @@ async def main() -> None:
 
         runners = []
         for app, port in ((panel_api(store, gateway), cfg.panel_port),
-                          (management_ui(store, gateway, cfg.ui_allowed, catalog, browser), cfg.ui_port)):
+                          (management_ui(store, gateway, cfg.ui_allowed, catalog, browser, intercom), cfg.ui_port)):
             runner = web.AppRunner(app)
             await runner.setup()
             await web.TCPSite(runner, "0.0.0.0", port).start()
@@ -63,6 +66,7 @@ async def main() -> None:
             await asyncio.Event().wait()
         finally:
             floors_task.cancel()
+            await intercom.stop()
             if zc:
                 await browser.close()
                 await zc.async_close()

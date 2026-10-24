@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.37.0
+
+- Intercom, first step (docs/speaker-intercom-plan.md, B1): the add-on runs Asterisk. Under
+  Project → Intercom, turn it on and add doors: each gets a SIP account (user name and a
+  random password) for a door station, or a phone with a SIP app for a test. Calling 600
+  from a door answers with an echo, to check the sound's way. Panels ringing comes next.
+- New option `sip_port` (default 5060); calls' audio uses UDP 10000-10199. The add-on is on
+  the host's network: both are open on Home Assistant's address.
+
 ## 0.36.2
 
 - Panel app 0.37.2: an announcement whose sound stops going on is ended after 15 s; it left

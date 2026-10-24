@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-VERSION = "0.36.2"
+VERSION = "0.37.0"
 
 # Home Assistant's internal network (hassio). Ingress requests come from the Supervisor
 # inside it; with host networking the exact source address in it varies by install.
@@ -24,6 +24,8 @@ class Settings:
     dev: bool
     # Home Assistant's config folder, where the companion integration goes (add-on only).
     ha_config: Path | None = None
+    # The intercom's SIP port (Asterisk, on the host's network).
+    sip_port: int = 5060
 
 
 # HA's base images start the program through s6-overlay, which does not pass the
@@ -56,6 +58,7 @@ def load() -> Settings:
             ui_allowed=(HASSIO_NETWORK,),
             dev=False,
             ha_config=Path("/homeassistant"),
+            sip_port=int(options.get("sip_port", 5060)),
         )
 
     # Developer mode: python -m wallpanel_hub with HA_URL and HA_TOKEN set.

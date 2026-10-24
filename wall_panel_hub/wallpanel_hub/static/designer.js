@@ -1659,7 +1659,7 @@ function renderAccess(view, p) {
 // ---------- project ----------
 
 function renderProject(view) {
-  const tabs = [["general", t("General")], ["devices", t("Device types")], ["widgets", t("Widgets")]];
+  const tabs = [["general", t("General")], ["devices", t("Device types")], ["widgets", t("Widgets")], ["intercom", t("Intercom")]];
   view.append(el("div", { class: "titlebar" },
     el("h2", {}, S.site?.name || t("Project")),
     el("div", { class: "tabs" }, tabs.map(([id, label]) =>
@@ -1667,6 +1667,7 @@ function renderProject(view) {
   if (!S.site) { loadSite().then(render); return; }
   if (S.view.tab === "devices") return renderDevices(view);
   if (S.view.tab === "widgets") return renderSources(view);
+  if (S.view.tab === "intercom") return renderIntercom(view);
 
   const site = S.site;
   const name = el("input", { value: site.name || "" });
@@ -1694,6 +1695,56 @@ function renderProject(view) {
         async () => { await post("api/site/pin", { role: "user", pin: null }); reload(); }, t("Remove"))),
     integrationBox(),
   );
+}
+
+// The intercom: doors (SIP door stations, or a phone for a test) register with the add-on's
+// Asterisk under the accounts made here.
+let intercom = null;
+async function loadIntercom() {
+  const r = await api("api/intercom");
+  intercom = r.ok ? r.body : { error: r.status };
+}
+
+function renderIntercom(view) {
+  if (!intercom) { view.append(el("p", { class: "muted" }, t("Loading…"))); loadIntercom().then(render); return; }
+  if (intercom.error) { view.append(el("p", { class: "muted" }, t("Not available"))); return; }
+  const ic = intercom;
+  const save = async (changes) => {
+    const r = await put("api/intercom", changes);
+    if (!r.ok) { alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
+    intercom = r.body; render();
+  };
+  const doors = () => ic.doors.map((d) => ({ id: d.id, name: d.name }));
+  const status = !ic.enabled ? t("Off") : !ic.installed ? t("Asterisk is not installed in this add-on") : ic.running ? t("● Running") : t("Starting…");
+  const enabled = el("input", { type: "checkbox", checked: ic.enabled, onchange: () => save({ enabled: enabled.checked }) });
+  view.append(el("div", { class: "box" }, el("h3", {}, t("Intercom")),
+    el("p", { class: "muted" }, t("Door stations, or a phone with a SIP app for a test, register with this add-on. Panels ringing comes in the next version.")),
+    el("div", { class: "form" },
+      el("label", {}, t("On")), el("div", { class: "row" }, enabled, el("span", { class: "muted" }, status)),
+      el("label", {}, t("SIP server")), el("div", {}, ...(ic.addresses.length ? ic.addresses : ["?"]).map((a) => el("div", {}, el("code", { style: { userSelect: "all" } }, `${a}:${ic.sip_port}`)))),
+      el("label", {}, t("Test")), el("span", { class: "muted" }, t("Call {0} from a door: what you say comes back (echo), to check the sound's way.", ic.echo)))));
+  const box = el("div", { class: "box" }, el("h3", {}, t("Doors")));
+  if (!ic.doors.length) box.append(el("p", { class: "muted" }, t("No doors yet.")));
+  for (const d of ic.doors) {
+    box.append(el("div", { class: "request" },
+      el("div", { class: "row" }, el("strong", { class: "grow" }, d.name),
+        el("span", { class: "muted" }, d.registered ? t("● Registered from {0}", d.registered) : t("○ Not registered"))),
+      el("div", { class: "form", style: { marginTop: "6px" } },
+        el("label", {}, t("User name")), el("code", { style: { userSelect: "all" } }, d.username),
+        el("label", {}, t("Password")), el("code", { style: { userSelect: "all" } }, d.password)),
+      el("div", { class: "row", style: { marginTop: "6px" } },
+        el("button", { onclick: async () => {
+          if (!confirm(t("Make a new password? The door must be set up again with it."))) return;
+          const r = await post(`api/intercom/doors/${enc(d.id)}/password`);
+          if (r.ok) { intercom = r.body; render(); }
+        } }, t("New password")),
+        el("button", { onclick: () => { if (confirm(t("Remove {0}?", d.name))) save({ doors: doors().filter((x) => x.id !== d.id) }); } }, t("Remove")))));
+  }
+  const name = el("input", { placeholder: t("Front door") });
+  box.append(el("div", { class: "row", style: { marginTop: "10px" } }, name,
+    el("button", { class: "solid", onclick: () => { if (name.value.trim()) save({ doors: [...doors(), { name: name.value.trim() }] }); } }, t("Add door"))),
+    el("div", { class: "row", style: { marginTop: "10px" } }, el("button", { onclick: async () => { await loadIntercom(); render(); } }, t("Refresh"))));
+  view.append(box);
 }
 
 // The integration's secret, hidden until asked: Home Assistant gets it on its own, this is

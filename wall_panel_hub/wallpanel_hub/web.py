@@ -17,6 +17,8 @@ import aiohttp
 from aiohttp import web
 
 from .cards import REGISTRY
+from .intercom import ECHO, IntercomInvalid
+from .intercom import addresses as intercom_addresses
 from .catalog import CatalogCache
 from .config import ConfigInvalid
 from .pins import PinInvalid, hash_pin
@@ -143,7 +145,7 @@ def _without_pins(doc: dict) -> dict:
 
 
 def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
-                  catalog: CatalogCache | None = None, browser=None) -> web.Application:
+                  catalog: CatalogCache | None = None, browser=None, intercom=None) -> web.Application:
     networks = [ipaddress.ip_network(n) for n in allowed]
 
     @web.middleware
@@ -254,6 +256,45 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     async def integration_secret(_):
         # For setting the integration up by hand: the Supervisor hands it over otherwise.
         return web.json_response({"secret": gateway.speakers.secret if gateway.speakers else None})
+
+    # ---- intercom (intercom.py) ----
+
+    async def intercom_view():
+        registered = await intercom.registered()
+        return {
+            "enabled": intercom.settings["enabled"],
+            "installed": bool(intercom.binary),
+            "running": intercom.running(),
+            "sip_port": intercom.sip_port,
+            "addresses": await intercom_addresses(),
+            "echo": ECHO,
+            "doors": [{**d, "registered": registered.get(d["username"])} for d in intercom.doors],
+        }
+
+    async def get_intercom(_):
+        if intercom is None:
+            raise web.HTTPNotFound()
+        return web.json_response(await intercom_view())
+
+    async def put_intercom(request: web.Request):
+        if intercom is None:
+            raise web.HTTPNotFound()
+        try:
+            intercom.update(await _body(request))
+        except IntercomInvalid as e:
+            return _invalid(e)
+        await intercom.apply()
+        return web.json_response(await intercom_view())
+
+    async def door_password(request: web.Request):
+        if intercom is None:
+            raise web.HTTPNotFound()
+        try:
+            intercom.new_password(request.match_info["did"])
+        except KeyError:
+            raise web.HTTPNotFound()
+        await intercom.apply()
+        return web.json_response(await intercom_view())
 
     async def approve(request: web.Request):
         try:
@@ -446,6 +487,9 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     app.router.add_post("/api/editor/panels/{pid}/send", send_draft)
     app.router.add_get("/api/overview", overview)
     app.router.add_get("/api/integration/secret", integration_secret)
+    app.router.add_get("/api/intercom", get_intercom)
+    app.router.add_put("/api/intercom", put_intercom)
+    app.router.add_post("/api/intercom/doors/{did}/password", door_password)
     app.router.add_post("/api/pending/{rid}/approve", approve)
     app.router.add_post("/api/pending/{rid}/reject", reject)
     app.router.add_post("/api/panels/{pid}/revoke", revoke)
