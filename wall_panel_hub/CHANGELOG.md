@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.36.1
+
+- Integration 0.3.1: playing a sound on a panel failed (a wrong argument for HA's address of
+  its own sounds).
+- Each command to a panel's speaker is in the add-on's log.
+- Panel app 0.37.1: Play with nothing to play no longer stops another app's music.
+
 ## 0.36.0
 
 - Panels as speakers in Home Assistant (panel app 0.37.0, companion integration 0.3.0):

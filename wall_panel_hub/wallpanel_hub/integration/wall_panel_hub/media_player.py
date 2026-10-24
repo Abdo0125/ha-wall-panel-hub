@@ -74,7 +74,7 @@ class PanelSpeaker(PanelEntity, MediaPlayerEntity):
             item = await media_source.async_resolve_media(self.hass, media_id, self.entity_id)
             media_id = item.url
         # HA's own sound: a signed path the panel fetches from HA, or from the add-on.
-        media_id = async_process_play_media_url(self.hass, media_id, allow_relative=True)
+        media_id = async_process_play_media_url(self.hass, media_id, allow_relative_url=True)
         command: dict[str, Any] = {"command": "play_media", "announce": bool(kwargs.get(ATTR_MEDIA_ANNOUNCE))}
         command["path" if media_id.startswith("/") else "url"] = media_id
         extra = kwargs.get("extra") or {}

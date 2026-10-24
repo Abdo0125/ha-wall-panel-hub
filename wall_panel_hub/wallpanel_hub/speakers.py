@@ -170,10 +170,12 @@ class Speakers:
             return "the panel is not connected"
         forward, reason = check_speaker_command(cmd)
         if forward is None:
+            log.warning("speaker %s: command refused: %s", panel_id, reason)
             return reason
         if "path" in forward:
             forward["hub_path"] = f"/api/media/{self.media_token(forward['path'])}"
         sent = await self.gateway.speaker_command(panel_id, forward)
+        log.info("speaker %s: %s%s", panel_id, forward["command"], "" if sent else " (not connected)")
         return None if sent else "the panel is not connected"
 
     # ---- the integration's connection ----
