@@ -1714,11 +1714,13 @@ function renderIntercom(view) {
     if (!r.ok) { alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
     intercom = r.body; render();
   };
-  const doors = () => ic.doors.map((d) => ({ id: d.id, name: d.name }));
+  // What is sent back for each door: the secret only when typed (else the add-on keeps it).
+  const doors = () => ic.doors.map((d) => ({ id: d.id, name: d.name, mode: d.mode, server: d.server, user: d.user, panels: d.panels }));
+  const change = (id, fields) => save({ doors: doors().map((x) => (x.id === id ? { ...x, ...fields } : x)) });
   const status = !ic.enabled ? t("Off") : !ic.installed ? t("Asterisk is not installed in this add-on") : ic.running ? t("● Running") : t("Starting…");
   const enabled = el("input", { type: "checkbox", checked: ic.enabled, onchange: () => save({ enabled: enabled.checked }) });
   view.append(el("div", { class: "box" }, el("h3", {}, t("Intercom")),
-    el("p", { class: "muted" }, t("Door stations, or a phone with a SIP app for a test, register with this add-on. Panels ringing comes in the next version.")),
+    el("p", { class: "muted" }, t("A door's call rings its panels; the first to answer takes it. A door registers with this add-on, or, when it has its own SIP server (Dahua VTO, Akuvox...), the add-on registers there as one of its indoor monitors.")),
     el("div", { class: "form" },
       el("label", {}, t("On")), el("div", { class: "row" }, enabled, el("span", { class: "muted" }, status)),
       el("label", {}, t("SIP server")), el("div", {}, ...(ic.addresses.length ? ic.addresses : ["?"]).map((a) => el("div", {}, el("code", { style: { userSelect: "all" } }, `${a}:${ic.sip_port}`)))),
@@ -1726,25 +1728,66 @@ function renderIntercom(view) {
   const box = el("div", { class: "box" }, el("h3", {}, t("Doors")));
   if (!ic.doors.length) box.append(el("p", { class: "muted" }, t("No doors yet.")));
   for (const d of ic.doors) {
-    box.append(el("div", { class: "request" },
-      el("div", { class: "row" }, el("strong", { class: "grow" }, d.name),
-        el("span", { class: "muted" }, d.registered ? t("● Registered from {0}", d.registered) : t("○ Not registered"))),
-      el("div", { class: "form", style: { marginTop: "6px" } },
+    const remote = d.mode === "server";
+    const state = remote
+      ? (d.registered ? t("● Linked to {0}", d.registered) : t("○ Not linked") + (d.registration ? ` (${d.registration})` : ""))
+      : (d.registered ? t("● Registered from {0}", d.registered) : t("○ Not registered"));
+    const mode = el("select", { onchange: () => {
+      if (mode.value === "here" || d.server) change(d.id, { mode: mode.value });
+      else { d.mode = "server"; render(); }  // its address and account first
+    } }, el("option", { value: "here", selected: !remote }, t("Registers with this add-on")),
+      el("option", { value: "server", selected: remote }, t("Has its own SIP server")));
+    const card = el("div", { class: "request" },
+      el("div", { class: "row" }, el("strong", { class: "grow" }, d.name), el("span", { class: "muted" }, state)),
+      el("div", { class: "form", style: { marginTop: "6px" } }, el("label", {}, t("Door")), mode));
+    if (remote) {
+      const server = el("input", { value: d.server || "", placeholder: "192.168.1.108" });
+      const user = el("input", { value: d.user || "", placeholder: "9901" });
+      const secret = el("input", { type: "password", autocomplete: "new-password", placeholder: d.secret_set ? t("(unchanged)") : "" });
+      card.append(el("p", { class: "muted" }, t("In the door's own pages, add an indoor monitor with a password (Dahua: a room number such as 9901, its SIP password), then enter it here.")),
+        el("div", { class: "form" },
+          el("label", {}, t("Door's address")), server,
+          el("label", {}, t("Account on the door")), user,
+          el("label", {}, t("Password")), secret),
+        el("div", { class: "row", style: { marginTop: "6px" } }, el("button", { class: "solid", onclick: () => {
+          const fields = { mode: "server", server: server.value.trim(), user: user.value.trim() };
+          if (secret.value) fields.secret = secret.value;
+          change(d.id, fields);
+        } }, t("Save"))));
+    } else {
+      card.append(el("div", { class: "form", style: { marginTop: "6px" } },
         el("label", {}, t("User name")), el("code", { style: { userSelect: "all" } }, d.username),
-        el("label", {}, t("Password")), el("code", { style: { userSelect: "all" } }, d.password)),
-      el("div", { class: "row", style: { marginTop: "6px" } },
-        el("button", { onclick: async () => {
-          if (!confirm(t("Make a new password? The door must be set up again with it."))) return;
-          const r = await post(`api/intercom/doors/${enc(d.id)}/password`);
-          if (r.ok) { intercom = r.body; render(); }
-        } }, t("New password")),
-        el("button", { onclick: () => { if (confirm(t("Remove {0}?", d.name))) save({ doors: doors().filter((x) => x.id !== d.id) }); } }, t("Remove")))));
+        el("label", {}, t("Password")), el("code", { style: { userSelect: "all" } }, d.password)));
+    }
+    // Which panels ring: all (also those paired later), or those ticked.
+    const all = el("input", { type: "checkbox", checked: d.panels == null,
+      onchange: () => change(d.id, { panels: all.checked ? null : ic.panels.map((p) => p.id) }) });
+    const ticks = ic.panels.map((p) => {
+      const box = el("input", { type: "checkbox", checked: d.panels == null || d.panels.includes(p.id), disabled: d.panels == null,
+        onchange: () => change(d.id, { panels: ic.panels.filter((q) => (q.id === p.id ? box.checked : d.panels.includes(q.id))).map((q) => q.id) }) });
+      return el("label", { class: "row" }, box, p.name);
+    });
+    card.append(el("div", { class: "form", style: { marginTop: "6px" } },
+      el("label", {}, t("Rings")), el("div", {}, el("label", { class: "row" }, all, t("All panels")), ...ticks)));
+    card.append(el("div", { class: "row", style: { marginTop: "6px" } },
+      remote ? null : el("button", { onclick: async () => {
+        if (!confirm(t("Make a new password? The door must be set up again with it."))) return;
+        const r = await post(`api/intercom/doors/${enc(d.id)}/password`);
+        if (r.ok) { intercom = r.body; render(); }
+      } }, t("New password")),
+      el("button", { onclick: () => { if (confirm(t("Remove {0}?", d.name))) save({ doors: doors().filter((x) => x.id !== d.id) }); } }, t("Remove"))));
+    box.append(card);
   }
   const name = el("input", { placeholder: t("Front door") });
   box.append(el("div", { class: "row", style: { marginTop: "10px" } }, name,
     el("button", { class: "solid", onclick: () => { if (name.value.trim()) save({ doors: [...doors(), { name: name.value.trim() }] }); } }, t("Add door"))),
     el("div", { class: "row", style: { marginTop: "10px" } }, el("button", { onclick: async () => { await loadIntercom(); render(); } }, t("Refresh"))));
   view.append(box);
+  // Panels: ready once connected with the intercom on (their account is made then).
+  view.append(el("div", { class: "box" }, el("h3", {}, t("Panels")),
+    ...(ic.panels.length ? ic.panels.map((p) => el("div", { class: "row" }, el("span", { class: "grow" }, p.name),
+      el("span", { class: "muted" }, p.registered ? t("● Ready to ring") : t("○ Not connected to the intercom"))))
+      : [el("p", { class: "muted" }, t("No panels paired."))])));
 }
 
 // The integration's secret, hidden until asked: Home Assistant gets it on its own, this is

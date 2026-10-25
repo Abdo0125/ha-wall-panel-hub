@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.38.0
+
+- Intercom, B2: panels ring. Each panel gets its own account the first time it connects
+  with the intercom on (app 0.38.0); its SIP goes inside its connection to the add-on, so
+  it works through Home Assistant's address too. A door's call rings its panels (all, or
+  those ticked), for 30 s; the first to answer takes it, with sound both ways.
+- A door with its own SIP server (Dahua VTO, Akuvox...): the add-on registers there as one
+  of its indoor monitors (its address, an account made in the door's pages, its password),
+  and the door's calls to that account ring the panels. Its own monitors keep working.
+- Project, Intercom: each door's way, the panels it rings, and the panels ready to ring.
+
 ## 0.37.1
 
 - Intercom: Asterisk stopped at once ("modules.conf invalid or missing"): its directories were

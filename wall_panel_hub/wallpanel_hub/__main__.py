@@ -27,6 +27,7 @@ async def main() -> None:
         secret = load_secret(cfg.data_dir)
         gateway.speakers = Speakers(store, gateway, secret)
         intercom = Intercom(cfg.data_dir, cfg.sip_port)
+        gateway.intercom = intercom
         await intercom.apply()
 
         async def floors_changed(cat: dict) -> None:

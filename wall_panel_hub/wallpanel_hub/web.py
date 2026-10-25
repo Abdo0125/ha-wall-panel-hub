@@ -261,6 +261,21 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
 
     async def intercom_view():
         registered = await intercom.registered()
+        registrations = await intercom.registrations()
+
+        def door(d: dict) -> dict:
+            if d.get("mode") == "server":
+                status = registrations.get(d["username"])
+                where = d["server"] if status == "Registered" else None
+            else:
+                status, where = None, registered.get(d["username"])
+            shown = {k: v for k, v in d.items() if k != "secret"}
+            return {**shown, "mode": d.get("mode", "here"), "panels": d.get("panels"),
+                    "secret_set": bool(d.get("secret")), "registered": where, "registration": status}
+
+        panels = [{"id": pid, "name": p.name,
+                   "registered": registered.get(intercom.accounts.get(pid, {}).get("username", ""))}
+                  for pid, p in store.panels.items()]
         return {
             "enabled": intercom.settings["enabled"],
             "installed": bool(intercom.binary),
@@ -268,7 +283,8 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
             "sip_port": intercom.sip_port,
             "addresses": await intercom_addresses(),
             "echo": ECHO,
-            "doors": [{**d, "registered": registered.get(d["username"])} for d in intercom.doors],
+            "doors": [door(d) for d in intercom.doors],
+            "panels": panels,
         }
 
     async def get_intercom(_):
@@ -311,6 +327,8 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         pid = request.match_info["pid"]
         store.revoke(pid)
         await gateway.disconnect(pid)
+        if intercom is not None:
+            await intercom.forget(pid)
         if gateway.speakers:
             await gateway.speakers.gone(pid)
         return web.json_response({"ok": True})

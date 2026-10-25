@@ -9,6 +9,7 @@ The hub opens its own connection to HA and forwards only what the panel may do:
 - wallpanel/* commands (layout, configuration, card registry), answered by the hub itself;
 - the pictures of its cameras (wallpanel/camera/*), fetched from HA's HTTP API by the hub;
 - its speaker (wallpanel/speaker/*): its state for HA's integration, HA's commands to it.
+- the intercom (wallpanel/intercom/*): its SIP to Asterisk (intercom.py), carried here.
 
 Layouts are stored in format v2 (cards). A panel asks for it with "schema": 2 in
 wallpanel/layout/subscribe or /get; an older app, which does not, gets format v1.
@@ -23,6 +24,7 @@ import re
 import aiohttp
 from aiohttp import WSMsgType, web
 
+from .intercom import DOMAIN
 from .access import EditRefused, role_caps
 from .cards import REGISTRY
 from . import panel_settings, project_settings
@@ -116,6 +118,8 @@ class PanelConnection:
         self.streams: dict[int, asyncio.Task] = {}
         # wallpanel/speaker/subscribe: HA's commands to the panel's speaker go there.
         self.speaker_subs: set[int] = set()
+        # wallpanel/intercom/subscribe: the panel's SIP WebSocket to Asterisk, by subscription.
+        self.tunnels: dict[int, aiohttp.ClientWebSocketResponse] = {}
 
     @property
     def allowed(self) -> set[str]:
@@ -244,6 +248,56 @@ class PanelConnection:
         for task in self.streams.values():
             task.cancel()
         self.streams.clear()
+        for ws in self.tunnels.values():
+            asyncio.ensure_future(ws.close())
+        self.tunnels.clear()
+
+    async def intercom(self, mid, kind: str, msg: dict) -> None:
+        """SIP between the panel and Asterisk, as text both ways: the panel's messages in
+        wallpanel/intercom/send, Asterisk's as events of its wallpanel/intercom/subscribe."""
+        ic = self.gateway.intercom
+        if kind == "wallpanel/intercom/subscribe":
+            if ic is None or not ic.running():
+                await self.send(_error(mid, "off", "the intercom is off"))
+                return
+            account = await ic.panel_account(self.panel_id)
+            try:
+                ws = await ic.connect(self.gateway.session)
+            except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as e:
+                await self.send(_error(mid, "unavailable", f"Asterisk: {e}"))
+                return
+            self.tunnels[mid] = ws
+            await self.send({"id": mid, "type": "result", "success": True,
+                             "result": {**account, "domain": DOMAIN}})
+            asyncio.create_task(self._carry(mid, ws))
+        elif kind == "wallpanel/intercom/send":
+            ws = self.tunnels.get(msg.get("subscription"))
+            text = msg.get("sip")
+            if ws is None or ws.closed or not isinstance(text, str) or len(text) > 65536:
+                await self.send(_error(mid, "closed", "no SIP connection"))
+                return
+            await ws.send_str(text)
+            await self.send({"id": mid, "type": "result", "success": True, "result": None})
+        else:  # unsubscribe
+            ws = self.tunnels.pop(msg.get("subscription"), None)
+            if ws is not None:
+                await ws.close()
+            await self.send({"id": mid, "type": "result", "success": True, "result": None})
+
+    async def _carry(self, sub: int, ws) -> None:
+        try:
+            async for m in ws:
+                if m.type != WSMsgType.TEXT:
+                    break
+                await self.send({"id": sub, "type": "event", "event": {"sip": m.data}})
+        except Exception as e:  # the panel gone...
+            log.info("intercom for panel %s: %s", self.panel_id, e)
+        finally:
+            if self.tunnels.get(sub) is ws:
+                del self.tunnels[sub]
+                await ws.close()
+                if not self.ws.closed:
+                    await self.send({"id": sub, "type": "event", "event": {"end": "closed"}})
 
     async def send(self, data: dict) -> None:
         if not self.ws.closed:
@@ -398,6 +452,8 @@ class PanelConnection:
             if kind == "wallpanel/speaker/subscribe":
                 self.speaker_subs.add(mid)
             await self.send({"id": mid, "type": "result", "success": True, "result": None})
+        elif kind in ("wallpanel/intercom/subscribe", "wallpanel/intercom/send", "wallpanel/intercom/unsubscribe"):
+            await self.intercom(mid, kind, msg)
         elif kind == "wallpanel/registry/get":
             await self.send({"id": mid, "type": "result", "success": True, "result": REGISTRY})
         else:
@@ -478,6 +534,8 @@ class Gateway:
         self.pictures: dict[str, dict] = {}
         # Panels as speakers in HA (speakers.Speakers).
         self.speakers = None
+        # The intercom (intercom.Intercom).
+        self.intercom = None
 
     async def speaker_command(self, panel_id: str, command: dict) -> bool:
         """HA's command to a panel's speaker, to its connection that listens. False if none."""
