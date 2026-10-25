@@ -340,6 +340,8 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
             raise web.HTTPNotFound()
         store.rename(pid, str((await request.json()).get("name", "")).strip() or "Panel")
         await gateway.notify_config(pid)
+        if intercom is not None and pid in intercom.accounts:
+            await intercom.apply()  # its name on its calls
         if gateway.speakers:
             await gateway.speakers.changed()
         return web.json_response({"ok": True})

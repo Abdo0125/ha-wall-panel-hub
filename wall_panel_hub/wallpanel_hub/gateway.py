@@ -24,7 +24,7 @@ import re
 import aiohttp
 from aiohttp import WSMsgType, web
 
-from .intercom import DOMAIN
+from .intercom import DOMAIN, contacts
 from .access import EditRefused, role_caps
 from .cards import REGISTRY
 from . import panel_settings, project_settings
@@ -270,6 +270,13 @@ class PanelConnection:
             await self.send({"id": mid, "type": "result", "success": True,
                              "result": {**account, "domain": DOMAIN}})
             asyncio.create_task(self._carry(mid, ws))
+        elif kind == "wallpanel/intercom/contacts":
+            if ic is None:
+                await self.send(_error(mid, "off", "the intercom is off"))
+                return
+            names = {pid: p.name for pid, p in self.gateway.store.panels.items()}
+            await self.send({"id": mid, "type": "result", "success": True,
+                             "result": contacts(ic.doors, ic.accounts, names, self.panel_id)})
         elif kind == "wallpanel/intercom/send":
             ws = self.tunnels.get(msg.get("subscription"))
             text = msg.get("sip")
@@ -452,7 +459,8 @@ class PanelConnection:
             if kind == "wallpanel/speaker/subscribe":
                 self.speaker_subs.add(mid)
             await self.send({"id": mid, "type": "result", "success": True, "result": None})
-        elif kind in ("wallpanel/intercom/subscribe", "wallpanel/intercom/send", "wallpanel/intercom/unsubscribe"):
+        elif kind in ("wallpanel/intercom/subscribe", "wallpanel/intercom/send", "wallpanel/intercom/unsubscribe",
+                      "wallpanel/intercom/contacts"):
             await self.intercom(mid, kind, msg)
         elif kind == "wallpanel/registry/get":
             await self.send({"id": mid, "type": "result", "success": True, "result": REGISTRY})

@@ -36,6 +36,7 @@ ECHO = "600"
 # How long a door's call rings the panels.
 RING_S = 30
 NAME = re.compile(r"[^\n\r\[\];=\"]{1,40}")
+NAME_UNSAFE = re.compile(r"[\n\r\[\];=\"\\]")
 HOST = re.compile(r"[A-Za-z0-9.-]{1,253}(:\d{1,5})?")
 USER = re.compile(r"[A-Za-z0-9_.+#*-]{1,40}")
 MODES = ("here", "server")
@@ -88,7 +89,8 @@ def pjsip_conf(doors: list[dict], sip_port: int, panels: list[dict] = ()) -> str
         ]
         if d.get("mode") == "server":
             host = d["server"]
-            lines += endpoint + [f"outbound_auth={user}", f"aors={user}", "",
+            lines += endpoint + [f"outbound_auth={user}", f"aors={user}",
+                                 f"from_user={d['user']}", f"from_domain={host.split(':')[0]}", "",
                                  # Asterisk as one of the door's indoor monitors.
                                  f"[{user}]", "type=registration", "transport=transport-udp", f"outbound_auth={user}",
                                  f"server_uri=sip:{host}", f"client_uri=sip:{d['user']}@{host}",
@@ -105,9 +107,11 @@ def pjsip_conf(doors: list[dict], sip_port: int, panels: list[dict] = ()) -> str
                                  f"[{user}]", "type=aor", "max_contacts=1", "remove_existing=yes", "qualify_frequency=30", ""]
     for p in panels:
         user = p["username"]
+        name = NAME_UNSAFE.sub("", p.get("name") or "Panel")[:40] or "Panel"
         lines += [
             f"[{user}]", "type=endpoint", "context=from-panel", "disallow=all", "allow=ulaw,alaw",
-            "webrtc=yes", "dtls_auto_generate_cert=yes", "timers=no", f"auth={user}", f"aors={user}", "",
+            "webrtc=yes", "dtls_auto_generate_cert=yes", "timers=no", f"callerid=\"{name}\" <{user}>",
+            f"auth={user}", f"aors={user}", "",
             f"[{user}]", "type=auth", "auth_type=userpass", f"username={user}", f"password={p['password']}", "",
             f"[{user}]", "type=aor", "max_contacts=1", "remove_existing=yes", "",
         ]
@@ -133,8 +137,28 @@ def extensions_conf(doors: list[dict] = (), panels: dict[str, str] | None = None
         for ext in exts:
             lines += [f"exten => {ext},1,{ring}", " same => n,Hangup()"]
         lines.append("")
-    lines += ["[from-panel]"] + echo + ["exten => _[0-9a-zA-Z*#+].,1,Hangup()", ""]
+    # A panel calls: a door registered here, another panel, or a number through the first
+    # door with its own server (its other monitors, the door station itself).
+    lines += ["[from-panel]"] + echo
+    for d in doors:
+        if d.get("mode") != "server":
+            lines += [f"exten => {d['username']},1,Dial(PJSIP/{d['username']},{RING_S})", " same => n,Hangup()"]
+    for u in panels.values():
+        lines += [f"exten => {u},1,Dial(PJSIP/{u},{RING_S})", " same => n,Hangup()"]
+    server = next((d for d in doors if d.get("mode") == "server"), None)
+    numbers = f"Dial(PJSIP/${{EXTEN}}@{server['username']},{RING_S})" if server else "Congestion(5)"
+    lines += [f"exten => _[0-9*#+]!,1,{numbers}", " same => n,Hangup()", ""]
     return "\n".join(lines)
+
+
+def contacts(doors: list[dict], accounts: dict[str, dict], names: dict[str, str], panel_id: str) -> dict:
+    """What a panel may call: the doors registered here and the other panels, by name; numbers
+    go through the first door with its own server (its name in "via"), else only the echo."""
+    found = [{"name": d["name"], "number": d["username"], "kind": "door"} for d in doors if d.get("mode") != "server"]
+    found += sorted(({"name": names.get(pid) or "Panel", "number": a["username"], "kind": "panel"}
+                     for pid, a in accounts.items() if pid != panel_id), key=lambda c: c["name"].lower())
+    server = next((d for d in doors if d.get("mode") == "server"), None)
+    return {"contacts": found, "via": server["name"] if server else None, "echo": ECHO}
 
 
 def asterisk_conf(root: Path) -> str:
@@ -182,6 +206,8 @@ class Intercom:
         self.process: asyncio.subprocess.Process | None = None
         self.task: asyncio.Task | None = None
         self.binary = shutil.which("asterisk")
+        # Panels' names (store.py), for their calls.
+        self.panel_names = lambda: {}
 
     # ---- settings ----
 
@@ -280,7 +306,8 @@ class Intercom:
         etc = self.root / "etc"
         for sub in ("etc", "db", "keys", "spool", "log"):
             (self.root / sub).mkdir(parents=True, exist_ok=True)
-        panels = [self.accounts[p] for p in sorted(self.accounts)]
+        names = self.panel_names()
+        panels = [{**self.accounts[p], "name": names.get(p)} for p in sorted(self.accounts)]
         files = {**STATIC_CONF, "asterisk.conf": asterisk_conf(self.root),
                  "pjsip.conf": pjsip_conf(self.doors, self.sip_port, panels),
                  "extensions.conf": extensions_conf(self.doors, {p: a["username"] for p, a in self.accounts.items()})}

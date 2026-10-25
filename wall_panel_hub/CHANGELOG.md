@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.39.0
+
+- Intercom: panels call too (app 0.39.0): a call button in the top bar opens the doors
+  registered here and the other panels, and a keypad. A number goes through the first door
+  with its own SIP server (its other monitors, the door station itself), as its indoor
+  monitor; 600 is the echo test. Panels' calls carry their names.
+
 ## 0.38.2
 
 - Intercom: doors' calls without session timers (some door stations end a call that
