@@ -32,6 +32,8 @@ RTP_START, RTP_END = 10000, 10199
 # Asterisk's web server, for panels' SIP over WebSocket: on this machine only, through the hub.
 HTTP_PORT = 18088
 DOMAIN = "wallpanel"
+# Asterisk's database family: the panels whose calls' sound comes through the hub (relay.py).
+RELAY_DB = "wallpanel_relay"
 ECHO = "600"
 # How long a door's call rings the panels.
 RING_S = 30
@@ -117,8 +119,21 @@ def pjsip_conf(doors: list[dict], sip_port: int, panels: list[dict] = ()) -> str
             f"auth={user}", f"aors={user}", "",
             f"[{user}]", "type=auth", "auth_type=userpass", f"username={user}", f"password={p['password']}", "",
             f"[{user}]", "type=aor", "max_contacts=1", "remove_existing=yes", "",
+            # The same panel, its sound through the hub (relay.py): plain RTP, on this machine.
+            f"[{relay_user(user)}]", "type=endpoint", "context=from-panel", "disallow=all", "allow=ulaw,alaw",
+            "transport=transport-ws", "direct_media=no", "rtp_symmetric=yes", "timers=no",
+            f"callerid=\"{name}\" <{user}>", f"auth={user}", f"aors={user}", "",
         ]
     return "\n".join(lines) + "\n"
+
+
+def relay_user(user: str) -> str:
+    return f"{user}_relay"
+
+
+def dial(user: str) -> str:
+    """A panel's channel: its relay endpoint while its sound comes through the hub."""
+    return f"${{IF(${{DB_EXISTS({RELAY_DB}/{user})}}?PJSIP/{relay_user(user)}:PJSIP/{user})}}"
 
 
 def extensions_conf(doors: list[dict] = (), panels: dict[str, str] | None = None) -> str:
@@ -129,7 +144,7 @@ def extensions_conf(doors: list[dict] = (), panels: dict[str, str] | None = None
     for d in doors:
         wanted = d.get("panels")
         users = [u for pid, u in panels.items() if wanted is None or pid in wanted]
-        ring = f"Dial({'&'.join(f'PJSIP/{u}' for u in users)},{RING_S})" if users else "Busy(5)"
+        ring = f"Dial({'&'.join(dial(u) for u in users)},{RING_S})" if users else "Busy(5)"
         lines += [f"[door-{d['id']}]"]
         if d.get("mode") != "server":
             lines += [f"; {ECHO}: what is said comes back, to check the sound's way."] + echo
@@ -147,7 +162,7 @@ def extensions_conf(doors: list[dict] = (), panels: dict[str, str] | None = None
         if d.get("mode") != "server":
             lines += [f"exten => {d['username']},1,Dial(PJSIP/{d['username']},{RING_S})", " same => n,Hangup()"]
     for u in panels.values():
-        lines += [f"exten => {u},1,Dial(PJSIP/{u},{RING_S})", " same => n,Hangup()"]
+        lines += [f"exten => {u},1,Dial({dial(u)},{RING_S})", " same => n,Hangup()"]
     server = next((d for d in doors if d.get("mode") == "server"), None)
     numbers = f"Dial(PJSIP/${{EXTEN}}@{server['username']},{RING_S})" if server else "Congestion(5)"
     lines += [f"exten => _[0-9*#+]!,1,{numbers}", " same => n,Hangup()", ""]
@@ -339,8 +354,16 @@ class Intercom:
 
     async def _after_start(self) -> None:
         await asyncio.sleep(5)
-        if self.running() and self.settings.get("sip_log"):
+        if not self.running():
+            return
+        # Panels say again how their sound goes when they connect.
+        await self.cli(f"database deltree {RELAY_DB}")
+        if self.settings.get("sip_log"):
             await self.sip_logger()
+
+    async def relay(self, user: str, on: bool) -> None:
+        """The panel's calls' sound through the hub (on), or by WebRTC."""
+        await self.cli(f"database put {RELAY_DB} {user} 1" if on else f"database del {RELAY_DB} {user}")
 
     async def _run(self) -> None:
         Path("/run/asterisk").mkdir(parents=True, exist_ok=True)
@@ -422,6 +445,18 @@ def parse_contacts(text: str) -> dict[str, str]:
 def parse_registrations(text: str) -> dict[str, str]:
     """`pjsip show registrations` -> {registration: status}."""
     return dict(REGISTRATION.findall(text))
+
+
+async def networks() -> list[str]:
+    """This machine's IPv4 networks, as address/prefix (the LAN, Tailscale's...; not loopback or HA's own)."""
+    try:
+        proc = await asyncio.create_subprocess_exec("ip", "-4", "-o", "addr", stdout=asyncio.subprocess.PIPE,
+                                                    stderr=asyncio.subprocess.DEVNULL)
+        out, _ = await asyncio.wait_for(proc.communicate(), 5)
+    except (OSError, asyncio.TimeoutError):
+        return []
+    found = re.findall(r"inet (\d+\.\d+\.\d+\.\d+/\d+)", out.decode())
+    return [a for a in found if not a.startswith(("127.", "172.30.", "172.17."))]
 
 
 async def addresses() -> list[str]:

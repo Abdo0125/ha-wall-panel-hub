@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.40.0
+
+- Intercom: a call's sound without a VPN (app 0.40.0). A panel that cannot reach this
+  machine (remote, through Home Assistant's address or Nabu Casa) now has its calls' sound
+  carried by the hub inside its own connection, as G.711, instead of WebRTC. The panel sees
+  for itself which way works (Asterisk's SIP port answers on one of this machine's
+  addresses, or not) and tells the hub, which rings it on the matching endpoint.
+
 ## 0.39.1
 
 - Intercom: a door's call is answered with one codec. A phone calling through the door's

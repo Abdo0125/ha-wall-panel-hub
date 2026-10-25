@@ -24,7 +24,8 @@ import re
 import aiohttp
 from aiohttp import WSMsgType, web
 
-from .intercom import DOMAIN, contacts
+from .intercom import DOMAIN, contacts, networks
+from . import relay as sound
 from .access import EditRefused, role_caps
 from .cards import REGISTRY
 from . import panel_settings, project_settings
@@ -120,6 +121,11 @@ class PanelConnection:
         self.speaker_subs: set[int] = set()
         # wallpanel/intercom/subscribe: the panel's SIP WebSocket to Asterisk, by subscription.
         self.tunnels: dict[int, aiohttp.ClientWebSocketResponse] = {}
+        # Subscriptions whose calls' sound comes through the hub (relay.py), and those calls by Call-ID.
+        self.relayed: set[int] = set()
+        self.relays: dict[str, sound.Relay] = {}
+        self.frames: asyncio.Queue | None = None
+        self.frames_task: asyncio.Task | None = None
 
     @property
     def allowed(self) -> set[str]:
@@ -251,6 +257,11 @@ class PanelConnection:
         for ws in self.tunnels.values():
             asyncio.ensure_future(ws.close())
         self.tunnels.clear()
+        for r in self.relays.values():
+            r.close()
+        self.relays.clear()
+        if self.frames_task is not None:
+            self.frames_task.cancel()
 
     async def intercom(self, mid, kind: str, msg: dict) -> None:
         """SIP between the panel and Asterisk, as text both ways: the panel's messages in
@@ -267,8 +278,9 @@ class PanelConnection:
                 await self.send(_error(mid, "unavailable", f"Asterisk: {e}"))
                 return
             self.tunnels[mid] = ws
+            # The networks this machine is on: the panel sees if it has a path here for WebRTC.
             await self.send({"id": mid, "type": "result", "success": True,
-                             "result": {**account, "domain": DOMAIN}})
+                             "result": {**account, "domain": DOMAIN, "networks": await networks(), "sip_port": ic.sip_port}})
             asyncio.create_task(self._carry(mid, ws))
         elif kind == "wallpanel/intercom/contacts":
             if ic is None:
@@ -277,15 +289,29 @@ class PanelConnection:
             names = {pid: p.name for pid, p in self.gateway.store.panels.items()}
             await self.send({"id": mid, "type": "result", "success": True,
                              "result": contacts(ic.doors, ic.accounts, names, self.panel_id)})
+        elif kind == "wallpanel/intercom/mode":
+            # {subscription, relay}: the panel's calls' sound through the hub, or by WebRTC.
+            sub = msg.get("subscription")
+            if sub not in self.tunnels or ic is None:
+                await self.send(_error(mid, "closed", "no SIP connection"))
+                return
+            on = bool(msg.get("relay"))
+            (self.relayed.add if on else self.relayed.discard)(sub)
+            await ic.relay((await ic.panel_account(self.panel_id))["username"], on)
+            await self.send({"id": mid, "type": "result", "success": True, "result": None})
         elif kind == "wallpanel/intercom/send":
-            ws = self.tunnels.get(msg.get("subscription"))
+            sub = msg.get("subscription")
+            ws = self.tunnels.get(sub)
             text = msg.get("sip")
             if ws is None or ws.closed or not isinstance(text, str) or len(text) > 65536:
                 await self.send(_error(mid, "closed", "no SIP connection"))
                 return
+            if sub in self.relayed:
+                text = await self._relayed(sub, text, from_panel=True)
             await ws.send_str(text)
             await self.send({"id": mid, "type": "result", "success": True, "result": None})
         else:  # unsubscribe
+            self.relayed.discard(msg.get("subscription"))
             ws = self.tunnels.pop(msg.get("subscription"), None)
             if ws is not None:
                 await ws.close()
@@ -296,7 +322,10 @@ class PanelConnection:
             async for m in ws:
                 if m.type != WSMsgType.TEXT:
                     break
-                await self.send({"id": sub, "type": "event", "event": {"sip": m.data}})
+                text = m.data
+                if sub in self.relayed:
+                    text = await self._relayed(sub, text, from_panel=False)
+                await self.send({"id": sub, "type": "event", "event": {"sip": text}})
         except Exception as e:  # the panel gone...
             log.info("intercom for panel %s: %s", self.panel_id, e)
         finally:
@@ -305,6 +334,50 @@ class PanelConnection:
                 await ws.close()
                 if not self.ws.closed:
                     await self.send({"id": sub, "type": "event", "event": {"end": "closed"}})
+
+    async def _relayed(self, sub: int, text: str, from_panel: bool) -> str:
+        """A SIP message of a relayed call: its sound's port opened, the panel's SDP given the
+        hub's address, Asterisk's where to send; the port closed when the call ends."""
+        cid = sound.call_id(text)
+        if cid is None:
+            return text
+        if sound.has_sdp(text):
+            relay = self.relays.get(cid)
+            if relay is None:
+                for old in [c for c, r in self.relays.items() if r.idle()]:
+                    self.relays.pop(old).close()
+                relay = self.relays[cid] = await sound.Relay.open(lambda payload, pt: self._frame(sub, cid, payload, pt))
+            if from_panel:
+                text = sound.with_address(text, relay.port)
+            elif (port := sound.media_port(text)) is not None:
+                relay.asterisk = (sound.HOST, port)
+        if sound.ends(text) and (relay := self.relays.pop(cid, None)) is not None:
+            relay.close()
+        return text
+
+    def frame(self, msg: dict) -> None:
+        """wallpanel/intercom/rtp {call, pt, rtp}: a frame of the panel's sound; no answer."""
+        relay = self.relays.get(msg.get("call"))
+        data = msg.get("rtp")
+        if relay is None or not isinstance(data, str) or len(data) > 2000:
+            return
+        try:
+            relay.send(base64.b64decode(data), int(msg.get("pt") or 0))
+        except (ValueError, TypeError):
+            pass
+
+    def _frame(self, sub: int, cid: str, payload: bytes, pt: int) -> None:
+        # In order, and never more than a second behind: frames late are dropped.
+        if self.frames is None:
+            self.frames = asyncio.Queue(maxsize=50)
+            self.frames_task = asyncio.create_task(self._send_frames())
+        if not self.frames.full():
+            self.frames.put_nowait({"id": sub, "type": "event",
+                                    "event": {"rtp": base64.b64encode(payload).decode(), "pt": pt, "call": cid}})
+
+    async def _send_frames(self) -> None:
+        while not self.ws.closed:
+            await self.send(await self.frames.get())
 
     async def send(self, data: dict) -> None:
         if not self.ws.closed:
@@ -459,8 +532,10 @@ class PanelConnection:
             if kind == "wallpanel/speaker/subscribe":
                 self.speaker_subs.add(mid)
             await self.send({"id": mid, "type": "result", "success": True, "result": None})
+        elif kind == "wallpanel/intercom/rtp":
+            self.frame(msg)
         elif kind in ("wallpanel/intercom/subscribe", "wallpanel/intercom/send", "wallpanel/intercom/unsubscribe",
-                      "wallpanel/intercom/contacts"):
+                      "wallpanel/intercom/contacts", "wallpanel/intercom/mode"):
             await self.intercom(mid, kind, msg)
         elif kind == "wallpanel/registry/get":
             await self.send({"id": mid, "type": "result", "success": True, "result": REGISTRY})
