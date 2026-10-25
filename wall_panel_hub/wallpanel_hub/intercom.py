@@ -82,6 +82,8 @@ def pjsip_conf(doors: list[dict], sip_port: int, panels: list[dict] = ()) -> str
             "allow=ulaw,alaw,g722,h264,vp8",
             # Behind NAT or a VPN: answer where the door's packets come from.
             "direct_media=no", "rtp_symmetric=yes", "force_rport=yes", "rewrite_contact=yes",
+            # No session timers: some door stations end a call that requires them.
+            "timers=no",
             f"callerid=\"{d['name']}\" <{user}>",
         ]
         if d.get("mode") == "server":
@@ -159,7 +161,9 @@ def asterisk_conf(root: Path) -> str:
 STATIC_CONF = {
     "modules.conf": "[modules]\nautoload=yes\n; Old SIP channel: pjsip has the port.\nnoload => chan_sip.so\nnoload => chan_iax2.so\nnoload => chan_skinny.so\nnoload => chan_mgcp.so\nnoload => chan_unistim.so\n",
     "logger.conf": "[general]\n[logfiles]\nconsole => notice,warning,error,verbose\nmessages.log => notice,warning,error\n",
-    "rtp.conf": f"[general]\nrtpstart={RTP_START}\nrtpend={RTP_END}\nicesupport=yes\n",
+    # Panels' calls offer this machine's addresses but HA's and Docker's own (and IPv6 link-local).
+    "rtp.conf": f"[general]\nrtpstart={RTP_START}\nrtpend={RTP_END}\nicesupport=yes\n"
+                "ice_deny=172.30.0.0/16\nice_deny=172.17.0.0/16\nice_deny=fe80::/10\nice_deny=fd0c:ac1e:2100::/48\n",
     "http.conf": f"[general]\nenabled=yes\nbindaddr=127.0.0.1\nbindport={HTTP_PORT}\n",
 }
 

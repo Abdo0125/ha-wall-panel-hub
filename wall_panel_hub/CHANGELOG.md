@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.38.2
+
+- Intercom: doors' calls without session timers (some door stations end a call that
+  requires them); panels' calls no longer offer HA's and Docker's own addresses.
+
 ## 0.38.1
 
 - Intercom: each call's steps in the add-on's log, and a "SIP log" switch (every SIP message,
