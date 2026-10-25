@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.41.0
+
+- Intercom, B4 (app 0.41.0): doors open from the panels. Each door, and each of the
+  project's other devices, opens by a code sent during the call (DTMF, by SIP INFO), by its
+  own address (Dahua's accessControl.cgi: Digest or Basic sign-in; its password stays in the
+  add-on), or by a device of Home Assistant's (a lock, switch, script, button, cover). An
+  Open button on the call, and beside the doors in the panel's call list.
+- A camera of Home Assistant's for each door and device, shown on the panel while it rings
+  and during the call (the panel may watch it even when it is not on its dashboard).
+- Other devices: monitors, doorbells or phones on a door's own SIP server, with a name, a
+  number, the door they go through, a camera and an opening. The panels call them by name,
+  and a call from one shows its name and camera. A door's call tells the panel which door it
+  is (X-Wallpanel-Door); a door with its own server now passes the caller's number on.
+
 ## 0.40.0
 
 - Intercom: a call's sound without a VPN (app 0.40.0). A panel that cannot reach this

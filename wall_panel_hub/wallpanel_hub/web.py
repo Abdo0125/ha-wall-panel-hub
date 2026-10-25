@@ -270,8 +270,13 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
             else:
                 status, where = None, registered.get(d["username"])
             shown = {k: v for k, v in d.items() if k != "secret"}
-            return {**shown, "mode": d.get("mode", "here"), "panels": d.get("panels"),
+            return {**shown, "mode": d.get("mode", "here"), "panels": d.get("panels"), "open": opening(d.get("open")),
                     "secret_set": bool(d.get("secret")), "registered": where, "registration": status}
+
+        def opening(o: dict | None) -> dict:
+            # The door's own password stays in the add-on.
+            o = o or {"kind": "none"}
+            return {**{k: v for k, v in o.items() if k != "password"}, "password_set": bool(o.get("password"))}
 
         panels = [{"id": pid, "name": p.name,
                    "registered": registered.get(intercom.accounts.get(pid, {}).get("username", ""))}
@@ -285,6 +290,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
             "addresses": await intercom_addresses(),
             "echo": ECHO,
             "doors": [door(d) for d in intercom.doors],
+            "contacts": [{**c, "open": opening(c.get("open"))} for c in intercom.extra],
             "panels": panels,
         }
 

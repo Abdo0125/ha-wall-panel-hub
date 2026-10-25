@@ -26,6 +26,7 @@ from aiohttp import WSMsgType, web
 
 from .intercom import DOMAIN, contacts, networks
 from . import relay as sound
+from . import door_open
 from .access import EditRefused, role_caps
 from .cards import REGISTRY
 from . import panel_settings, project_settings
@@ -129,7 +130,16 @@ class PanelConnection:
 
     @property
     def allowed(self) -> set[str]:
-        return layout_entities(self.gateway.store.get_layout(self.panel_id))
+        return layout_entities(self.gateway.store.get_layout(self.panel_id)) | self.door_cameras()
+
+    def door_cameras(self) -> set[str]:
+        """The cameras of the doors that ring this panel and of the project's devices (intercom)."""
+        ic = getattr(self.gateway, "intercom", None)
+        if ic is None or not ic.settings.get("enabled"):
+            return set()
+        found = {d.get("camera") for d in ic.doors if d.get("panels") is None or self.panel_id in d["panels"]}
+        found |= {c.get("camera") for c in ic.extra}
+        return {c for c in found if c}
 
     async def project_settings(self, mid, kind: str, msg: dict) -> None:
         store = self.gateway.store
@@ -288,7 +298,28 @@ class PanelConnection:
                 return
             names = {pid: p.name for pid, p in self.gateway.store.panels.items()}
             await self.send({"id": mid, "type": "result", "success": True,
-                             "result": contacts(ic.doors, ic.accounts, names, self.panel_id)})
+                             "result": contacts(ic.doors, ic.accounts, names, self.panel_id, ic.extra)})
+        elif kind == "wallpanel/intercom/open":
+            # {target}: a door's code comes back for the panel to send in its call; else opened here.
+            how = ic.opener(msg.get("target"), self.panel_id) if ic is not None else None
+            if not how or how.get("kind", "none") == "none":
+                await self.send(_error(mid, "unavailable", "this door does not open from here"))
+                return
+            try:
+                if how["kind"] == "dtmf":
+                    result = {"dtmf": how["code"]}
+                elif how["kind"] == "http":
+                    await door_open.by_address(self.gateway.session, how["url"], how.get("user", ""), how.get("password", ""))
+                    result = {"opened": True}
+                else:
+                    await door_open.by_device(self.gateway.session, self.gateway.ha_http, self.gateway.ha_auth, how["entity"])
+                    result = {"opened": True}
+            except door_open.OpenFailed as e:
+                log.warning("panel %s: door %s not opened: %s", self.panel_id, msg.get("target"), e)
+                await self.send(_error(mid, "failed", str(e)))
+                return
+            log.info("panel %s opens %s (%s)", self.panel_id, msg.get("target"), how["kind"])
+            await self.send({"id": mid, "type": "result", "success": True, "result": result})
         elif kind == "wallpanel/intercom/mode":
             # {subscription, relay}: the panel's calls' sound through the hub, or by WebRTC.
             sub = msg.get("subscription")
@@ -535,7 +566,7 @@ class PanelConnection:
         elif kind == "wallpanel/intercom/rtp":
             self.frame(msg)
         elif kind in ("wallpanel/intercom/subscribe", "wallpanel/intercom/send", "wallpanel/intercom/unsubscribe",
-                      "wallpanel/intercom/contacts", "wallpanel/intercom/mode"):
+                      "wallpanel/intercom/contacts", "wallpanel/intercom/mode", "wallpanel/intercom/open"):
             await self.intercom(mid, kind, msg)
         elif kind == "wallpanel/registry/get":
             await self.send({"id": mid, "type": "result", "success": True, "result": REGISTRY})

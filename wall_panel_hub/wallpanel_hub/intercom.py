@@ -43,6 +43,15 @@ HOST = re.compile(r"[A-Za-z0-9.-]{1,253}(:\d{1,5})?")
 USER = re.compile(r"[A-Za-z0-9_.+#*-]{1,40}")
 MODES = ("here", "server")
 MAX_DOORS = 20
+MAX_CONTACTS = 50
+# How a door opens (door_open.py): a code sent during the call, its own address, a device of HA's.
+OPENS = ("none", "dtmf", "http", "entity")
+DTMF = re.compile(r"[0-9*#A-D]{1,16}")
+URL = re.compile(r"https?://[^\s]{3,500}")
+CAMERA = re.compile(r"camera\.[a-z0-9_]{1,100}")
+OPENER = re.compile(r"(lock|switch|input_boolean|script|button|input_button|cover)\.[a-z0-9_]{1,100}")
+NUMBER = re.compile(r"[0-9*#+]{1,32}")
+KINDS = ("door", "panel", "phone")
 
 
 class IntercomInvalid(ValueError):
@@ -87,11 +96,14 @@ def pjsip_conf(doors: list[dict], sip_port: int, panels: list[dict] = ()) -> str
             "direct_media=no", "rtp_symmetric=yes", "force_rport=yes", "rewrite_contact=yes",
             # No session timers: some door stations end a call that requires them.
             "timers=no",
+            # The door's code (opening it) as it takes it: in the sound's way, else in SIP INFO.
+            "dtmf_mode=auto_info",
             # One codec in the answer: a phone told of several sends an UPDATE to keep one,
             # which a door's server may refuse (481), ending the call.
             "preferred_codec_only=yes",
-            f"callerid=\"{d['name']}\" <{user}>",
         ]
+        if d.get("mode") != "server":
+            endpoint.append(f"callerid=\"{d['name']}\" <{user}>")
         if d.get("mode") == "server":
             host = d["server"]
             lines += endpoint + [f"outbound_auth={user}", f"aors={user}",
@@ -136,15 +148,18 @@ def dial(user: str) -> str:
     return f"${{IF(${{DB_EXISTS({RELAY_DB}/{user})}}?PJSIP/{relay_user(user)}:PJSIP/{user})}}"
 
 
-def extensions_conf(doors: list[dict] = (), panels: dict[str, str] | None = None) -> str:
-    """[panels]: panel id -> its user name, for the panels with an account."""
+def extensions_conf(doors: list[dict] = (), panels: dict[str, str] | None = None, extra: list[dict] = ()) -> str:
+    """[panels]: panel id -> its user name, for the panels with an account; [extra]: the
+    project's other devices (contacts), called through their door's server."""
     panels = panels or {}
-    lines = ["; Written by Wall Panel Hub: changes here are lost."]
+    lines = ["; Written by Wall Panel Hub: changes here are lost.",
+             # Each door's call to a panel says which door: its name, camera and opening there.
+             "[wallpanel-door]", "exten => s,1,Set(PJSIP_HEADER(add,X-Wallpanel-Door)=${ARG1})", " same => n,Return()", ""]
     echo = [f"exten => {ECHO},1,Answer()", " same => n,Echo()", " same => n,Hangup()"]
     for d in doors:
         wanted = d.get("panels")
         users = [u for pid, u in panels.items() if wanted is None or pid in wanted]
-        ring = f"Dial({'&'.join(dial(u) for u in users)},{RING_S})" if users else "Busy(5)"
+        ring = f"Dial({'&'.join(dial(u) for u in users)},{RING_S},b(wallpanel-door^s^1({d['id']})))" if users else "Busy(5)"
         lines += [f"[door-{d['id']}]"]
         if d.get("mode") != "server":
             lines += [f"; {ECHO}: what is said comes back, to check the sound's way."] + echo
@@ -163,20 +178,46 @@ def extensions_conf(doors: list[dict] = (), panels: dict[str, str] | None = None
             lines += [f"exten => {d['username']},1,Dial(PJSIP/{d['username']},{RING_S})", " same => n,Hangup()"]
     for u in panels.values():
         lines += [f"exten => {u},1,Dial({dial(u)},{RING_S})", " same => n,Hangup()"]
+    servers = {d["id"]: d for d in doors if d.get("mode") == "server"}
+    for c in extra:
+        via = servers.get(c.get("via"))
+        if via is not None:
+            lines += [f"exten => c_{c['id']},1,Dial(PJSIP/{c['number']}@{via['username']},{RING_S})", " same => n,Hangup()"]
     server = next((d for d in doors if d.get("mode") == "server"), None)
     numbers = f"Dial(PJSIP/${{EXTEN}}@{server['username']},{RING_S})" if server else "Congestion(5)"
     lines += [f"exten => _[0-9*#+]!,1,{numbers}", " same => n,Hangup()", ""]
     return "\n".join(lines)
 
 
-def contacts(doors: list[dict], accounts: dict[str, dict], names: dict[str, str], panel_id: str) -> dict:
-    """What a panel may call: the doors registered here and the other panels, by name; numbers
-    go through the first door with its own server (its name in "via"), else only the echo."""
-    found = [{"name": d["name"], "number": d["username"], "kind": "door"} for d in doors if d.get("mode") != "server"]
+def _opens(o: dict | None) -> bool:
+    return bool(o) and o.get("kind", "none") != "none"
+
+
+def _in_call(o: dict | None) -> bool:
+    """Opens only during a call: its code goes in the call's sound (DTMF)."""
+    return bool(o) and o.get("kind") == "dtmf"
+
+
+def contacts(doors: list[dict], accounts: dict[str, dict], names: dict[str, str], panel_id: str,
+             extra: list[dict] = ()) -> dict:
+    """What a panel may call: the doors registered here, the project's other devices and the
+    other panels, by name; numbers go through the first door with its own server (its name in
+    "via"), else only the echo. "doors" and each device's "match" (the number it calls from)
+    name a call that comes, with its camera and whether it opens (target for .../open)."""
+    mine = [d for d in doors if d.get("panels") is None or panel_id in d["panels"]]
+    found = [{"name": d["name"], "number": d["username"], "kind": "door", "camera": d.get("camera"),
+              "open": _opens(d.get("open")), "in_call": _in_call(d.get("open")), "target": f"door:{d['id']}"}
+             for d in mine if d.get("mode") != "server"]
+    servers = {d["id"] for d in doors if d.get("mode") == "server"}
+    found += [{"name": c["name"], "number": f"c_{c['id']}", "kind": c.get("kind", "door"), "camera": c.get("camera"),
+               "open": _opens(c.get("open")), "in_call": _in_call(c.get("open")), "target": f"contact:{c['id']}", "match": c["number"]}
+              for c in extra if c.get("via") in servers]
     found += sorted(({"name": names.get(pid) or "Panel", "number": a["username"], "kind": "panel"}
                      for pid, a in accounts.items() if pid != panel_id), key=lambda c: c["name"].lower())
     server = next((d for d in doors if d.get("mode") == "server"), None)
-    return {"contacts": found, "via": server["name"] if server else None, "echo": ECHO}
+    return {"contacts": found, "via": server["name"] if server else None, "echo": ECHO,
+            "doors": [{"id": d["id"], "name": d["name"], "camera": d.get("camera"), "open": _opens(d.get("open")),
+                       "in_call": _in_call(d.get("open")), "target": f"door:{d['id']}"} for d in mine]}
 
 
 def asterisk_conf(root: Path) -> str:
@@ -215,7 +256,7 @@ class Intercom:
         self.file = data_dir / "intercom.json"
         self.root = data_dir / "asterisk"
         self.sip_port = sip_port
-        self.settings = {"enabled": False, "doors": [], "panels": {}}
+        self.settings = {"enabled": False, "doors": [], "panels": {}, "contacts": []}
         if self.file.exists():
             try:
                 self.settings = {**self.settings, **json.loads(self.file.read_text(encoding="utf-8"))}
@@ -239,6 +280,11 @@ class Intercom:
         return self.settings["doors"]
 
     @property
+    def extra(self) -> list[dict]:
+        """The project's other devices: monitors, doorbells, phones on a door's own server."""
+        return self.settings["contacts"]
+
+    @property
     def accounts(self) -> dict[str, dict]:
         """Panels' accounts, by panel id."""
         return self.settings["panels"]
@@ -256,7 +302,79 @@ class Intercom:
                 raise IntercomInvalid(f"at most {MAX_DOORS} doors")
             old = {d["id"]: d for d in self.doors}
             self.settings["doors"] = [self._door(w or {}, old) for w in wanted]
+        if "contacts" in changes:
+            wanted = changes["contacts"]
+            if not isinstance(wanted, list) or len(wanted) > MAX_CONTACTS:
+                raise IntercomInvalid(f"at most {MAX_CONTACTS} devices")
+            old = {c["id"]: c for c in self.extra}
+            servers = {d["id"] for d in self.doors if d.get("mode") == "server"}
+            self.settings["contacts"] = [self._contact(w or {}, old, servers) for w in wanted]
         self._save()
+
+    @staticmethod
+    def _camera(value) -> str | None:
+        if not value:
+            return None
+        if not isinstance(value, str) or not CAMERA.fullmatch(value):
+            raise IntercomInvalid("a camera is one of Home Assistant's (camera.…)")
+        return value
+
+    @staticmethod
+    def _open(w, old: dict | None) -> dict:
+        """{"kind", "code"?, "url"?, "user"?, "password"?, "entity"?}: the password kept when left out."""
+        if not isinstance(w, dict):
+            return old or {"kind": "none"}
+        kind = w.get("kind") or "none"
+        if kind not in OPENS:
+            raise IntercomInvalid(f"a door opens by one of {', '.join(OPENS)}")
+        if kind == "dtmf":
+            code = str(w.get("code") or "").strip().upper()
+            if not DTMF.fullmatch(code):
+                raise IntercomInvalid("the opening code: 1 to 16 of 0-9 * # A-D")
+            return {"kind": kind, "code": code}
+        if kind == "http":
+            url = str(w.get("url") or "").strip()
+            if not URL.fullmatch(url):
+                raise IntercomInvalid("the opening address: http://… or https://…")
+            user = str(w.get("user") or "").strip()[:64]
+            password = w["password"] if "password" in w else (old or {}).get("password", "")
+            if len(str(password)) > 64 or re.search(r"[\r\n]", str(password)):
+                raise IntercomInvalid("the opening password: at most 64 characters, on one line")
+            return {"kind": kind, "url": url, "user": user, "password": str(password)}
+        if kind == "entity":
+            entity = str(w.get("entity") or "").strip()
+            if not OPENER.fullmatch(entity):
+                raise IntercomInvalid("the opening device: a lock, switch, script or button of Home Assistant's")
+            return {"kind": kind, "entity": entity}
+        return {"kind": "none"}
+
+    def _contact(self, w: dict, old: dict, servers: set) -> dict:
+        name = str(w.get("name") or "").strip()
+        if not NAME.fullmatch(name):
+            raise IntercomInvalid("a device's name is 1 to 40 characters, without [ ] ; = \"")
+        number = str(w.get("number") or "").strip()
+        if not NUMBER.fullmatch(number):
+            raise IntercomInvalid("a device's number: 1 to 32 of 0-9 * # +")
+        kind = w.get("kind") or "door"
+        if kind not in KINDS:
+            raise IntercomInvalid(f"a device is one of {', '.join(KINDS)}")
+        if w.get("via") not in servers:
+            raise IntercomInvalid("a device is called through a door with its own SIP server")
+        kept = old.get(w.get("id"), {})
+        return {"id": kept.get("id") or _door_id(), "name": name, "number": number, "kind": kind, "via": w["via"],
+                "camera": self._camera(w.get("camera")), "open": self._open(w.get("open"), kept.get("open"))}
+
+    def opener(self, target: str, panel_id: str) -> dict | None:
+        """How [target] ("door:<id>", "contact:<id>") opens, if this panel may open it."""
+        kind, _, tid = str(target).partition(":")
+        if kind == "door":
+            d = next((d for d in self.doors if d["id"] == tid), None)
+            if d is None or (d.get("panels") is not None and panel_id not in d["panels"]):
+                return None
+            return d.get("open")
+        if kind == "contact":
+            return next((c.get("open") for c in self.extra if c["id"] == tid), None)
+        return None
 
     @staticmethod
     def _door(w: dict, old: dict) -> dict:
@@ -287,6 +405,8 @@ class Intercom:
                 door["secret"] = secret
         panels = w.get("panels", door.get("panels"))
         door["panels"] = None if panels is None else [str(p) for p in panels if isinstance(p, str)][:100]
+        door["camera"] = Intercom._camera(w.get("camera", door.get("camera")))
+        door["open"] = Intercom._open(w.get("open"), door.get("open"))
         return door
 
     def new_password(self, door_id: str) -> None:
@@ -328,7 +448,7 @@ class Intercom:
         panels = [{**self.accounts[p], "name": names.get(p)} for p in sorted(self.accounts)]
         files = {**STATIC_CONF, "asterisk.conf": asterisk_conf(self.root),
                  "pjsip.conf": pjsip_conf(self.doors, self.sip_port, panels),
-                 "extensions.conf": extensions_conf(self.doors, {p: a["username"] for p, a in self.accounts.items()})}
+                 "extensions.conf": extensions_conf(self.doors, {p: a["username"] for p, a in self.accounts.items()}, self.extra)}
         for name, text in files.items():
             (etc / name).write_text(text, encoding="utf-8")
         (etc / "pjsip.conf").chmod(0o600)

@@ -1705,8 +1705,45 @@ async function loadIntercom() {
   intercom = r.ok ? r.body : { error: r.status };
 }
 
+// A door's or device's camera and how it opens, edited the same way for both.
+function cameraSelect(value) {
+  const cams = (S.catalog?.entities || []).filter((e) => domainOf(e.entity_id) === "camera");
+  return selectEl([["", t("— None —")], ...cams.map((e) => [e.entity_id, `${e.name} (${e.entity_id})`])], value || "");
+}
+
+function openFields(o) {
+  o = o || { kind: "none" };
+  const kind = selectEl([["none", t("Does not open from the panels")], ["dtmf", t("A code sent during the call (DTMF)")],
+    ["http", t("The door's own address (Dahua, Akuvox…)")], ["entity", t("A device of Home Assistant's")]], o.kind || "none");
+  const code = el("input", { value: o.code || "", placeholder: "#", dir: "ltr" });
+  const url = el("input", { value: o.url || "", dir: "ltr", placeholder: "http://192.168.1.108/cgi-bin/accessControl.cgi?action=openDoor&channel=1&UserID=101&Type=Remote" });
+  const user = el("input", { value: o.user || "", placeholder: "admin", dir: "ltr" });
+  const password = el("input", { type: "password", autocomplete: "new-password", placeholder: o.password_set ? t("(unchanged)") : "" });
+  const openers = (S.catalog?.entities || []).filter((e) => ["lock", "switch", "input_boolean", "script", "button", "input_button", "cover"].includes(domainOf(e.entity_id)));
+  const entity = selectEl([["", t("— None —")], ...openers.map((e) => [e.entity_id, `${e.name} (${e.entity_id})`])], o.entity || "");
+  const rows = el("div", { class: "form" });
+  const show = () => {
+    rows.replaceChildren(el("label", {}, t("Opens")), kind);
+    if (kind.value === "dtmf") rows.append(el("label", {}, t("Code")), code);
+    if (kind.value === "http") rows.append(el("label", {}, t("Address")), url, el("label", {}, t("User name")), user, el("label", {}, t("Password")), password);
+    if (kind.value === "entity") rows.append(el("label", {}, t("Device")), entity);
+  };
+  kind.onchange = show;
+  show();
+  // What is saved: the password only when typed (else the add-on keeps it).
+  const value = () => {
+    const v = { kind: kind.value };
+    if (v.kind === "dtmf") v.code = code.value.trim();
+    if (v.kind === "http") { v.url = url.value.trim(); v.user = user.value.trim(); if (password.value) v.password = password.value; }
+    if (v.kind === "entity") v.entity = entity.value;
+    return v;
+  };
+  return { rows, value };
+}
+
 function renderIntercom(view) {
   if (!intercom) { view.append(el("p", { class: "muted" }, t("Loading…"))); loadIntercom().then(render); return; }
+  if (!S.catalog) { view.append(el("p", { class: "muted" }, t("Loading Home Assistant's devices…"))); loadCatalog().then(render); return; }
   if (intercom.error) { view.append(el("p", { class: "muted" }, t("Not available"))); return; }
   const ic = intercom;
   const save = async (changes) => {
@@ -1715,7 +1752,10 @@ function renderIntercom(view) {
     intercom = r.body; render();
   };
   // What is sent back for each door: the secret only when typed (else the add-on keeps it).
-  const doors = () => ic.doors.map((d) => ({ id: d.id, name: d.name, mode: d.mode, server: d.server, user: d.user, panels: d.panels }));
+  const keepOpen = (o) => { const v = { ...(o || { kind: "none" }) }; delete v.password_set; return v; };
+  const doors = () => ic.doors.map((d) => ({ id: d.id, name: d.name, mode: d.mode, server: d.server, user: d.user, panels: d.panels,
+    camera: d.camera || null, open: keepOpen(d.open) }));
+  const devices = () => (ic.contacts || []).map((c) => ({ ...c, open: keepOpen(c.open) }));
   const change = (id, fields) => save({ doors: doors().map((x) => (x.id === id ? { ...x, ...fields } : x)) });
   const status = !ic.enabled ? t("Off") : !ic.installed ? t("Asterisk is not installed in this add-on") : ic.running ? t("● Running") : t("Starting…");
   const enabled = el("input", { type: "checkbox", checked: ic.enabled, onchange: () => save({ enabled: enabled.checked }) });
@@ -1772,6 +1812,12 @@ function renderIntercom(view) {
     });
     card.append(el("div", { class: "form", style: { marginTop: "6px" } },
       el("label", {}, t("Rings")), el("div", {}, el("label", { class: "row" }, all, t("All panels")), ...ticks)));
+    // Its camera, shown on the panel while it rings, and how it opens.
+    const cam = cameraSelect(d.camera);
+    const opening = openFields(d.open);
+    card.append(el("div", { class: "form", style: { marginTop: "6px" } }, el("label", {}, t("Camera")), cam), opening.rows,
+      el("div", { class: "row", style: { marginTop: "6px" } }, el("button", { class: "solid", onclick: () =>
+        change(d.id, { camera: cam.value || null, open: opening.value() }) }, t("Save camera and opening"))));
     card.append(el("div", { class: "row", style: { marginTop: "6px" } },
       remote ? null : el("button", { onclick: async () => {
         if (!confirm(t("Make a new password? The door must be set up again with it."))) return;
@@ -1786,6 +1832,35 @@ function renderIntercom(view) {
     el("button", { class: "solid", onclick: () => { if (name.value.trim()) save({ doors: [...doors(), { name: name.value.trim() }] }); } }, t("Add door"))),
     el("div", { class: "row", style: { marginTop: "10px" } }, el("button", { onclick: async () => { await loadIntercom(); render(); } }, t("Refresh"))));
   view.append(box);
+  // Other devices on a door's own server: monitors, doorbells, phones; called by name from the
+  // panels, and named (with their camera) when they call.
+  const servers = ic.doors.filter((d) => d.mode === "server");
+  const other = el("div", { class: "box" }, el("h3", {}, t("Other devices")),
+    el("p", { class: "muted" }, t("Other monitors, doorbells or phones on a door's own SIP server: the panels call them by name, and show their name and camera when they call.")));
+  const saveDevices = (list) => save({ contacts: list });
+  if (!servers.length) other.append(el("p", { class: "muted" }, t("Add a door with its own SIP server first.")));
+  else {
+    const kinds = [["door", t("Doorbell")], ["panel", t("Monitor")], ["phone", t("Phone")]];
+    const deviceForm = (c, onSave, label) => {
+      const name = el("input", { value: c.name || "", placeholder: t("Back door") });
+      const number = el("input", { value: c.number || "", placeholder: "8002", dir: "ltr" });
+      const kind = selectEl(kinds, c.kind || "door");
+      const via = selectEl(servers.map((d) => [d.id, d.name]), c.via || servers[0].id);
+      const cam = cameraSelect(c.camera);
+      const opening = openFields(c.open);
+      return el("div", { class: "request" },
+        el("div", { class: "form" }, el("label", {}, t("Name")), name, el("label", {}, t("Number")), number,
+          el("label", {}, t("Kind")), kind, el("label", {}, t("Through")), via, el("label", {}, t("Camera")), cam),
+        opening.rows,
+        el("div", { class: "row", style: { marginTop: "6px" } },
+          el("button", { class: "solid", onclick: () => onSave({ ...c, name: name.value.trim(), number: number.value.trim(), kind: kind.value,
+            via: via.value, camera: cam.value || null, open: opening.value() }) }, label),
+          c.id ? el("button", { onclick: () => { if (confirm(t("Remove {0}?", c.name))) saveDevices(devices().filter((x) => x.id !== c.id)); } }, t("Remove")) : null));
+    };
+    for (const c of devices()) other.append(deviceForm(c, (v) => saveDevices(devices().map((x) => (x.id === c.id ? v : x))), t("Save")));
+    other.append(el("h4", {}, t("Add a device")), deviceForm({}, (v) => saveDevices([...devices(), v]), t("Add")));
+  }
+  view.append(other);
   // Panels: ready once connected with the intercom on (their account is made then).
   view.append(el("div", { class: "box" }, el("h3", {}, t("Panels")),
     ...(ic.panels.length ? ic.panels.map((p) => el("div", { class: "row" }, el("span", { class: "grow" }, p.name),
