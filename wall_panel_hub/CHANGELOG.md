@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.39.1
+
+- Intercom: a door's call is answered with one codec. A phone calling through the door's
+  own server (a Dahua VTO) was told of several, sent an UPDATE to keep one, was refused
+  (481) by the server and ended the call on answer.
+
 ## 0.39.0
 
 - Intercom: panels call too (app 0.39.0): a call button in the top bar opens the doors

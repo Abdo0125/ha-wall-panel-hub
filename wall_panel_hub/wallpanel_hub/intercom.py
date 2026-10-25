@@ -85,6 +85,9 @@ def pjsip_conf(doors: list[dict], sip_port: int, panels: list[dict] = ()) -> str
             "direct_media=no", "rtp_symmetric=yes", "force_rport=yes", "rewrite_contact=yes",
             # No session timers: some door stations end a call that requires them.
             "timers=no",
+            # One codec in the answer: a phone told of several sends an UPDATE to keep one,
+            # which a door's server may refuse (481), ending the call.
+            "preferred_codec_only=yes",
             f"callerid=\"{d['name']}\" <{user}>",
         ]
         if d.get("mode") == "server":
