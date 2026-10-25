@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.37.1
+
+- Intercom: Asterisk stopped at once ("modules.conf invalid or missing"): its directories were
+  written as a template, which Asterisk ignores, so it looked for its configuration in an empty
+  /etc/asterisk.
+
 ## 0.37.0
 
 - Intercom, first step (docs/speaker-intercom-plan.md, B1): the add-on runs Asterisk. Under

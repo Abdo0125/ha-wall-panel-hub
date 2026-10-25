@@ -78,7 +78,7 @@ def extensions_conf() -> str:
 
 def asterisk_conf(root: Path) -> str:
     return "\n".join([
-        "[directories](!)",
+        "[directories]",
         f"astetcdir => {root / 'etc'}",
         "astmoddir => /usr/lib/asterisk/modules",
         "astvarlibdir => /var/lib/asterisk",
