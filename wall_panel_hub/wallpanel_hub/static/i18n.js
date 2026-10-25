@@ -10,6 +10,8 @@ const LANG = (() => {
 })();
 const I18N = {
  "ar": {
+  "SIP log": "سجل SIP",
+  "Every SIP message in the add-on's log, to find why a call fails. Leave it off otherwise.": "كل رسائل SIP في سجل الـ add-on لمعرفة سبب فشل مكالمة. اتركه متوقفاً في غير ذلك.",
   "A door's call rings its panels; the first to answer takes it. A door registers with this add-on, or, when it has its own SIP server (Dahua VTO, Akuvox...), the add-on registers there as one of its indoor monitors.": "مكالمة الباب ترنّ شاشاته، وأول شاشة تردّ تأخذها. الباب يسجّل في هذا الـ add-on، أو إن كان له خادم SIP خاص (Dahua VTO، Akuvox...) يسجّل الـ add-on فيه كإحدى شاشاته الداخلية.",
   "● Linked to {0}": "● مرتبط بـ {0}",
   "○ Not linked": "○ غير مرتبط",
@@ -434,6 +436,8 @@ const I18N = {
   "Properties": "الخصائص"
  },
  "fr": {
+  "SIP log": "Journal SIP",
+  "Every SIP message in the add-on's log, to find why a call fails. Leave it off otherwise.": "Chaque message SIP dans le journal de l'add-on, pour trouver pourquoi un appel échoue. À laisser désactivé sinon.",
   "A door's call rings its panels; the first to answer takes it. A door registers with this add-on, or, when it has its own SIP server (Dahua VTO, Akuvox...), the add-on registers there as one of its indoor monitors.": "L'appel d'une porte fait sonner ses panneaux ; le premier qui répond le prend. Une porte s'enregistre auprès de cet add-on ou, si elle a son propre serveur SIP (Dahua VTO, Akuvox...), l'add-on s'y enregistre comme l'un de ses moniteurs intérieurs.",
   "● Linked to {0}": "● Relié à {0}",
   "○ Not linked": "○ Non relié",
@@ -858,6 +862,8 @@ const I18N = {
   "Properties": "Propriétés"
  },
  "es": {
+  "SIP log": "Registro SIP",
+  "Every SIP message in the add-on's log, to find why a call fails. Leave it off otherwise.": "Cada mensaje SIP en el registro del add-on, para saber por qué falla una llamada. Déjelo apagado si no.",
   "A door's call rings its panels; the first to answer takes it. A door registers with this add-on, or, when it has its own SIP server (Dahua VTO, Akuvox...), the add-on registers there as one of its indoor monitors.": "La llamada de una puerta hace sonar sus pantallas; la primera que responde la toma. Una puerta se registra en este add-on o, si tiene su propio servidor SIP (Dahua VTO, Akuvox...), el add-on se registra allí como uno de sus monitores interiores.",
   "● Linked to {0}": "● Vinculado a {0}",
   "○ Not linked": "○ No vinculado",

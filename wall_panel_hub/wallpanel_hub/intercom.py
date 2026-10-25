@@ -150,14 +150,15 @@ def asterisk_conf(root: Path) -> str:
         f"astlogdir => {root / 'log'}",
         "",
         "[options]",
-        "verbose = 1",
+        # Each call's steps in the add-on's log.
+        "verbose = 3",
         "",
     ])
 
 
 STATIC_CONF = {
     "modules.conf": "[modules]\nautoload=yes\n; Old SIP channel: pjsip has the port.\nnoload => chan_sip.so\nnoload => chan_iax2.so\nnoload => chan_skinny.so\nnoload => chan_mgcp.so\nnoload => chan_unistim.so\n",
-    "logger.conf": "[general]\n[logfiles]\nconsole => notice,warning,error\nmessages.log => notice,warning,error\n",
+    "logger.conf": "[general]\n[logfiles]\nconsole => notice,warning,error,verbose\nmessages.log => notice,warning,error\n",
     "rtp.conf": f"[general]\nrtpstart={RTP_START}\nrtpend={RTP_END}\nicesupport=yes\n",
     "http.conf": f"[general]\nenabled=yes\nbindaddr=127.0.0.1\nbindport={HTTP_PORT}\n",
 }
@@ -199,6 +200,8 @@ class Intercom:
         a door without id is new, one left out is removed; a secret left out is kept."""
         if "enabled" in changes:
             self.settings["enabled"] = bool(changes["enabled"])
+        if "sip_log" in changes:
+            self.settings["sip_log"] = bool(changes["sip_log"])
         if "doors" in changes:
             wanted = changes["doors"]
             if not isinstance(wanted, list) or len(wanted) > MAX_DOORS:
@@ -292,8 +295,18 @@ class Intercom:
         self.write_config()
         if self.task and not self.task.done():
             await self.cli("core reload")
+            await self.sip_logger()
         else:
             self.task = asyncio.create_task(self._run())
+
+    async def sip_logger(self) -> None:
+        """Every SIP message in the add-on's log, while asked (to find why a door's call fails)."""
+        await self.cli(f"pjsip set logger {'on' if self.settings.get('sip_log') else 'off'}")
+
+    async def _after_start(self) -> None:
+        await asyncio.sleep(5)
+        if self.running() and self.settings.get("sip_log"):
+            await self.sip_logger()
 
     async def _run(self) -> None:
         Path("/run/asterisk").mkdir(parents=True, exist_ok=True)
@@ -303,6 +316,7 @@ class Intercom:
             self.process = await asyncio.create_subprocess_exec(
                 self.binary, "-f", "-n", "-C", str(self.root / "etc" / "asterisk.conf"),
                 stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+            asyncio.create_task(self._after_start())
             async for line in self.process.stdout:
                 text = line.decode(errors="replace").rstrip()
                 if text:

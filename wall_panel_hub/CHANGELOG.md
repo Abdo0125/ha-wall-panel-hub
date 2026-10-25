@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.38.1
+
+- Intercom: each call's steps in the add-on's log, and a "SIP log" switch (every SIP message,
+  to find why a door's call fails).
+
 ## 0.38.0
 
 - Intercom, B2: panels ring. Each panel gets its own account the first time it connects

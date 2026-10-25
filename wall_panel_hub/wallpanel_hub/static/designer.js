@@ -1724,7 +1724,10 @@ function renderIntercom(view) {
     el("div", { class: "form" },
       el("label", {}, t("On")), el("div", { class: "row" }, enabled, el("span", { class: "muted" }, status)),
       el("label", {}, t("SIP server")), el("div", {}, ...(ic.addresses.length ? ic.addresses : ["?"]).map((a) => el("div", {}, el("code", { style: { userSelect: "all" } }, `${a}:${ic.sip_port}`)))),
-      el("label", {}, t("Test")), el("span", { class: "muted" }, t("Call {0} from a door: what you say comes back (echo), to check the sound's way.", ic.echo)))));
+      el("label", {}, t("Test")), el("span", { class: "muted" }, t("Call {0} from a door: what you say comes back (echo), to check the sound's way.", ic.echo)),
+      el("label", {}, t("SIP log")), el("label", { class: "row" },
+        el("input", { type: "checkbox", checked: !!ic.sip_log, onchange: (e) => save({ sip_log: e.target.checked }) }),
+        el("span", { class: "muted" }, t("Every SIP message in the add-on's log, to find why a call fails. Leave it off otherwise."))))));
   const box = el("div", { class: "box" }, el("h3", {}, t("Doors")));
   if (!ic.doors.length) box.append(el("p", { class: "muted" }, t("No doors yet.")));
   for (const d of ic.doors) {

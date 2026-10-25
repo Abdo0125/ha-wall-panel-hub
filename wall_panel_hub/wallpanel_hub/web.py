@@ -278,6 +278,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
                   for pid, p in store.panels.items()]
         return {
             "enabled": intercom.settings["enabled"],
+            "sip_log": bool(intercom.settings.get("sip_log")),
             "installed": bool(intercom.binary),
             "running": intercom.running(),
             "sip_port": intercom.sip_port,
