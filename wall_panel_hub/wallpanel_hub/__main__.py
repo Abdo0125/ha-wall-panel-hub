@@ -34,6 +34,8 @@ async def main() -> None:
         doorbell = Doorbell(intercom, gateway.speakers.door_event,
                             lambda pid: getattr(store.panels.get(pid), "name", None))
         doorbell_task = asyncio.create_task(doorbell.run())
+        # The servers' links, for HA.
+        links_task = asyncio.create_task(intercom.watch(gateway.speakers.changed))
 
         async def floors_changed(cat: dict) -> None:
             if store.save_floors(cat):
@@ -73,6 +75,7 @@ async def main() -> None:
         finally:
             floors_task.cancel()
             doorbell_task.cancel()
+            links_task.cancel()
             await intercom.stop()
             if zc:
                 await browser.close()

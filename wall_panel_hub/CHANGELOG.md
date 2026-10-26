@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.43.0
+
+- Intercom: external SIP servers have their own list. A server (Dahua VTO, Akuvox, a PBX...)
+  is set up once (its address, the monitor account and password), and its devices under it by
+  number: door stations, doorbells, monitors, phones, each with its camera, opening, and the
+  panels it rings. A call from the server is named by the number it comes from; one from a
+  number not set up rings every panel. Doors that register with the add-on are listed under
+  its own SIP server.
+- With several servers, the one that numbers typed on a panel go through is chosen.
+- Each server is a device in Home Assistant with a Link sensor (integration 0.5.0).
+- Doors set up as "has its own SIP server" before this version are not carried over: add the
+  server and its devices again.
+
 ## 0.42.1
 
 - Intercom: a door whose monitor account has a # (Dahua's second monitor, "9901#2") was left

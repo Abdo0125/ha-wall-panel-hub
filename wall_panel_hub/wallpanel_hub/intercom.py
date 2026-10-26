@@ -1,16 +1,17 @@
 """The intercom: Asterisk, run and configured by the hub (docs/speaker-intercom-plan.md, part B).
 
-A door reaches Asterisk in one of two ways:
-- "here": the door (a SIP door station, or a phone standing in for one) registers with
-  Asterisk under an account the hub makes: a user name and a long random password.
-- "server": the door station has its own SIP server (Dahua VTO, Akuvox...): Asterisk
-  registers there under an indoor-monitor account made in the door's own pages, and the
-  door's calls to that account come here. The door's own monitors keep working.
+Calls reach Asterisk in two ways:
+- the hub's own server: a door (a SIP door station, or a phone standing in for one) registers
+  with Asterisk under an account the hub makes: a user name and a long random password.
+- an external server (Dahua VTO, Akuvox, a PBX...): Asterisk registers there under an
+  indoor-monitor account made in its own pages, and the calls to that account come here.
+  Its devices (door stations, doorbells, monitors, phones) are set up under it by number:
+  named when they call, called by name. Its own monitors keep working.
 
 Panels register too, each with an account made for it the first time it asks
 (wallpanel/intercom/subscribe): SIP over a WebSocket that the hub carries inside the panel's
-own connection (gateway.py), to Asterisk's web server on this machine only. A door's call
-rings its panels (all by default); the first to answer takes it.
+own connection (gateway.py), to Asterisk's web server on this machine only. A call rings its
+panels (all by default); the first to answer takes it.
 
 The hub writes Asterisk's whole configuration under /data/asterisk from its own settings
 (intercom.json) and reloads it on each change; nothing in it is edited by hand.
@@ -40,6 +41,8 @@ RELAY_DB = "wallpanel_relay"
 ECHO = "600"
 # How long a door's call rings the panels.
 RING_S = 30
+# How often the servers' registrations are read, for HA.
+LINK_CHECK_S = 20
 NAME = re.compile(r"[^\n\r\[\];=\"]{1,40}")
 NAME_UNSAFE = re.compile(r"[\n\r\[\];=\"\\]")
 HOST = re.compile(r"[A-Za-z0-9.-]{1,253}(:\d{1,5})?")
@@ -47,7 +50,7 @@ USER = re.compile(r"[A-Za-z0-9_.+#*-]{1,40}")
 # What Asterisk takes in an endpoint's from_user: an account such as Dahua's second monitor
 # "9901#2" is not, and would leave the door out (its calls then "not found").
 FROM_USER = re.compile(r"[A-Za-z0-9_.~-]+")
-MODES = ("here", "server")
+MAX_SERVERS = 10
 MAX_DOORS = 20
 MAX_CONTACTS = 50
 # How a door opens (door_open.py): a code sent during the call, its own address, a device of HA's.
@@ -83,7 +86,24 @@ def panel_username(panel_id: str) -> str:
     return "panel_" + hashlib.sha256(panel_id.encode()).hexdigest()[:10]
 
 
-def pjsip_conf(doors: list[dict], sip_port: int, panels: list[dict] = ()) -> str:
+def _endpoint(user: str, context: str) -> list[str]:
+    return [
+        f"[{user}]", "type=endpoint", f"context={context}", "disallow=all",
+        # Video passed through as it comes (H.264 from most door stations).
+        "allow=ulaw,alaw,g722,h264,vp8",
+        # Behind NAT or a VPN: answer where the door's packets come from.
+        "direct_media=no", "rtp_symmetric=yes", "force_rport=yes", "rewrite_contact=yes",
+        # No session timers: some door stations end a call that requires them.
+        "timers=no",
+        # The door's code (opening it) as it takes it: in the sound's way, else in SIP INFO.
+        "dtmf_mode=auto_info",
+        # One codec in the answer: a phone told of several sends an UPDATE to keep one,
+        # which a door's server may refuse (481), ending the call.
+        "preferred_codec_only=yes",
+    ]
+
+
+def pjsip_conf(doors: list[dict], sip_port: int, panels: list[dict] = (), servers: list[dict] = ()) -> str:
     lines = [
         "; Written by Wall Panel Hub: changes here are lost.",
         "[global]", "type=global", "user_agent=Wall Panel Hub", "endpoint_identifier_order=username,ip", "",
@@ -94,43 +114,26 @@ def pjsip_conf(doors: list[dict], sip_port: int, panels: list[dict] = ()) -> str
     ]
     for d in doors:
         user = d["username"]
-        endpoint = [
-            f"[{user}]", "type=endpoint", f"context=door-{d['id']}", "disallow=all",
-            # Video passed through as it comes (H.264 from most door stations).
-            "allow=ulaw,alaw,g722,h264,vp8",
-            # Behind NAT or a VPN: answer where the door's packets come from.
-            "direct_media=no", "rtp_symmetric=yes", "force_rport=yes", "rewrite_contact=yes",
-            # No session timers: some door stations end a call that requires them.
-            "timers=no",
-            # The door's code (opening it) as it takes it: in the sound's way, else in SIP INFO.
-            "dtmf_mode=auto_info",
-            # One codec in the answer: a phone told of several sends an UPDATE to keep one,
-            # which a door's server may refuse (481), ending the call.
-            "preferred_codec_only=yes",
-        ]
-        if d.get("mode") != "server":
-            endpoint.append(f"callerid=\"{d['name']}\" <{user}>")
-        if d.get("mode") == "server":
-            host = d["server"]
-            # Our calls to the door come from its monitor's account: here, else set by the
-            # dialplan (from_panel_dial).
-            own = [f"from_user={d['user']}"] if FROM_USER.fullmatch(d["user"]) else []
-            lines += endpoint + [f"outbound_auth={user}", f"aors={user}", *own,
-                                 f"from_domain={host.split(':')[0]}", "",
-                                 # Asterisk as one of the door's indoor monitors.
-                                 f"[{user}]", "type=registration", "transport=transport-udp", f"outbound_auth={user}",
-                                 f"server_uri=sip:{host}", f"client_uri=sip:{d['user']}@{host}",
-                                 f"contact_user={d['user']}", "retry_interval=30", "forbidden_retry_interval=60",
-                                 "max_retries=100000", "expiration=300", "",
-                                 f"[{user}]", "type=auth", "auth_type=userpass", f"username={d['user']}",
-                                 f"password={_conf_value(d.get('secret') or '')}", "",
-                                 f"[{user}]", "type=aor", f"contact=sip:{host}", "",
-                                 # The door's calls are known by where they come from.
-                                 f"[{user}]", "type=identify", f"endpoint={user}", f"match={host.split(':')[0]}", ""]
-        else:
-            lines += endpoint + [f"auth={user}", f"aors={user}", "",
-                                 f"[{user}]", "type=auth", "auth_type=userpass", f"username={user}", f"password={d['password']}", "",
-                                 f"[{user}]", "type=aor", "max_contacts=1", "remove_existing=yes", "qualify_frequency=30", ""]
+        lines += _endpoint(user, f"door-{d['id']}") + [
+            f"callerid=\"{d['name']}\" <{user}>", f"auth={user}", f"aors={user}", "",
+            f"[{user}]", "type=auth", "auth_type=userpass", f"username={user}", f"password={d['password']}", "",
+            f"[{user}]", "type=aor", "max_contacts=1", "remove_existing=yes", "qualify_frequency=30", ""]
+    for s in servers:
+        user, host = s["username"], s["server"]
+        # Our calls there come from the monitor's account: here, else set by the dialplan (through).
+        own = [f"from_user={s['user']}"] if FROM_USER.fullmatch(s["user"]) else []
+        lines += _endpoint(user, f"server-{s['id']}") + [
+            f"outbound_auth={user}", f"aors={user}", *own, f"from_domain={host.split(':')[0]}", "",
+            # Asterisk as one of the server's indoor monitors.
+            f"[{user}]", "type=registration", "transport=transport-udp", f"outbound_auth={user}",
+            f"server_uri=sip:{host}", f"client_uri=sip:{s['user']}@{host}",
+            f"contact_user={s['user']}", "retry_interval=30", "forbidden_retry_interval=60",
+            "max_retries=100000", "expiration=300", "",
+            f"[{user}]", "type=auth", "auth_type=userpass", f"username={s['user']}",
+            f"password={_conf_value(s.get('secret') or '')}", "",
+            f"[{user}]", "type=aor", f"contact=sip:{host}", "",
+            # The server's calls are known by where they come from.
+            f"[{user}]", "type=identify", f"endpoint={user}", f"match={host.split(':')[0]}", ""]
     for p in panels:
         user = p["username"]
         name = NAME_UNSAFE.sub("", p.get("name") or "Panel")[:40] or "Panel"
@@ -157,60 +160,83 @@ def dial(user: str) -> str:
     return f"${{IF(${{DB_EXISTS({RELAY_DB}/{user})}}?PJSIP/{relay_user(user)}:PJSIP/{user})}}"
 
 
-def extensions_conf(doors: list[dict] = (), panels: dict[str, str] | None = None, extra: list[dict] = ()) -> str:
+def default_server(servers: list[dict], numbers_via: str | None) -> dict | None:
+    """The server that numbers typed on a panel go through: the one chosen, else the first."""
+    return next((s for s in servers if s["id"] == numbers_via), servers[0] if servers else None)
+
+
+def extensions_conf(doors: list[dict] = (), panels: dict[str, str] | None = None, extra: list[dict] = (),
+                    servers: list[dict] = (), numbers_via: str | None = None) -> str:
     """[panels]: panel id -> its user name, for the panels with an account; [extra]: the
-    project's other devices (contacts), called through their door's server."""
+    devices on the external servers, each called through its own."""
     panels = panels or {}
     call = "Call: ${CHANNEL(linkedid)}"
     lines = ["; Written by Wall Panel Hub: changes here are lost.",
-             # Each door's call to a panel says which door: its name, camera and opening there.
+             # Each call to a panel says who: a door's id, a device's target ("contact:<id>").
              "[wallpanel-door]", "exten => s,1,Set(PJSIP_HEADER(add,X-Wallpanel-Door)=${ARG1})", " same => n,Return()", "",
-             # A panel took the door's call: told to the hub (doorbell.py), for HA.
-             "[wallpanel-answered]", f"exten => s,1,UserEvent(WallpanelAnswered,Door: ${{ARG1}},{call},Panel: ${{CHANNEL(endpoint)}})",
+             # A panel took the call: told to the hub (doorbell.py), for HA.
+             "[wallpanel-answered]", f"exten => s,1,UserEvent(WallpanelAnswered,Target: ${{ARG1}},{call},Panel: ${{CHANNEL(endpoint)}})",
              " same => n,Return()", ""]
     echo = [f"exten => {ECHO},1,Answer()", " same => n,Echo()", " same => n,Hangup()"]
-    for d in doors:
-        wanted = d.get("panels")
+
+    def ring(wanted, header: str | None, target: str | None) -> str:
         users = [u for pid, u in panels.items() if wanted is None or pid in wanted]
-        ring = (f"Dial({'&'.join(dial(u) for u in users)},{RING_S},b(wallpanel-door^s^1({d['id']}))U(wallpanel-answered^{d['id']}))"
-                if users else "Busy(5)")
-        lines += [f"[door-{d['id']}]"]
-        if d.get("mode") != "server":
-            lines += [f"; {ECHO}: what is said comes back, to check the sound's way."] + echo
-        # Any number the door calls rings its panels; "s" when it calls with none. The hub
-        # hears of it (and of how it ended), for HA.
-        exts = ["_[0-9*#+]!", "s"]
-        if d.get("mode") == "server" and not re.fullmatch(r"[0-9*#+]*", d["user"]):
-            exts.append(d["user"])
+        if not users:
+            return "Busy(5)"
+        opts = (f"b(wallpanel-door^s^1({header}))" if header else "") + (f"U(wallpanel-answered^{target})" if target else "")
+        return f"Dial({'&'.join(dial(u) for u in users)},{RING_S}{',' + opts if opts else ''})"
+
+    def told(ext: str, target: str, dial_step: str) -> list[str]:
+        # The hub hears of the call (and of how it ended, at h), for HA.
+        return [f"exten => {ext},1,UserEvent(WallpanelRing,Target: {target},{call},Number: ${{CALLERID(num)}})",
+                f" same => n,{dial_step}", " same => n,Hangup()"]
+
+    end = f"exten => h,1,UserEvent(WallpanelEnd,{call},Status: ${{DIALSTATUS}})"
+    for d in doors:
+        # Any number the door calls rings its panels; "s" when it calls with none.
+        lines += [f"[door-{d['id']}]", f"; {ECHO}: what is said comes back, to check the sound's way."] + echo
+        for ext in ("_[0-9*#+]!", "s"):
+            lines += told(ext, f"door:{d['id']}", ring(d.get("panels"), d["id"], f"door:{d['id']}"))
+        lines += [end, ""]
+    for s in servers:
+        # A call from an external server: whose it is by the number it comes from (a device
+        # set up under the server), else it rings every panel as the server's.
+        here, there = f"server-{s['id']}", f"server-{s['id']}-from"
+        exts = ["_[0-9*#+]!", "s"] + ([] if re.fullmatch(r"[0-9*#+]*", s["user"]) else [s["user"]])
+        lines += [f"[{here}]"]
         for ext in exts:
-            lines += [f"exten => {ext},1,UserEvent(WallpanelRing,Door: {d['id']},{call},Number: ${{CALLERID(num)}})",
-                      f" same => n,{ring}", " same => n,Hangup()"]
-        lines += [f"exten => h,1,UserEvent(WallpanelEnd,Door: {d['id']},{call},Status: ${{DIALSTATUS}})", ""]
-    # A panel calls: a door registered here, another panel, or a number through the first
-    # door with its own server (its other monitors, the door station itself).
+            lines += [f"exten => {ext},1,Set(WHO=${{FILTER(0-9*#+,${{CALLERID(num)}})}})",
+                      f" same => n,Goto({there},${{IF(${{DIALPLAN_EXISTS({there},${{WHO}},1)}}?${{WHO}}:any)}},1)"]
+        lines += ["", f"[{there}]"]
+        for c in extra:
+            if c.get("via") == s["id"]:
+                target = f"contact:{c['id']}"
+                lines += told(c["number"], target, ring(c.get("panels"), target, target))
+        lines += told("any", f"server:{s['id']}", ring(None, None, f"server:{s['id']}")) + [end, ""]
+    # A panel calls: a door registered here, another panel, a device by name through its
+    # server, or a number through the server chosen for numbers.
     lines += ["[from-panel]"] + echo
     for d in doors:
-        if d.get("mode") != "server":
-            lines += [f"exten => {d['username']},1,Dial(PJSIP/{d['username']},{RING_S})", " same => n,Hangup()"]
+        lines += [f"exten => {d['username']},1,Dial(PJSIP/{d['username']},{RING_S})", " same => n,Hangup()"]
     for u in panels.values():
         lines += [f"exten => {u},1,Dial({dial(u)},{RING_S})", " same => n,Hangup()"]
-    servers = {d["id"]: d for d in doors if d.get("mode") == "server"}
+    by_id = {s["id"]: s for s in servers}
     for c in extra:
-        via = servers.get(c.get("via"))
+        via = by_id.get(c.get("via"))
         if via is not None:
             lines += through(f"c_{c['id']}", via, c["number"])
-    server = next((d for d in doors if d.get("mode") == "server"), None)
+    server = default_server(list(servers), numbers_via)
     lines += through("_[0-9*#+]!", server, "${EXTEN}") if server else [
         "exten => _[0-9*#+]!,1,Congestion(5)", " same => n,Hangup()"]
     lines.append("")
     return "\n".join(lines)
 
 
-def through(ext: str, door: dict, number: str) -> list[str]:
-    """[number] called through [door]'s own server, from its monitor's account: set here when
+def through(ext: str, server: dict, number: str) -> list[str]:
+    """[number] called through an external [server], from its monitor's account: set here when
     the endpoint cannot have it (pjsip_conf)."""
-    steps = [] if FROM_USER.fullmatch(door["user"]) else [f"Set(CALLERID(num)={door['user']})"]
-    steps += [f"Dial(PJSIP/{number}@{door['username']},{RING_S})", "Hangup()"]
+    steps = [] if FROM_USER.fullmatch(server["user"]) else [f"Set(CALLERID(num)={server['user']})"]
+    steps += [f"Dial(PJSIP/{number}@{server['username']},{RING_S})", "Hangup()"]
     return [f"exten => {ext},1,{steps[0]}"] + [f" same => n,{s}" for s in steps[1:]]
 
 
@@ -223,23 +249,27 @@ def _in_call(o: dict | None) -> bool:
     return bool(o) and o.get("kind") == "dtmf"
 
 
+def _rings(x: dict, panel_id: str) -> bool:
+    return x.get("panels") is None or panel_id in x["panels"]
+
+
 def contacts(doors: list[dict], accounts: dict[str, dict], names: dict[str, str], panel_id: str,
-             extra: list[dict] = ()) -> dict:
-    """What a panel may call: the doors registered here, the project's other devices and the
-    other panels, by name; numbers go through the first door with its own server (its name in
+             extra: list[dict] = (), servers: list[dict] = (), numbers_via: str | None = None) -> dict:
+    """What a panel may call: the doors registered here, the devices on the external servers
+    and the other panels, by name; numbers go through the server chosen for them (its name in
     "via"), else only the echo. "doors" and each device's "match" (the number it calls from)
     name a call that comes, with its camera and whether it opens (target for .../open)."""
-    mine = [d for d in doors if d.get("panels") is None or panel_id in d["panels"]]
+    mine = [d for d in doors if _rings(d, panel_id)]
     found = [{"name": d["name"], "number": d["username"], "kind": "door", "camera": d.get("camera"),
               "open": _opens(d.get("open")), "in_call": _in_call(d.get("open")), "target": f"door:{d['id']}"}
-             for d in mine if d.get("mode") != "server"]
-    servers = {d["id"] for d in doors if d.get("mode") == "server"}
+             for d in mine]
+    ids = {s["id"] for s in servers}
     found += [{"name": c["name"], "number": f"c_{c['id']}", "kind": c.get("kind", "door"), "camera": c.get("camera"),
                "open": _opens(c.get("open")), "in_call": _in_call(c.get("open")), "target": f"contact:{c['id']}", "match": c["number"]}
-              for c in extra if c.get("via") in servers]
+              for c in extra if c.get("via") in ids and _rings(c, panel_id)]
     found += sorted(({"name": names.get(pid) or "Panel", "number": a["username"], "kind": "panel"}
                      for pid, a in accounts.items() if pid != panel_id), key=lambda c: c["name"].lower())
-    server = next((d for d in doors if d.get("mode") == "server"), None)
+    server = default_server(list(servers), numbers_via)
     return {"contacts": found, "via": server["name"] if server else None, "echo": ECHO,
             "doors": [{"id": d["id"], "name": d["name"], "camera": d.get("camera"), "open": _opens(d.get("open")),
                        "in_call": _in_call(d.get("open")), "target": f"door:{d['id']}"} for d in mine]}
@@ -290,12 +320,17 @@ class Intercom:
         self.file = data_dir / "intercom.json"
         self.root = data_dir / "asterisk"
         self.sip_port = sip_port
-        self.settings = {"enabled": False, "doors": [], "panels": {}, "contacts": []}
+        self.settings = {"enabled": False, "servers": [], "doors": [], "panels": {}, "contacts": [], "numbers_via": None}
         if self.file.exists():
             try:
                 self.settings = {**self.settings, **json.loads(self.file.read_text(encoding="utf-8"))}
             except ValueError:
                 log.warning("intercom settings not readable: starting empty")
+        # Before external servers had their own list, a door was one ("mode": "server"):
+        # not carried over (set up again), nor the devices that went through it.
+        self.settings["doors"] = [d for d in self.doors if d.get("mode", "here") == "here"]
+        ids = {s["id"] for s in self.servers}
+        self.settings["contacts"] = [c for c in self.extra if c.get("via") in ids]
         self.process: asyncio.subprocess.Process | None = None
         self.task: asyncio.Task | None = None
         self.binary = shutil.which("asterisk")
@@ -303,6 +338,8 @@ class Intercom:
         self.ami_secret = secrets.token_hex(16)
         # Panels' names (store.py), for their calls.
         self.panel_names = lambda: {}
+        # Each external server's registration, as last read (watch): server id -> Registered...
+        self.links: dict[str, str] = {}
 
     # ---- settings ----
 
@@ -312,12 +349,18 @@ class Intercom:
         tmp.replace(self.file)
 
     @property
+    def servers(self) -> list[dict]:
+        """External SIP servers (Dahua VTO, Akuvox, a PBX...), the hub one of their monitors there."""
+        return self.settings["servers"]
+
+    @property
     def doors(self) -> list[dict]:
+        """Doors registered with the hub's own server."""
         return self.settings["doors"]
 
     @property
     def extra(self) -> list[dict]:
-        """The project's other devices: monitors, doorbells, phones on a door's own server."""
+        """The devices on the external servers: door stations, doorbells, monitors, phones."""
         return self.settings["contacts"]
 
     @property
@@ -326,12 +369,21 @@ class Intercom:
         return self.settings["panels"]
 
     def update(self, changes: dict) -> None:
-        """{"enabled"?, "doors"?: [{"id"?, "name", "mode"?, "server"?, "user"?, "secret"?, "panels"?}]}:
-        a door without id is new, one left out is removed; a secret left out is kept."""
+        """{"enabled"?, "sip_log"?, "servers"?, "doors"?, "contacts"?, "numbers_via"?}: in each
+        list, one without id is new, one left out is removed; a secret left out is kept. The
+        devices of a server removed go with it."""
         if "enabled" in changes:
             self.settings["enabled"] = bool(changes["enabled"])
         if "sip_log" in changes:
             self.settings["sip_log"] = bool(changes["sip_log"])
+        if "servers" in changes:
+            wanted = changes["servers"]
+            if not isinstance(wanted, list) or len(wanted) > MAX_SERVERS:
+                raise IntercomInvalid(f"at most {MAX_SERVERS} servers")
+            old = {s["id"]: s for s in self.servers}
+            self.settings["servers"] = [self._server(w or {}, old) for w in wanted]
+            ids = {s["id"] for s in self.servers}
+            self.settings["contacts"] = [c for c in self.extra if c["via"] in ids]
         if "doors" in changes:
             wanted = changes["doors"]
             if not isinstance(wanted, list) or len(wanted) > MAX_DOORS:
@@ -343,8 +395,19 @@ class Intercom:
             if not isinstance(wanted, list) or len(wanted) > MAX_CONTACTS:
                 raise IntercomInvalid(f"at most {MAX_CONTACTS} devices")
             old = {c["id"]: c for c in self.extra}
-            servers = {d["id"] for d in self.doors if d.get("mode") == "server"}
-            self.settings["contacts"] = [self._contact(w or {}, old, servers) for w in wanted]
+            ids = {s["id"] for s in self.servers}
+            found = [self._contact(w or {}, old, ids) for w in wanted]
+            numbers = [(c["via"], c["number"]) for c in found]
+            if len(set(numbers)) != len(numbers):
+                raise IntercomInvalid("two devices of one server have the same number")
+            self.settings["contacts"] = found
+        if "numbers_via" in changes:
+            via = changes["numbers_via"] or None
+            if via is not None and via not in {s["id"] for s in self.servers}:
+                raise IntercomInvalid("numbers go through one of the servers")
+            self.settings["numbers_via"] = via
+        if self.settings.get("numbers_via") not in {s["id"] for s in self.servers}:
+            self.settings["numbers_via"] = None
         self._save()
 
     @staticmethod
@@ -384,10 +447,44 @@ class Intercom:
             return {"kind": kind, "entity": entity}
         return {"kind": "none"}
 
-    def _contact(self, w: dict, old: dict, servers: set) -> dict:
+    @staticmethod
+    def _panels(w: dict, kept: dict) -> list[str] | None:
+        """Which panels ring: all (None, also those paired later), or these."""
+        panels = w.get("panels", kept.get("panels"))
+        return None if panels is None else [str(p) for p in panels if isinstance(p, str)][:100]
+
+    @staticmethod
+    def _name(w: dict, what: str) -> str:
         name = str(w.get("name") or "").strip()
         if not NAME.fullmatch(name):
-            raise IntercomInvalid("a device's name is 1 to 40 characters, without [ ] ; = \"")
+            raise IntercomInvalid(f"a {what}'s name is 1 to 40 characters, without [ ] ; = \"")
+        return name
+
+    @staticmethod
+    def _server(w: dict, old: dict) -> dict:
+        name = Intercom._name(w, "server")
+        kept = old.get(w.get("id"))
+        if kept:
+            server = {**kept, "name": name}
+        else:
+            sid = _door_id()
+            server = {"id": sid, "name": name, "username": f"server_{sid}"}
+        host = str(w.get("server") or server.get("server") or "").strip()
+        user = str(w.get("user") or server.get("user") or "").strip()
+        if not HOST.fullmatch(host):
+            raise IntercomInvalid("the server's address: its IP or name, and :port if not 5060")
+        if not USER.fullmatch(user):
+            raise IntercomInvalid("the account on the server: 1 to 40 letters, digits or _ . + # * -")
+        server.update(server=host, user=user)
+        if "secret" in w:
+            secret = str(w["secret"] or "")
+            if len(secret) > 64 or re.search(r"[\r\n]", secret):
+                raise IntercomInvalid("the account's password: at most 64 characters, on one line")
+            server["secret"] = secret
+        return server
+
+    def _contact(self, w: dict, old: dict, servers: set) -> dict:
+        name = self._name(w, "device")
         number = str(w.get("number") or "").strip()
         if not NUMBER.fullmatch(number):
             raise IntercomInvalid("a device's number: 1 to 32 of 0-9 * # +")
@@ -395,29 +492,28 @@ class Intercom:
         if kind not in KINDS:
             raise IntercomInvalid(f"a device is one of {', '.join(KINDS)}")
         if w.get("via") not in servers:
-            raise IntercomInvalid("a device is called through a door with its own SIP server")
+            raise IntercomInvalid("a device is on one of the external servers")
         kept = old.get(w.get("id"), {})
         return {"id": kept.get("id") or _door_id(), "name": name, "number": number, "kind": kind, "via": w["via"],
-                "camera": self._camera(w.get("camera")), "open": self._open(w.get("open"), kept.get("open"))}
+                "panels": self._panels(w, kept), "camera": self._camera(w.get("camera")),
+                "open": self._open(w.get("open"), kept.get("open"))}
 
     def name_of(self, target: str) -> str | None:
         kind, _, tid = str(target).partition(":")
-        found = self.doors if kind == "door" else self.extra if kind == "contact" else []
+        found = {"door": self.doors, "contact": self.extra, "server": self.servers}.get(kind, [])
         return next((x["name"] for x in found if x["id"] == tid), None)
 
     def bells(self) -> list[dict]:
-        """The doors, and the other devices that are doorbells, for HA: each a device there with
-        its doorbell's events and, when it opens without a call, an Open button."""
+        """For HA: the doors and the devices that are doorbells, each a device there with its
+        doorbell's events and, when it opens without a call, an Open button; and the external
+        servers, each with whether the hub is linked there."""
         def bell(target: str, x: dict) -> dict:
-            return {"target": target, "name": x["name"], "camera": x.get("camera"),
+            return {"target": target, "kind": "door", "name": x["name"], "camera": x.get("camera"),
                     "opens": (x.get("open") or {}).get("kind") in ("http", "entity")}
         return ([bell(f"door:{d['id']}", d) for d in self.doors]
-                + [bell(f"contact:{c['id']}", c) for c in self.extra if c.get("kind", "door") == "door"])
-
-    def caller(self, door_id: str, number: str | None) -> str:
-        """Whose call came through [door_id]: a device of its server by its number, else the door."""
-        device = next((c for c in self.extra if c.get("via") == door_id and number and c["number"] == number), None)
-        return f"contact:{device['id']}" if device else f"door:{door_id}"
+                + [bell(f"contact:{c['id']}", c) for c in self.extra if c.get("kind", "door") == "door"]
+                + [{"target": f"server:{s['id']}", "kind": "server", "name": s["name"], "opens": False,
+                    "linked": self.links.get(s["id"]) == "Registered"} for s in self.servers])
 
     def panel_of(self, endpoint: str) -> str | None:
         """The panel an Asterisk endpoint (panel_x, panel_x_relay) is."""
@@ -428,44 +524,22 @@ class Intercom:
         """How [target] ("door:<id>", "contact:<id>") opens, if this panel may open it (any, for
         HA: panel_id None)."""
         kind, _, tid = str(target).partition(":")
-        if kind == "door":
-            d = next((d for d in self.doors if d["id"] == tid), None)
-            if d is None or (panel_id is not None and d.get("panels") is not None and panel_id not in d["panels"]):
-                return None
-            return d.get("open")
-        if kind == "contact":
-            return next((c.get("open") for c in self.extra if c["id"] == tid), None)
-        return None
+        found = {"door": self.doors, "contact": self.extra}.get(kind, [])
+        x = next((x for x in found if x["id"] == tid), None)
+        if x is None or (panel_id is not None and not _rings(x, panel_id)):
+            return None
+        return x.get("open")
 
     @staticmethod
     def _door(w: dict, old: dict) -> dict:
-        name = str(w.get("name") or "").strip()
-        if not NAME.fullmatch(name):
-            raise IntercomInvalid("a door's name is 1 to 40 characters, without [ ] ; = \"")
-        mode = w.get("mode") or "here"
-        if mode not in MODES:
-            raise IntercomInvalid(f"a door's mode is one of {', '.join(MODES)}")
+        name = Intercom._name(w, "door")
         kept = old.get(w.get("id"))
         if kept:
-            door = {**kept, "name": name, "mode": mode}
+            door = {**kept, "name": name}
         else:
             did = _door_id()
-            door = {"id": did, "name": name, "mode": mode, "username": f"door_{did}", "password": _password()}
-        if mode == "server":
-            server = str(w.get("server") or door.get("server") or "").strip()
-            user = str(w.get("user") or door.get("user") or "").strip()
-            if not HOST.fullmatch(server):
-                raise IntercomInvalid("the door's address: its IP or name, and :port if not 5060")
-            if not USER.fullmatch(user):
-                raise IntercomInvalid("the account on the door: 1 to 40 letters, digits or _ . + # * -")
-            door.update(server=server, user=user)
-            if "secret" in w:
-                secret = str(w["secret"] or "")
-                if len(secret) > 64 or re.search(r"[\r\n]", secret):
-                    raise IntercomInvalid("the account's password: at most 64 characters, on one line")
-                door["secret"] = secret
-        panels = w.get("panels", door.get("panels"))
-        door["panels"] = None if panels is None else [str(p) for p in panels if isinstance(p, str)][:100]
+            door = {"id": did, "name": name, "username": f"door_{did}", "password": _password()}
+        door["panels"] = Intercom._panels(w, door)
         door["camera"] = Intercom._camera(w.get("camera", door.get("camera")))
         door["open"] = Intercom._open(w.get("open"), door.get("open"))
         return door
@@ -489,15 +563,20 @@ class Intercom:
         return account
 
     async def forget(self, panel_id: str) -> None:
-        """A panel unpaired: its account goes, and it rings for no door."""
+        """A panel unpaired: its account goes, and it rings for nothing."""
         changed = self.accounts.pop(panel_id, None) is not None
-        for d in self.doors:
-            if d.get("panels") and panel_id in d["panels"]:
-                d["panels"].remove(panel_id)
+        for x in self.doors + self.extra:
+            if x.get("panels") and panel_id in x["panels"]:
+                x["panels"].remove(panel_id)
                 changed = True
         if changed:
             self._save()
             await self.apply()
+
+    def directory(self, names: dict[str, str], panel_id: str) -> dict:
+        """What [panel_id] may call (contacts)."""
+        return contacts(self.doors, self.accounts, names, panel_id, self.extra, self.servers,
+                        self.settings.get("numbers_via"))
 
     # ---- Asterisk ----
 
@@ -507,14 +586,31 @@ class Intercom:
             (self.root / sub).mkdir(parents=True, exist_ok=True)
         names = self.panel_names()
         panels = [{**self.accounts[p], "name": names.get(p)} for p in sorted(self.accounts)]
+        users = {p: a["username"] for p, a in self.accounts.items()}
         files = {**STATIC_CONF, "asterisk.conf": asterisk_conf(self.root),
-                 "pjsip.conf": pjsip_conf(self.doors, self.sip_port, panels),
-                 "extensions.conf": extensions_conf(self.doors, {p: a["username"] for p, a in self.accounts.items()}, self.extra),
+                 "pjsip.conf": pjsip_conf(self.doors, self.sip_port, panels, self.servers),
+                 "extensions.conf": extensions_conf(self.doors, users, self.extra, self.servers,
+                                                    self.settings.get("numbers_via")),
                  "manager.conf": manager_conf(self.ami_secret)}
         for name, text in files.items():
             (etc / name).write_text(text, encoding="utf-8")
         (etc / "pjsip.conf").chmod(0o600)
         (etc / "manager.conf").chmod(0o600)
+
+    async def watch(self, changed) -> None:
+        """The servers' registrations, read now and then; [changed]() when one links or drops."""
+        while True:
+            now = {}
+            if self.running() and self.servers:
+                found = await self.registrations()
+                now = {s["id"]: found.get(s["username"], "") for s in self.servers}
+            if now != self.links:
+                self.links = now
+                try:
+                    await changed()
+                except Exception:
+                    log.exception("intercom: servers' links not told")
+            await asyncio.sleep(LINK_CHECK_S)
 
     async def apply(self) -> None:
         """Asterisk as the settings say: started, reloaded, or stopped."""

@@ -67,6 +67,11 @@
           "active": "En appel"
         }
       }
+    },
+    "binary_sensor": {
+      "link": {
+        "name": "Liaison"
+      }
     }
   }
 }

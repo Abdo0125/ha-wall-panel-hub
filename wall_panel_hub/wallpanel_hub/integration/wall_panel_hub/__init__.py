@@ -30,7 +30,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .const import CONF_HOST, CONF_PORT, CONF_SECRET, DOMAIN, URL_BASE
 from .hub import HubLink
 
-PLATFORMS = [Platform.MEDIA_PLAYER, Platform.SELECT, Platform.SENSOR, Platform.EVENT, Platform.BUTTON]
+PLATFORMS = [Platform.MEDIA_PLAYER, Platform.SELECT, Platform.SENSOR, Platform.EVENT, Platform.BUTTON,
+             Platform.BINARY_SENSOR]
 
 _LOGGER = logging.getLogger(__name__)
 

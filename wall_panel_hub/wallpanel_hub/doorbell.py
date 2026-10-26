@@ -3,9 +3,10 @@
 Asterisk's dialplan (intercom.extensions_conf) tells of each door's call in UserEvents, read
 here through Asterisk's manager (AMI: 127.0.0.1 only, a secret new each run of the hub):
 WallpanelRing when it comes, WallpanelAnswered when a panel takes it, WallpanelEnd when it
-ends. Each becomes an event of the door, or of the device of the door's server it comes from
-(Intercom.caller): ring, answered (by which panel), missed. Heard whether or not a panel is
-connected: HA's notification matters most when no one is at a panel.
+ends. Each becomes an event of whose call it is (its target: a door, a device of an external
+server; a server's own when its number is not known): ring, answered (by which panel), missed.
+Heard whether or not a panel is connected: HA's notification matters most when no one is at a
+panel.
 """
 
 import asyncio
@@ -47,7 +48,7 @@ class Doorbell:
             if not call or call in self.calls:
                 return
             number = ev.get("Number") or None
-            target = self.intercom.caller(ev.get("Door") or "", number)
+            target = ev.get("Target") or ""
             while len(self.calls) >= MAX_CALLS:
                 del self.calls[next(iter(self.calls))]
             self.calls[call] = {"target": target, "answered": False}

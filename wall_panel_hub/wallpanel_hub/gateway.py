@@ -24,7 +24,7 @@ import re
 import aiohttp
 from aiohttp import WSMsgType, web
 
-from .intercom import DOMAIN, contacts, networks
+from .intercom import DOMAIN, networks
 from . import relay as sound
 from . import door_open
 from .access import EditRefused, role_caps
@@ -137,8 +137,7 @@ class PanelConnection:
         ic = getattr(self.gateway, "intercom", None)
         if ic is None or not ic.settings.get("enabled"):
             return set()
-        found = {d.get("camera") for d in ic.doors if d.get("panels") is None or self.panel_id in d["panels"]}
-        found |= {c.get("camera") for c in ic.extra}
+        found = {x.get("camera") for x in ic.doors + ic.extra if x.get("panels") is None or self.panel_id in x["panels"]}
         return {c for c in found if c}
 
     async def project_settings(self, mid, kind: str, msg: dict) -> None:
@@ -298,7 +297,7 @@ class PanelConnection:
                 return
             names = {pid: p.name for pid, p in self.gateway.store.panels.items()}
             await self.send({"id": mid, "type": "result", "success": True,
-                             "result": contacts(ic.doors, ic.accounts, names, self.panel_id, ic.extra)})
+                             "result": ic.directory(names, self.panel_id)})
         elif kind == "wallpanel/intercom/open":
             # {target}: a door's code comes back for the panel to send in its call; else opened here.
             result = await self.gateway.open_door(str(msg.get("target") or ""), self.panel_id)

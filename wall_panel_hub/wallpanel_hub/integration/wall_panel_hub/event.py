@@ -16,7 +16,7 @@ EVENTS = ["ring", "answered", "missed", "opened"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add: AddEntitiesCallback) -> None:
-    add_door_entities(hass, entry, add, Doorbell)
+    add_door_entities(hass, entry, add, Doorbell, want=lambda door: door.get("kind", "door") == "door")
 
 
 class Doorbell(DoorEntity, EventEntity):

@@ -3,7 +3,7 @@ its doors, with their doorbells' events, and opening them.
 
 The add-on answers at /api/integration on its panel port, to its own secret only. It sends
 every paired panel with its speaker's state and its call ("panels"), and the intercom's doors
-("doors"), again on each change; each door's events ("door_event": ring, answered, missed,
+and external servers ("doors"), again on each change; each door's events ("door_event": ring, answered, missed,
 opened); and the result of each command.
 """
 
@@ -33,7 +33,8 @@ class HubLink:
         self.secret = secret
         # Panels by id, as the add-on last sent them; trusted once [synced].
         self.panels: dict[str, dict[str, Any]] = {}
-        # The intercom's doors (and doorbells) by target ("door:<id>", "contact:<id>").
+        # The intercom's doors (and doorbells) by target ("door:<id>", "contact:<id>"), and its
+        # external servers ("server:<id>", kind "server").
         self.doors: dict[str, dict[str, Any]] = {}
         self.synced = False
         self._listeners: list[Callable[[], None]] = []

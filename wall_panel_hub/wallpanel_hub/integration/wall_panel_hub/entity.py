@@ -72,8 +72,11 @@ def add_speaker_entities(
     entry.async_on_unload(link.listen(update))
 
 
+MODELS = {"door": "Door", "contact": "Doorbell", "server": "SIP server"}
+
+
 class DoorEntity(Entity):
-    """A door's entity, on the door's own device (its name in the add-on)."""
+    """A door's (or an external SIP server's) entity, on its own device (its name in the add-on)."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -86,7 +89,7 @@ class DoorEntity(Entity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, target)},
             name=door.get("name") or "Door",
-            model="Door" if target.startswith("door:") else "Doorbell",
+            model=MODELS.get(target.partition(":")[0], "Door"),
             manufacturer="Wall Panel Hub",
         )
 

@@ -263,15 +263,13 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         registered = await intercom.registered()
         registrations = await intercom.registrations()
 
+        def server(s: dict) -> dict:
+            status = registrations.get(s["username"])
+            shown = {k: v for k, v in s.items() if k != "secret"}
+            return {**shown, "secret_set": bool(s.get("secret")), "registration": status}
+
         def door(d: dict) -> dict:
-            if d.get("mode") == "server":
-                status = registrations.get(d["username"])
-                where = d["server"] if status == "Registered" else None
-            else:
-                status, where = None, registered.get(d["username"])
-            shown = {k: v for k, v in d.items() if k != "secret"}
-            return {**shown, "mode": d.get("mode", "here"), "panels": d.get("panels"), "open": opening(d.get("open")),
-                    "secret_set": bool(d.get("secret")), "registered": where, "registration": status}
+            return {**d, "panels": d.get("panels"), "open": opening(d.get("open")), "registered": registered.get(d["username"])}
 
         def opening(o: dict | None) -> dict:
             # The door's own password stays in the add-on.
@@ -289,8 +287,10 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
             "sip_port": intercom.sip_port,
             "addresses": await intercom_addresses(),
             "echo": ECHO,
+            "servers": [server(s) for s in intercom.servers],
+            "numbers_via": intercom.settings.get("numbers_via"),
             "doors": [door(d) for d in intercom.doors],
-            "contacts": [{**c, "open": opening(c.get("open"))} for c in intercom.extra],
+            "contacts": [{**c, "panels": c.get("panels"), "open": opening(c.get("open"))} for c in intercom.extra],
             "panels": panels,
         }
 
