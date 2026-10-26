@@ -307,6 +307,9 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         except IntercomInvalid as e:
             return _invalid(e)
         await intercom.apply()
+        # HA's doors follow (their devices, Open buttons).
+        if gateway.speakers is not None:
+            await gateway.speakers.changed()
         return web.json_response(await intercom_view())
 
     async def door_password(request: web.Request):

@@ -36,6 +36,37 @@
           "bluetooth": "Bluetooth"
         }
       }
+    },
+    "event": {
+      "doorbell": {
+        "name": "Sonnette",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ring": "A sonné",
+              "answered": "Répondu",
+              "missed": "Manqué",
+              "opened": "Ouverte"
+            }
+          }
+        }
+      }
+    },
+    "button": {
+      "open": {
+        "name": "Ouvrir"
+      }
+    },
+    "sensor": {
+      "call": {
+        "name": "Appel",
+        "state": {
+          "idle": "Inactif",
+          "ringing": "Sonne",
+          "calling": "Appelle",
+          "active": "En appel"
+        }
+      }
     }
   }
 }

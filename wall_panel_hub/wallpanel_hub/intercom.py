@@ -31,6 +31,9 @@ log = logging.getLogger(__name__)
 RTP_START, RTP_END = 10000, 10199
 # Asterisk's web server, for panels' SIP over WebSocket: on this machine only, through the hub.
 HTTP_PORT = 18088
+# Asterisk's manager (AMI), for doors' calls as HA events (doorbell.py): on this machine only.
+AMI_PORT = 18038
+AMI_USER = "wallpanel"
 DOMAIN = "wallpanel"
 # Asterisk's database family: the panels whose calls' sound comes through the hub (relay.py).
 RELAY_DB = "wallpanel_relay"
@@ -152,24 +155,31 @@ def extensions_conf(doors: list[dict] = (), panels: dict[str, str] | None = None
     """[panels]: panel id -> its user name, for the panels with an account; [extra]: the
     project's other devices (contacts), called through their door's server."""
     panels = panels or {}
+    call = "Call: ${CHANNEL(linkedid)}"
     lines = ["; Written by Wall Panel Hub: changes here are lost.",
              # Each door's call to a panel says which door: its name, camera and opening there.
-             "[wallpanel-door]", "exten => s,1,Set(PJSIP_HEADER(add,X-Wallpanel-Door)=${ARG1})", " same => n,Return()", ""]
+             "[wallpanel-door]", "exten => s,1,Set(PJSIP_HEADER(add,X-Wallpanel-Door)=${ARG1})", " same => n,Return()", "",
+             # A panel took the door's call: told to the hub (doorbell.py), for HA.
+             "[wallpanel-answered]", f"exten => s,1,UserEvent(WallpanelAnswered,Door: ${{ARG1}},{call},Panel: ${{CHANNEL(endpoint)}})",
+             " same => n,Return()", ""]
     echo = [f"exten => {ECHO},1,Answer()", " same => n,Echo()", " same => n,Hangup()"]
     for d in doors:
         wanted = d.get("panels")
         users = [u for pid, u in panels.items() if wanted is None or pid in wanted]
-        ring = f"Dial({'&'.join(dial(u) for u in users)},{RING_S},b(wallpanel-door^s^1({d['id']})))" if users else "Busy(5)"
+        ring = (f"Dial({'&'.join(dial(u) for u in users)},{RING_S},b(wallpanel-door^s^1({d['id']}))U(wallpanel-answered^{d['id']}))"
+                if users else "Busy(5)")
         lines += [f"[door-{d['id']}]"]
         if d.get("mode") != "server":
             lines += [f"; {ECHO}: what is said comes back, to check the sound's way."] + echo
-        # Any number the door calls rings its panels; "s" when it calls with none.
+        # Any number the door calls rings its panels; "s" when it calls with none. The hub
+        # hears of it (and of how it ended), for HA.
         exts = ["_[0-9*#+]!", "s"]
         if d.get("mode") == "server" and not re.fullmatch(r"[0-9*#+]*", d["user"]):
             exts.append(d["user"])
         for ext in exts:
-            lines += [f"exten => {ext},1,{ring}", " same => n,Hangup()"]
-        lines.append("")
+            lines += [f"exten => {ext},1,UserEvent(WallpanelRing,Door: {d['id']},{call},Number: ${{CALLERID(num)}})",
+                      f" same => n,{ring}", " same => n,Hangup()"]
+        lines += [f"exten => h,1,UserEvent(WallpanelEnd,Door: {d['id']},{call},Status: ${{DIALSTATUS}})", ""]
     # A panel calls: a door registered here, another panel, or a number through the first
     # door with its own server (its other monitors, the door station itself).
     lines += ["[from-panel]"] + echo
@@ -220,6 +230,15 @@ def contacts(doors: list[dict], accounts: dict[str, dict], names: dict[str, str]
                        "in_call": _in_call(d.get("open")), "target": f"door:{d['id']}"} for d in mine]}
 
 
+def manager_conf(secret: str) -> str:
+    """Asterisk's manager, for the hub only: its user reads the dialplan's events, nothing else."""
+    return "\n".join([
+        "[general]", "enabled=yes", f"port={AMI_PORT}", "bindaddr=127.0.0.1", "",
+        f"[{AMI_USER}]", f"secret={secret}", "deny=0.0.0.0/0.0.0.0", "permit=127.0.0.1/255.255.255.255",
+        "read=user", "write=", "",
+    ])
+
+
 def asterisk_conf(root: Path) -> str:
     return "\n".join([
         # Not a template ("(!)"): Asterisk ignores those, and would read an empty /etc/asterisk.
@@ -265,6 +284,8 @@ class Intercom:
         self.process: asyncio.subprocess.Process | None = None
         self.task: asyncio.Task | None = None
         self.binary = shutil.which("asterisk")
+        # The hub's way into Asterisk's manager (doorbell.py), new each run.
+        self.ami_secret = secrets.token_hex(16)
         # Panels' names (store.py), for their calls.
         self.panel_names = lambda: {}
 
@@ -364,12 +385,37 @@ class Intercom:
         return {"id": kept.get("id") or _door_id(), "name": name, "number": number, "kind": kind, "via": w["via"],
                 "camera": self._camera(w.get("camera")), "open": self._open(w.get("open"), kept.get("open"))}
 
-    def opener(self, target: str, panel_id: str) -> dict | None:
-        """How [target] ("door:<id>", "contact:<id>") opens, if this panel may open it."""
+    def name_of(self, target: str) -> str | None:
+        kind, _, tid = str(target).partition(":")
+        found = self.doors if kind == "door" else self.extra if kind == "contact" else []
+        return next((x["name"] for x in found if x["id"] == tid), None)
+
+    def bells(self) -> list[dict]:
+        """The doors, and the other devices that are doorbells, for HA: each a device there with
+        its doorbell's events and, when it opens without a call, an Open button."""
+        def bell(target: str, x: dict) -> dict:
+            return {"target": target, "name": x["name"], "camera": x.get("camera"),
+                    "opens": (x.get("open") or {}).get("kind") in ("http", "entity")}
+        return ([bell(f"door:{d['id']}", d) for d in self.doors]
+                + [bell(f"contact:{c['id']}", c) for c in self.extra if c.get("kind", "door") == "door"])
+
+    def caller(self, door_id: str, number: str | None) -> str:
+        """Whose call came through [door_id]: a device of its server by its number, else the door."""
+        device = next((c for c in self.extra if c.get("via") == door_id and number and c["number"] == number), None)
+        return f"contact:{device['id']}" if device else f"door:{door_id}"
+
+    def panel_of(self, endpoint: str) -> str | None:
+        """The panel an Asterisk endpoint (panel_x, panel_x_relay) is."""
+        user = endpoint[:-len("_relay")] if endpoint.endswith("_relay") else endpoint
+        return next((pid for pid, a in self.accounts.items() if a["username"] == user), None)
+
+    def opener(self, target: str, panel_id: str | None) -> dict | None:
+        """How [target] ("door:<id>", "contact:<id>") opens, if this panel may open it (any, for
+        HA: panel_id None)."""
         kind, _, tid = str(target).partition(":")
         if kind == "door":
             d = next((d for d in self.doors if d["id"] == tid), None)
-            if d is None or (d.get("panels") is not None and panel_id not in d["panels"]):
+            if d is None or (panel_id is not None and d.get("panels") is not None and panel_id not in d["panels"]):
                 return None
             return d.get("open")
         if kind == "contact":
@@ -448,10 +494,12 @@ class Intercom:
         panels = [{**self.accounts[p], "name": names.get(p)} for p in sorted(self.accounts)]
         files = {**STATIC_CONF, "asterisk.conf": asterisk_conf(self.root),
                  "pjsip.conf": pjsip_conf(self.doors, self.sip_port, panels),
-                 "extensions.conf": extensions_conf(self.doors, {p: a["username"] for p, a in self.accounts.items()}, self.extra)}
+                 "extensions.conf": extensions_conf(self.doors, {p: a["username"] for p, a in self.accounts.items()}, self.extra),
+                 "manager.conf": manager_conf(self.ami_secret)}
         for name, text in files.items():
             (etc / name).write_text(text, encoding="utf-8")
         (etc / "pjsip.conf").chmod(0o600)
+        (etc / "manager.conf").chmod(0o600)
 
     async def apply(self) -> None:
         """Asterisk as the settings say: started, reloaded, or stopped."""

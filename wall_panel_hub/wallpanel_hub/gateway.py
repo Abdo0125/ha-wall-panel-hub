@@ -301,25 +301,16 @@ class PanelConnection:
                              "result": contacts(ic.doors, ic.accounts, names, self.panel_id, ic.extra)})
         elif kind == "wallpanel/intercom/open":
             # {target}: a door's code comes back for the panel to send in its call; else opened here.
-            how = ic.opener(msg.get("target"), self.panel_id) if ic is not None else None
-            if not how or how.get("kind", "none") == "none":
-                await self.send(_error(mid, "unavailable", "this door does not open from here"))
-                return
-            try:
-                if how["kind"] == "dtmf":
-                    result = {"dtmf": how["code"]}
-                elif how["kind"] == "http":
-                    await door_open.by_address(self.gateway.session, how["url"], how.get("user", ""), how.get("password", ""))
-                    result = {"opened": True}
-                else:
-                    await door_open.by_device(self.gateway.session, self.gateway.ha_http, self.gateway.ha_auth, how["entity"])
-                    result = {"opened": True}
-            except door_open.OpenFailed as e:
-                log.warning("panel %s: door %s not opened: %s", self.panel_id, msg.get("target"), e)
-                await self.send(_error(mid, "failed", str(e)))
-                return
-            log.info("panel %s opens %s (%s)", self.panel_id, msg.get("target"), how["kind"])
-            await self.send({"id": mid, "type": "result", "success": True, "result": result})
+            result = await self.gateway.open_door(str(msg.get("target") or ""), self.panel_id)
+            if isinstance(result, dict):
+                await self.send({"id": mid, "type": "result", "success": True, "result": result})
+            else:
+                # The door said no: as when it opened a moment ago (its time between openings).
+                await self.send(_error(mid, "refused" if "answered 4" in result else "failed", result))
+        elif kind == "wallpanel/intercom/state":
+            # {state, with?}: the panel's call, for HA; no answer.
+            if self.gateway.speakers is not None:
+                await self.gateway.speakers.call_state(self.panel_id, msg)
         elif kind == "wallpanel/intercom/mode":
             # {subscription, relay}: the panel's calls' sound through the hub, or by WebRTC.
             sub = msg.get("subscription")
@@ -566,7 +557,8 @@ class PanelConnection:
         elif kind == "wallpanel/intercom/rtp":
             self.frame(msg)
         elif kind in ("wallpanel/intercom/subscribe", "wallpanel/intercom/send", "wallpanel/intercom/unsubscribe",
-                      "wallpanel/intercom/contacts", "wallpanel/intercom/mode", "wallpanel/intercom/open"):
+                      "wallpanel/intercom/contacts", "wallpanel/intercom/mode", "wallpanel/intercom/open",
+                      "wallpanel/intercom/state"):
             await self.intercom(mid, kind, msg)
         elif kind == "wallpanel/registry/get":
             await self.send({"id": mid, "type": "result", "success": True, "result": REGISTRY})
@@ -650,6 +642,31 @@ class Gateway:
         self.speakers = None
         # The intercom (intercom.Intercom).
         self.intercom = None
+
+    async def open_door(self, target: str, panel_id: str | None, calls: bool = True) -> dict | str:
+        """Opens [target] for a panel (or HA: panel_id None): {"opened"}, or {"dtmf": code} for
+        the panel to send in its call ([calls]); else why not. HA hears that it opened."""
+        ic = self.intercom
+        how = ic.opener(target, panel_id) if ic is not None else None
+        if not how or how.get("kind", "none") == "none" or (how["kind"] == "dtmf" and not calls):
+            return "this door does not open from here"
+        who = "Home Assistant" if panel_id is None else getattr(self.store.panels.get(panel_id), "name", panel_id)
+        try:
+            if how["kind"] == "dtmf":
+                result = {"dtmf": how["code"]}
+            elif how["kind"] == "http":
+                await door_open.by_address(self.session, how["url"], how.get("user", ""), how.get("password", ""))
+                result = {"opened": True}
+            else:
+                await door_open.by_device(self.session, self.ha_http, self.ha_auth, how["entity"])
+                result = {"opened": True}
+        except door_open.OpenFailed as e:
+            log.warning("%s: door %s not opened: %s", who, target, e)
+            return str(e)
+        log.info("%s opens %s (%s)", who, target, how["kind"])
+        if self.speakers is not None:
+            await self.speakers.door_event(target, "opened", {"by": who, "how": how["kind"]})
+        return result
 
     async def speaker_command(self, panel_id: str, command: dict) -> bool:
         """HA's command to a panel's speaker, to its connection that listens. False if none."""

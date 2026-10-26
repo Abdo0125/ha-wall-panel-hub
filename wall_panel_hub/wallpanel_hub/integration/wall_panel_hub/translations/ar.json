@@ -36,6 +36,37 @@
           "bluetooth": "بلوتوث"
         }
       }
+    },
+    "event": {
+      "doorbell": {
+        "name": "جرس الباب",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ring": "رنّ",
+              "answered": "تم الرد",
+              "missed": "فائتة",
+              "opened": "فُتح"
+            }
+          }
+        }
+      }
+    },
+    "button": {
+      "open": {
+        "name": "فتح"
+      }
+    },
+    "sensor": {
+      "call": {
+        "name": "المكالمة",
+        "state": {
+          "idle": "خامل",
+          "ringing": "يرن",
+          "calling": "يتصل",
+          "active": "في مكالمة"
+        }
+      }
     }
   }
 }

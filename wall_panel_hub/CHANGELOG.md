@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.42.0
+
+- Intercom, B5 (app 0.42.0, integration 0.4.0): doors in Home Assistant. Each door, and each
+  of the project's other devices that is a doorbell, is a device there with its Doorbell
+  (an event: rang, answered and by which panel, missed, opened and by whom and how), for
+  automations such as a notification with the door's camera. Heard from Asterisk itself
+  (its manager, on this machine only), even when no panel is connected.
+- An Open button in Home Assistant for each door that opens without a call (its own address,
+  a device of Home Assistant's).
+- Each panel's call in Home Assistant: idle, ringing, calling, in a call (and with whom).
+- A door that refuses to open (as within its time between openings) now says so on the panel.
+- The call screen shows the door camera's picture at once, fetched as the call comes, until
+  its live video starts; the panel's log tells how long the first picture took, and by which way.
+
 ## 0.41.0
 
 - Intercom, B4 (app 0.41.0): doors open from the panels. Each door, and each of the

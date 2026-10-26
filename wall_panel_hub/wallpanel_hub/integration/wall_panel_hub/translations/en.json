@@ -36,6 +36,37 @@
           "bluetooth": "Bluetooth"
         }
       }
+    },
+    "event": {
+      "doorbell": {
+        "name": "Doorbell",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "ring": "Rang",
+              "answered": "Answered",
+              "missed": "Missed",
+              "opened": "Opened"
+            }
+          }
+        }
+      }
+    },
+    "button": {
+      "open": {
+        "name": "Open"
+      }
+    },
+    "sensor": {
+      "call": {
+        "name": "Call",
+        "state": {
+          "idle": "Idle",
+          "ringing": "Ringing",
+          "calling": "Calling",
+          "active": "In a call"
+        }
+      }
     }
   }
 }

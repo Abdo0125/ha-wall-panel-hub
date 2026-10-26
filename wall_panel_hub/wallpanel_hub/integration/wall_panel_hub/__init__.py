@@ -8,8 +8,9 @@ These views need no Home Assistant login: panels authenticate to the hub with th
 own key, and pairing still needs the installer's approval in the add-on.
 
 With the add-on's secret (handed over in its Supervisor discovery) it also links to the
-add-on (hub.HubLink): each panel is a device here, with its speaker (media_player) and its
-sound output (select).
+add-on (hub.HubLink): each panel is a device here, with its speaker (media_player), its
+sound output (select) and its call (sensor); each door of the intercom too, with its
+doorbell (event) and, when it opens without a call, its Open button.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .const import CONF_HOST, CONF_PORT, CONF_SECRET, DOMAIN, URL_BASE
 from .hub import HubLink
 
-PLATFORMS = [Platform.MEDIA_PLAYER, Platform.SELECT]
+PLATFORMS = [Platform.MEDIA_PLAYER, Platform.SELECT, Platform.SENSOR, Platform.EVENT, Platform.BUTTON]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,17 +50,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         @callback
         def follow_panels() -> None:
-            # A panel unpaired in the add-on goes from here too, with its entities; a panel
-            # renamed there is renamed here.
+            # A panel unpaired in the add-on (a door removed) goes from here too, with its
+            # entities; one renamed there is renamed here.
             if not link.synced:
                 return
             for device in dr.async_entries_for_config_entry(devices, entry.entry_id):
                 ids = {i[1] for i in device.identifiers if i[0] == DOMAIN}
-                panel = next((link.panels[i] for i in ids if i in link.panels), None)
-                if ids and panel is None:
+                found = next((link.panels.get(i) or link.doors.get(i) for i in ids if i in link.panels or i in link.doors), None)
+                if ids and found is None:
                     devices.async_remove_device(device.id)
-                elif panel and panel.get("name") and device.name != panel["name"]:
-                    devices.async_update_device(device.id, name=panel["name"])
+                elif found and found.get("name") and device.name != found["name"]:
+                    devices.async_update_device(device.id, name=found["name"])
 
         entry.async_on_unload(link.listen(follow_panels))
         link.start()

@@ -1,8 +1,10 @@
-"""The link to the Wall Panel Hub add-on: its panels and their speakers, and commands to them.
+"""The link to the Wall Panel Hub add-on: its panels and their speakers, and commands to them;
+its doors, with their doorbells' events, and opening them.
 
 The add-on answers at /api/integration on its panel port, to its own secret only. It sends
-every paired panel with its speaker's state ("panels"), again on each change, and the
-result of each command.
+every paired panel with its speaker's state and its call ("panels"), and the intercom's doors
+("doors"), again on each change; each door's events ("door_event": ring, answered, missed,
+opened); and the result of each command.
 """
 
 from __future__ import annotations
@@ -31,8 +33,11 @@ class HubLink:
         self.secret = secret
         # Panels by id, as the add-on last sent them; trusted once [synced].
         self.panels: dict[str, dict[str, Any]] = {}
+        # The intercom's doors (and doorbells) by target ("door:<id>", "contact:<id>").
+        self.doors: dict[str, dict[str, Any]] = {}
         self.synced = False
         self._listeners: list[Callable[[], None]] = []
+        self._door_listeners: list[Callable[[dict[str, Any]], None]] = []
         self._ws = None
         self._task: asyncio.Task | None = None
         self._pending: dict[int, asyncio.Future] = {}
@@ -47,6 +52,12 @@ class HubLink:
         """Called on each change of the panels or of the link; returns the way to stop."""
         self._listeners.append(listener)
         return lambda: self._listeners.remove(listener)
+
+    @callback
+    def listen_doors(self, listener: Callable[[dict[str, Any]], None]) -> Callable[[], None]:
+        """Called with each door's event; returns the way to stop."""
+        self._door_listeners.append(listener)
+        return lambda: self._door_listeners.remove(listener)
 
     @callback
     def _changed(self) -> None:
@@ -98,18 +109,29 @@ class HubLink:
     def _message(self, msg: dict[str, Any]) -> None:
         if msg.get("type") == "panels":
             self.panels = {p["id"]: p for p in msg.get("panels") or [] if isinstance(p, dict) and p.get("id")}
+            self.doors = {d["target"]: d for d in msg.get("doors") or [] if isinstance(d, dict) and d.get("target")}
             self.synced = True
             self._changed()
+        elif msg.get("type") == "door_event":
+            for listener in list(self._door_listeners):
+                listener(msg)
         elif msg.get("type") == "result":
             future = self._pending.pop(msg.get("id"), None)
             if future is not None and not future.done():
                 if msg.get("success"):
                     future.set_result(None)
                 else:
-                    future.set_exception(HomeAssistantError(f"Panel: {msg.get('error') or 'refused'}"))
+                    future.set_exception(HomeAssistantError(f"Wall Panel Hub: {msg.get('error') or 'refused'}"))
 
     async def command(self, panel_id: str, command: dict[str, Any]) -> None:
         """Sends a command to a panel's speaker; raises if the add-on or the panel refuses it."""
+        await self._ask({"type": "command", "panel_id": panel_id, "command": command})
+
+    async def open(self, target: str) -> None:
+        """Opens a door; raises if it does not."""
+        await self._ask({"type": "open", "target": target})
+
+    async def _ask(self, message: dict[str, Any]) -> None:
         ws = self._ws
         if ws is None or ws.closed:
             raise HomeAssistantError("Wall Panel Hub is not connected")
@@ -117,7 +139,7 @@ class HubLink:
         self._next += 1
         future = self.hass.loop.create_future()
         self._pending[mid] = future
-        await ws.send_json({"type": "command", "id": mid, "panel_id": panel_id, "command": command})
+        await ws.send_json({**message, "id": mid})
         try:
             async with asyncio.timeout(COMMAND_TIMEOUT_S):
                 await future

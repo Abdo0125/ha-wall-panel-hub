@@ -7,6 +7,7 @@ from aiohttp import web
 from . import companion, discovery, settings
 from .catalog import CatalogCache
 from .catalog import fetch as fetch_catalog
+from .doorbell import Doorbell
 from .gateway import Gateway
 from .intercom import Intercom
 from .speakers import Speakers, load_secret
@@ -30,6 +31,9 @@ async def main() -> None:
         gateway.intercom = intercom
         intercom.panel_names = lambda: {pid: p.name for pid, p in store.panels.items()}
         await intercom.apply()
+        doorbell = Doorbell(intercom, gateway.speakers.door_event,
+                            lambda pid: getattr(store.panels.get(pid), "name", None))
+        doorbell_task = asyncio.create_task(doorbell.run())
 
         async def floors_changed(cat: dict) -> None:
             if store.save_floors(cat):
@@ -68,6 +72,7 @@ async def main() -> None:
             await asyncio.Event().wait()
         finally:
             floors_task.cancel()
+            doorbell_task.cancel()
             await intercom.stop()
             if zc:
                 await browser.close()
