@@ -137,7 +137,8 @@ class PanelConnection:
         ic = getattr(self.gateway, "intercom", None)
         if ic is None or not ic.settings.get("enabled"):
             return set()
-        found = {x.get("camera") for x in ic.doors + ic.extra if x.get("panels") is None or self.panel_id in x["panels"]}
+        found = {x.get(k) for x in ic.doors + ic.extra if x.get("panels") is None or self.panel_id in x["panels"]
+                 for k in ("camera", "camera_sub")}
         return {c for c in found if c}
 
     async def project_settings(self, mid, kind: str, msg: dict) -> None:

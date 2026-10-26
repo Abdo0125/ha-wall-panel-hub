@@ -260,18 +260,18 @@ def contacts(doors: list[dict], accounts: dict[str, dict], names: dict[str, str]
     "via"), else only the echo. "doors" and each device's "match" (the number it calls from)
     name a call that comes, with its camera and whether it opens (target for .../open)."""
     mine = [d for d in doors if _rings(d, panel_id)]
-    found = [{"name": d["name"], "number": d["username"], "kind": "door", "camera": d.get("camera"),
+    found = [{"name": d["name"], "number": d["username"], "kind": "door", "camera": d.get("camera"), "camera_sub": d.get("camera_sub"),
               "open": _opens(d.get("open")), "in_call": _in_call(d.get("open")), "target": f"door:{d['id']}"}
              for d in mine]
     ids = {s["id"] for s in servers}
-    found += [{"name": c["name"], "number": f"c_{c['id']}", "kind": c.get("kind", "door"), "camera": c.get("camera"),
+    found += [{"name": c["name"], "number": f"c_{c['id']}", "kind": c.get("kind", "door"), "camera": c.get("camera"), "camera_sub": c.get("camera_sub"),
                "open": _opens(c.get("open")), "in_call": _in_call(c.get("open")), "target": f"contact:{c['id']}", "match": c["number"]}
               for c in extra if c.get("via") in ids and _rings(c, panel_id)]
     found += sorted(({"name": names.get(pid) or "Panel", "number": a["username"], "kind": "panel"}
                      for pid, a in accounts.items() if pid != panel_id), key=lambda c: c["name"].lower())
     server = default_server(list(servers), numbers_via)
     return {"contacts": found, "via": server["name"] if server else None, "echo": ECHO,
-            "doors": [{"id": d["id"], "name": d["name"], "camera": d.get("camera"), "open": _opens(d.get("open")),
+            "doors": [{"id": d["id"], "name": d["name"], "camera": d.get("camera"), "camera_sub": d.get("camera_sub"), "open": _opens(d.get("open")),
                        "in_call": _in_call(d.get("open")), "target": f"door:{d['id']}"} for d in mine]}
 
 
@@ -495,7 +495,7 @@ class Intercom:
             raise IntercomInvalid("a device is on one of the external servers")
         kept = old.get(w.get("id"), {})
         return {"id": kept.get("id") or _door_id(), "name": name, "number": number, "kind": kind, "via": w["via"],
-                "panels": self._panels(w, kept), "camera": self._camera(w.get("camera")),
+                "panels": self._panels(w, kept), "camera": self._camera(w.get("camera")), "camera_sub": self._camera(w.get("camera_sub")),
                 "open": self._open(w.get("open"), kept.get("open"))}
 
     def name_of(self, target: str) -> str | None:
@@ -541,6 +541,8 @@ class Intercom:
             door = {"id": did, "name": name, "username": f"door_{did}", "password": _password()}
         door["panels"] = Intercom._panels(w, door)
         door["camera"] = Intercom._camera(w.get("camera", door.get("camera")))
+        # Its light stream (a camera's sub stream), shown first on a call until the main one comes.
+        door["camera_sub"] = Intercom._camera(w.get("camera_sub", door.get("camera_sub")))
         door["open"] = Intercom._open(w.get("open"), door.get("open"))
         return door
 

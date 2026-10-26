@@ -10,6 +10,7 @@ const LANG = (() => {
 })();
 const I18N = {
  "ar": {
+  "Sub stream (shown first)": "البث الفرعي (يظهر أولاً)",
   "{0} devices": "{0} أجهزة",
   "A call rings its panels; the first to answer takes it. Doors register with this add-on's SIP server, or are on an external server (Dahua VTO, Akuvox, a PBX…) where the add-on is one of the indoor monitors.": "المكالمة ترنّ شاشاتها، وأول شاشة تردّ تأخذها. الأبواب تسجّل في خادم SIP الخاص بهذا الـ add-on، أو تكون على خادم خارجي (Dahua VTO، Akuvox، سنترال…) يكون الـ add-on فيه إحدى الشاشات الداخلية.",
   "This add-on's SIP server": "خادم SIP الخاص بالـ add-on",
@@ -459,6 +460,7 @@ const I18N = {
   "Properties": "الخصائص"
  },
  "fr": {
+  "Sub stream (shown first)": "Flux secondaire (affiché d'abord)",
   "{0} devices": "{0} appareils",
   "A call rings its panels; the first to answer takes it. Doors register with this add-on's SIP server, or are on an external server (Dahua VTO, Akuvox, a PBX…) where the add-on is one of the indoor monitors.": "Un appel fait sonner ses écrans ; le premier qui répond le prend. Les portes s'enregistrent sur le serveur SIP de cet add-on, ou sont sur un serveur externe (Dahua VTO, Akuvox, un PBX…) où l'add-on est l'un des moniteurs intérieurs.",
   "This add-on's SIP server": "Serveur SIP de cet add-on",
@@ -908,6 +910,7 @@ const I18N = {
   "Properties": "Propriétés"
  },
  "es": {
+  "Sub stream (shown first)": "Subflujo (se muestra primero)",
   "{0} devices": "{0} dispositivos",
   "A call rings its panels; the first to answer takes it. Doors register with this add-on's SIP server, or are on an external server (Dahua VTO, Akuvox, a PBX…) where the add-on is one of the indoor monitors.": "Una llamada suena en sus pantallas; la primera que responde la toma. Las puertas se registran en el servidor SIP de este add-on, o están en un servidor externo (Dahua VTO, Akuvox, una centralita…) donde el add-on es uno de los monitores interiores.",
   "This add-on's SIP server": "Servidor SIP de este add-on",

@@ -1814,10 +1814,12 @@ function renderIntercom(view) {
       ringsField(d.panels, (panels) => change(d.id, { panels })).rows);
     // Its camera, shown on the panel while it rings, and how it opens.
     const cam = cameraSelect(d.camera);
+    const sub = cameraSelect(d.camera_sub);
     const opening = openFields(d.open);
-    card.append(el("div", { class: "form", style: { marginTop: "6px" } }, el("label", {}, t("Camera")), cam), opening.rows,
+    card.append(el("div", { class: "form", style: { marginTop: "6px" } }, el("label", {}, t("Camera")), cam,
+      el("label", {}, t("Sub stream (shown first)")), sub), opening.rows,
       el("div", { class: "row", style: { marginTop: "6px" } }, el("button", { class: "solid", onclick: () =>
-        change(d.id, { camera: cam.value || null, open: opening.value() }) }, t("Save camera and opening"))));
+        change(d.id, { camera: cam.value || null, camera_sub: sub.value || null, open: opening.value() }) }, t("Save camera and opening"))));
     card.append(el("div", { class: "row", style: { marginTop: "6px" } },
       el("button", { onclick: async () => {
         if (!confirm(t("Make a new password? The door must be set up again with it."))) return;
@@ -1841,15 +1843,16 @@ function renderIntercom(view) {
     const number = el("input", { value: c.number || "", placeholder: "8001", dir: "ltr" });
     const kind = selectEl(kinds, c.kind || "door");
     const cam = cameraSelect(c.camera);
+    const sub = cameraSelect(c.camera_sub);
     const opening = openFields(c.open);
     const rings = ringsField(c.panels);
     return el("div", { style: { marginTop: "6px" } },
       el("div", { class: "form" }, el("label", {}, t("Name")), name, el("label", {}, t("Number")), number,
-        el("label", {}, t("Kind")), kind, el("label", {}, t("Camera")), cam),
+        el("label", {}, t("Kind")), kind, el("label", {}, t("Camera")), cam, el("label", {}, t("Sub stream (shown first)")), sub),
       opening.rows, rings.rows,
       el("div", { class: "row", style: { marginTop: "6px" } },
         el("button", { class: "solid", onclick: () => onSave({ ...c, name: name.value.trim(), number: number.value.trim(), kind: kind.value,
-          camera: cam.value || null, open: opening.value(), panels: rings.value() }) }, label),
+          camera: cam.value || null, camera_sub: sub.value || null, open: opening.value(), panels: rings.value() }) }, label),
         c.id ? el("button", { onclick: () => { if (confirm(t("Remove {0}?", c.name))) saveDevices(devices().filter((x) => x.id !== c.id)); } }, t("Remove")) : null));
   };
   const serverFields = (s) => {

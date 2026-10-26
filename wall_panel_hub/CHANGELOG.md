@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.44.0
+
+- Intercom: a door or device may have a sub stream besides its camera (a doorbell's light
+  stream, such as Dahua's sub stream in Home Assistant). On a call the panel (app 0.44.0)
+  shows it first, starts the main one under it, and fades to the main one once its video
+  comes; if the main one gives none, the sub stream stays.
+
 ## 0.43.1
 
 - Intercom page: each door, server and device folds to one line (its name, state, number;
