@@ -44,6 +44,9 @@ NAME = re.compile(r"[^\n\r\[\];=\"]{1,40}")
 NAME_UNSAFE = re.compile(r"[\n\r\[\];=\"\\]")
 HOST = re.compile(r"[A-Za-z0-9.-]{1,253}(:\d{1,5})?")
 USER = re.compile(r"[A-Za-z0-9_.+#*-]{1,40}")
+# What Asterisk takes in an endpoint's from_user: an account such as Dahua's second monitor
+# "9901#2" is not, and would leave the door out (its calls then "not found").
+FROM_USER = re.compile(r"[A-Za-z0-9_.~-]+")
 MODES = ("here", "server")
 MAX_DOORS = 20
 MAX_CONTACTS = 50
@@ -109,8 +112,11 @@ def pjsip_conf(doors: list[dict], sip_port: int, panels: list[dict] = ()) -> str
             endpoint.append(f"callerid=\"{d['name']}\" <{user}>")
         if d.get("mode") == "server":
             host = d["server"]
-            lines += endpoint + [f"outbound_auth={user}", f"aors={user}",
-                                 f"from_user={d['user']}", f"from_domain={host.split(':')[0]}", "",
+            # Our calls to the door come from its monitor's account: here, else set by the
+            # dialplan (from_panel_dial).
+            own = [f"from_user={d['user']}"] if FROM_USER.fullmatch(d["user"]) else []
+            lines += endpoint + [f"outbound_auth={user}", f"aors={user}", *own,
+                                 f"from_domain={host.split(':')[0]}", "",
                                  # Asterisk as one of the door's indoor monitors.
                                  f"[{user}]", "type=registration", "transport=transport-udp", f"outbound_auth={user}",
                                  f"server_uri=sip:{host}", f"client_uri=sip:{d['user']}@{host}",
@@ -192,11 +198,20 @@ def extensions_conf(doors: list[dict] = (), panels: dict[str, str] | None = None
     for c in extra:
         via = servers.get(c.get("via"))
         if via is not None:
-            lines += [f"exten => c_{c['id']},1,Dial(PJSIP/{c['number']}@{via['username']},{RING_S})", " same => n,Hangup()"]
+            lines += through(f"c_{c['id']}", via, c["number"])
     server = next((d for d in doors if d.get("mode") == "server"), None)
-    numbers = f"Dial(PJSIP/${{EXTEN}}@{server['username']},{RING_S})" if server else "Congestion(5)"
-    lines += [f"exten => _[0-9*#+]!,1,{numbers}", " same => n,Hangup()", ""]
+    lines += through("_[0-9*#+]!", server, "${EXTEN}") if server else [
+        "exten => _[0-9*#+]!,1,Congestion(5)", " same => n,Hangup()"]
+    lines.append("")
     return "\n".join(lines)
+
+
+def through(ext: str, door: dict, number: str) -> list[str]:
+    """[number] called through [door]'s own server, from its monitor's account: set here when
+    the endpoint cannot have it (pjsip_conf)."""
+    steps = [] if FROM_USER.fullmatch(door["user"]) else [f"Set(CALLERID(num)={door['user']})"]
+    steps += [f"Dial(PJSIP/{number}@{door['username']},{RING_S})", "Hangup()"]
+    return [f"exten => {ext},1,{steps[0]}"] + [f" same => n,{s}" for s in steps[1:]]
 
 
 def _opens(o: dict | None) -> bool:
@@ -546,6 +561,10 @@ class Intercom:
                 text = line.decode(errors="replace").rstrip()
                 if text:
                     log.info("asterisk: %s", text)
+                    # A door (or panel) Asterisk could not take: said plainly, its reason just above.
+                    left = re.search(r"Could not create an object of type '(\w+)' with id '([^']+)'", text)
+                    if left:
+                        log.warning("intercom: Asterisk left out %s %s (see the error above): its calls will fail", *left.groups())
             code = await self.process.wait()
             self.process = None
             if not self.settings["enabled"]:

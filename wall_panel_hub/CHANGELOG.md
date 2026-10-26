@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.42.1
+
+- Intercom: a door whose monitor account has a # (Dahua's second monitor, "9901#2") was left
+  out by Asterisk, so calls through it were "not found". Its account now goes in the call
+  from the dialplan. A door or panel Asterisk leaves out is now said plainly in the log.
+
 ## 0.42.0
 
 - Intercom, B5 (app 0.42.0, integration 0.4.0): doors in Home Assistant. Each door, and each
