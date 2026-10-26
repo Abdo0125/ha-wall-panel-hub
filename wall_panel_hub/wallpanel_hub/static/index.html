@@ -42,6 +42,10 @@
   .navitem .grow { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dot { font-size: 10px; } .dot.on { color: var(--ok); } .dot.off { color: var(--muted); }
   .request { border: 1px dashed var(--accent); border-radius: 8px; padding: 8px 10px; margin: 4px 0; }
+  details.fold > summary { cursor: pointer; list-style: none; }
+  details.fold > summary::-webkit-details-marker { display: none; }
+  details.fold > summary::before { content: "▸"; margin-inline-end: 6px; color: var(--muted, #888); }
+  details.fold[open] > summary::before { content: "▾"; }
   .request .code { font-family: monospace; font-size: 18px; letter-spacing: 3px; color: var(--accent); }
 
   main { overflow: auto; padding: 16px 20px; min-width: 0; }

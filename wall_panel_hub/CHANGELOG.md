@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.43.1
+
+- Intercom page: each door, server and device folds to one line (its name, state, number;
+  a server's count of devices), opened to edit; the add forms fold too. Those opened stay
+  open after a save, and in this browser.
+
 ## 0.43.0
 
 - Intercom: external SIP servers have their own list. A server (Dahua VTO, Akuvox, a PBX...)

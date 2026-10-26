@@ -1705,6 +1705,21 @@ async function loadIntercom() {
   intercom = r.ok ? r.body : { error: r.status };
 }
 
+// Doors, servers and devices folded to one line; those opened stay open (after a save, and
+// in this browser).
+const icOpen = (() => {
+  try { return new Set(JSON.parse(localStorage.getItem("wallpanel_intercom_open") || "[]")); } catch (_) { return new Set(); }
+})();
+function fold(key, summary, ...body) {
+  const d = el("details", { class: "request fold" }, el("summary", { class: "row" }, ...summary), ...body);
+  d.open = icOpen.has(key);
+  d.addEventListener("toggle", () => {
+    if (d.open) icOpen.add(key); else icOpen.delete(key);
+    try { localStorage.setItem("wallpanel_intercom_open", JSON.stringify([...icOpen])); } catch (_) { /* no storage */ }
+  });
+  return d;
+}
+
 // A door's or device's camera and how it opens, edited the same way for both.
 function cameraSelect(value) {
   const cams = (S.catalog?.entities || []).filter((e) => domainOf(e.entity_id) === "camera");
@@ -1792,8 +1807,7 @@ function renderIntercom(view) {
   if (!ic.doors.length) box.append(el("p", { class: "muted" }, t("No doors yet.")));
   for (const d of ic.doors) {
     const state = d.registered ? t("● Registered from {0}", d.registered) : t("○ Not registered");
-    const card = el("div", { class: "request" },
-      el("div", { class: "row" }, el("strong", { class: "grow" }, d.name), el("span", { class: "muted" }, state)),
+    const card = fold(`door:${d.id}`, [el("strong", { class: "grow" }, d.name), el("span", { class: "muted" }, state)],
       el("div", { class: "form", style: { marginTop: "6px" } },
         el("label", {}, t("User name")), el("code", { style: { userSelect: "all" } }, d.username),
         el("label", {}, t("Password")), el("code", { style: { userSelect: "all" } }, d.password)),
@@ -1814,8 +1828,8 @@ function renderIntercom(view) {
     box.append(card);
   }
   const name = el("input", { placeholder: t("Front door") });
-  box.append(el("div", { class: "row", style: { marginTop: "10px" } }, name,
-    el("button", { class: "solid", onclick: () => { if (name.value.trim()) save({ doors: [...doors(), { name: name.value.trim() }] }); } }, t("Add door"))));
+  box.append(fold("add:door", [el("strong", {}, "+ " + t("Add door"))], el("div", { class: "row", style: { marginTop: "6px" } }, name,
+    el("button", { class: "solid", onclick: () => { if (name.value.trim()) save({ doors: [...doors(), { name: name.value.trim() }] }); } }, t("Add door")))));
   view.append(box);
   // External servers (Dahua VTO, Akuvox, a PBX...): the add-on is one of their monitors, and
   // their devices are set up under each by number: called by name from the panels, named
@@ -1829,7 +1843,7 @@ function renderIntercom(view) {
     const cam = cameraSelect(c.camera);
     const opening = openFields(c.open);
     const rings = ringsField(c.panels);
-    return el("div", { class: "request" },
+    return el("div", { style: { marginTop: "6px" } },
       el("div", { class: "form" }, el("label", {}, t("Name")), name, el("label", {}, t("Number")), number,
         el("label", {}, t("Kind")), kind, el("label", {}, t("Camera")), cam),
       opening.rows, rings.rows,
@@ -1857,17 +1871,22 @@ function renderIntercom(view) {
   for (const s of servers) {
     const state = s.registration === "Registered" ? t("● Linked to {0}", s.server) : t("○ Not linked") + (s.registration ? ` (${s.registration})` : "");
     const fields = serverFields(s);
-    const card = el("div", { class: "request" },
-      el("div", { class: "row" }, el("strong", { class: "grow" }, s.name), el("span", { class: "muted" }, state)),
+    const mine = devices().filter((c) => c.via === s.id);
+    const card = fold(`server:${s.id}`, [el("strong", { class: "grow" }, s.name),
+      el("span", { class: "muted" }, t("{0} devices", mine.length) + " · " + state)],
       fields.rows,
       el("div", { class: "row", style: { marginTop: "6px" } },
         el("button", { class: "solid", onclick: () => save({ servers: serverList().map((x) => (x.id === s.id ? fields.value() : x)) }) }, t("Save")),
         el("button", { onclick: () => { if (confirm(t("Remove {0} and its devices?", s.name))) save({ servers: serverList().filter((x) => x.id !== s.id) }); } }, t("Remove"))),
       el("h4", {}, t("Its devices")));
-    const mine = devices().filter((c) => c.via === s.id);
     if (!mine.length) card.append(el("p", { class: "muted" }, t("No devices yet.")));
-    for (const c of mine) card.append(deviceForm(c, (v) => saveDevices(devices().map((x) => (x.id === c.id ? v : x))), t("Save")));
-    card.append(el("h4", {}, t("Add a device")), deviceForm({ via: s.id }, (v) => saveDevices([...devices(), v]), t("Add")));
+    const kindName = Object.fromEntries(kinds);
+    for (const c of mine) {
+      card.append(fold(`device:${c.id}`, [el("strong", { class: "grow" }, c.name), el("span", { class: "muted" }, `${c.number} · ${kindName[c.kind] || ""}`)],
+        deviceForm(c, (v) => saveDevices(devices().map((x) => (x.id === c.id ? v : x))), t("Save"))));
+    }
+    card.append(fold(`add:device:${s.id}`, [el("strong", {}, "+ " + t("Add a device"))],
+      deviceForm({ via: s.id }, (v) => saveDevices([...devices(), v]), t("Add"))));
     ext.append(card);
   }
   // Numbers typed on a panel: through one server, when there are several.
@@ -1877,8 +1896,8 @@ function renderIntercom(view) {
     ext.append(el("div", { class: "form", style: { marginTop: "6px" } }, el("label", {}, t("Numbers typed go through")), via));
   }
   const fresh = serverFields({});
-  ext.append(el("h4", {}, t("Add a server")), fresh.rows,
-    el("div", { class: "row", style: { marginTop: "6px" } }, el("button", { class: "solid", onclick: () => save({ servers: [...serverList(), fresh.value()] }) }, t("Add server"))),
+  ext.append(fold("add:server", [el("strong", {}, "+ " + t("Add a server"))], el("div", { style: { marginTop: "6px" } }, fresh.rows),
+    el("div", { class: "row", style: { marginTop: "6px" } }, el("button", { class: "solid", onclick: () => save({ servers: [...serverList(), fresh.value()] }) }, t("Add server")))),
     el("div", { class: "row", style: { marginTop: "10px" } }, el("button", { onclick: async () => { await loadIntercom(); render(); } }, t("Refresh"))));
   view.append(ext);
   // Panels: ready once connected with the intercom on (their account is made then).
