@@ -16,6 +16,7 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 
+from .airplay import AirPlayInvalid
 from .cards import REGISTRY
 from .intercom import ECHO, IntercomInvalid
 from .intercom import addresses as intercom_addresses
@@ -105,6 +106,13 @@ def panel_api(store: Store, gateway: Gateway) -> web.Application:
     app.router.add_get("/api/pair/{rid}", pair_status)
     app.router.add_get("/api/websocket", gateway.handle)
     app.router.add_get(r"/api/media/{token:[a-f0-9]{32}}", media)
+
+    async def airplay(request: web.Request):
+        if getattr(gateway, "airplay", None) is None:
+            raise web.HTTPNotFound()
+        return await gateway.airplay.stream(request)
+
+    app.router.add_get(r"/api/airplay/{token:[a-f0-9]{32}}", airplay)
     app.router.add_get("/api/integration", integration)
     return app
 
@@ -339,6 +347,9 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         await gateway.disconnect(pid)
         if intercom is not None:
             await intercom.forget(pid)
+        if getattr(gateway, "airplay", None) is not None:
+            gateway.airplay.forget(pid)
+            await gateway.airplay.apply()
         if gateway.speakers:
             await gateway.speakers.gone(pid)
         return web.json_response({"ok": True})
@@ -517,6 +528,29 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     app.router.add_post("/api/editor/panels/{pid}/send", send_draft)
     app.router.add_get("/api/overview", overview)
     app.router.add_get("/api/integration/secret", integration_secret)
+    # AirPlay: each panel's switch and password (airplay.py).
+    def airplay_view() -> dict:
+        ap = gateway.airplay
+        return {"installed": bool(ap and ap.binary),
+                "panels": [{"id": pid, "name": p.name, **(ap.view(pid) if ap else {})} for pid, p in store.panels.items()]}
+
+    async def get_airplay(_):
+        if gateway.airplay is None:
+            raise web.HTTPNotFound()
+        return web.json_response(airplay_view())
+
+    async def put_airplay(request: web.Request):
+        if gateway.airplay is None:
+            raise web.HTTPNotFound()
+        try:
+            gateway.airplay.update(request.match_info["pid"], await _body(request))
+        except AirPlayInvalid as e:
+            return _invalid(e)
+        await gateway.airplay.apply()
+        return web.json_response(airplay_view())
+
+    app.router.add_get("/api/airplay", get_airplay)
+    app.router.add_put("/api/airplay/{pid}", put_airplay)
     app.router.add_get("/api/intercom", get_intercom)
     app.router.add_put("/api/intercom", put_intercom)
     app.router.add_post("/api/intercom/doors/{did}/password", door_password)

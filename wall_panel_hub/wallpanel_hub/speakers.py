@@ -123,9 +123,26 @@ class Speakers:
     def snapshot(self) -> list[dict]:
         return [
             {"id": p.id, "name": p.name, "model": p.model, "online": self.gateway.online(p.id),
-             "speaker": self.states.get(p.id), "call": self.calls.get(p.id)}
+             "speaker": self._speaker(p.id), "call": self.calls.get(p.id)}
             for p in self.store.panels.values()
         ]
+
+    def _speaker(self, panel_id: str) -> dict | None:
+        """The panel's speaker state, with AirPlay's while it plays on it (airplay.py)."""
+        state = self.states.get(panel_id)
+        airplay = getattr(self.gateway, "airplay", None)
+        return airplay.overlay(panel_id, state) if airplay is not None else state
+
+    async def art_changed(self, panel_id: str, art: tuple[str, str, bytes]) -> None:
+        """A cover (AirPlay's) for the panel's media_player, sent once: the state names it by its hash."""
+        if self.links:
+            await self.send_all(self._art(panel_id, art))
+
+    @staticmethod
+    def _art(panel_id: str, art: tuple[str, str, bytes]) -> str:
+        import base64
+        return json.dumps({"type": "art", "panel_id": panel_id, "hash": art[0], "mime": art[1],
+                           "data": base64.b64encode(art[2]).decode()})
 
     def message(self) -> str:
         ic = self.gateway.intercom
@@ -218,6 +235,11 @@ class Speakers:
             return reason
         if "path" in forward:
             forward["hub_path"] = f"/api/media/{self.media_token(forward['path'])}"
+        # HA's own sound, or its stop or pause, ends AirPlay on the panel; an announcement only lowers it.
+        airplay = getattr(self.gateway, "airplay", None)
+        if (airplay is not None and airplay.active(panel_id) and forward["command"] in ("play_media", "stop", "pause")
+                and not forward.get("announce")):
+            await airplay.kick(panel_id)
         sent = await self.gateway.speaker_command(panel_id, forward)
         log.info("speaker %s: %s%s", panel_id, forward["command"], "" if sent else " (not connected)")
         return None if sent else "the panel is not connected"
@@ -243,6 +265,9 @@ class Speakers:
         log.info("Home Assistant integration connected")
         try:
             await ws.send_str(self.message())
+            airplay = getattr(self.gateway, "airplay", None)
+            for pid, art in airplay.arts() if airplay is not None else ():
+                await ws.send_str(self._art(pid, art))
             async for m in ws:
                 if m.type != WSMsgType.TEXT:
                     break

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.45.0
+
+- AirPlay: a panel can be an AirPlay speaker named after it, for iPhones, iPads and Macs on
+  the home network (Project -> AirPlay, or on the panel: Settings -> This panel). Off until
+  turned on, with an optional AirPlay password for each panel. shairport-sync runs for it in
+  the add-on as an unprivileged user, announced by avahi on the home network's interfaces only;
+  its sound goes to the panel with a token made for each session. The panel's media_player in
+  Home Assistant (integration 0.6.0) shows it: source AirPlay, title, artist, album and cover;
+  nothing of it is logged or kept on disk. Home Assistant's own sounds come first: playing,
+  stopping or pausing from Home Assistant ends the AirPlay session; an announcement lowers it.
+  For now panels on the home network only (app 0.45.0).
+
 ## 0.44.0
 
 - Intercom: a door or device may have a sub stream besides its camera (a doorbell's light

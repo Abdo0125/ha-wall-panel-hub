@@ -1659,7 +1659,7 @@ function renderAccess(view, p) {
 // ---------- project ----------
 
 function renderProject(view) {
-  const tabs = [["general", t("General")], ["devices", t("Device types")], ["widgets", t("Widgets")], ["intercom", t("Intercom")]];
+  const tabs = [["general", t("General")], ["devices", t("Device types")], ["widgets", t("Widgets")], ["intercom", t("Intercom")], ["airplay", "AirPlay"]];
   view.append(el("div", { class: "titlebar" },
     el("h2", {}, S.site?.name || t("Project")),
     el("div", { class: "tabs" }, tabs.map(([id, label]) =>
@@ -1668,6 +1668,7 @@ function renderProject(view) {
   if (S.view.tab === "devices") return renderDevices(view);
   if (S.view.tab === "widgets") return renderSources(view);
   if (S.view.tab === "intercom") return renderIntercom(view);
+  if (S.view.tab === "airplay") return renderAirPlay(view);
 
   const site = S.site;
   const name = el("input", { value: site.name || "" });
@@ -1695,6 +1696,42 @@ function renderProject(view) {
         async () => { await post("api/site/pin", { role: "user", pin: null }); reload(); }, t("Remove"))),
     integrationBox(),
   );
+}
+
+// AirPlay: each panel an AirPlay speaker on the home network, named after it (off until turned
+// on), with its own password if wanted; what plays shows on its media_player in HA.
+let airplay = null;
+async function renderAirPlay(view) {
+  if (!airplay) {
+    view.append(el("p", { class: "muted" }, t("Loading…")));
+    const r = await api("api/airplay");
+    airplay = r.ok ? r.body : { error: r.status };
+    render();
+    return;
+  }
+  if (airplay.error) { view.append(el("p", { class: "muted" }, t("Not available"))); return; }
+  const save = async (pid, changes) => {
+    const r = await put(`api/airplay/${enc(pid)}`, changes);
+    if (!r.ok) { alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
+    airplay = r.body; render();
+  };
+  const states = { off: t("○ Off"), unavailable: t("○ Not installed in this add-on"), starting: t("… Starting"),
+    ready: t("● Ready"), playing: t("● Playing"), paused: t("● Paused") };
+  const box = el("div", { class: "box" }, el("h3", {}, "AirPlay"),
+    el("p", { class: "muted" }, t("Each panel turned on here is an AirPlay speaker named after it, for iPhones, iPads and Macs on the home network (announced there only). Its sound goes from the add-on to the panel, and its media_player in Home Assistant shows what plays. Home Assistant's own sounds come first.")));
+  if (!airplay.panels.length) box.append(el("p", { class: "muted" }, t("No panels yet.")));
+  for (const p of airplay.panels) {
+    const on = el("input", { type: "checkbox", checked: p.enabled, onchange: () => save(p.id, { enabled: on.checked }) });
+    const password = el("input", { type: "password", autocomplete: "new-password", placeholder: p.password_set ? t("(unchanged)") : t("None") });
+    box.append(el("div", { class: "request" },
+      el("div", { class: "row" }, el("label", { class: "row grow" }, on, el("strong", {}, p.name)), el("span", { class: "muted" }, states[p.state] || p.state)),
+      el("div", { class: "form", style: { marginTop: "6px" } }, el("label", {}, t("AirPlay password")), password),
+      el("div", { class: "row", style: { marginTop: "6px" } },
+        el("button", { class: "solid", onclick: () => { if (password.value) save(p.id, { password: password.value }); } }, t("Set password")),
+        p.password_set ? el("button", { onclick: () => save(p.id, { password: "" }) }, t("Remove password")) : null)));
+  }
+  box.append(el("div", { class: "row", style: { marginTop: "10px" } }, el("button", { onclick: () => { airplay = null; render(); } }, t("Refresh"))));
+  view.append(box);
 }
 
 // The intercom: doors (SIP door stations, or a phone for a test) register with the add-on's

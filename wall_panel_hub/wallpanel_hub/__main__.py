@@ -5,6 +5,7 @@ import aiohttp
 from aiohttp import web
 
 from . import companion, discovery, settings
+from .airplay import AirPlay
 from .catalog import CatalogCache
 from .catalog import fetch as fetch_catalog
 from .doorbell import Doorbell
@@ -31,6 +32,9 @@ async def main() -> None:
         gateway.intercom = intercom
         intercom.panel_names = lambda: {pid: p.name for pid, p in store.panels.items()}
         await intercom.apply()
+        gateway.airplay = AirPlay(cfg.data_dir, store, gateway.speaker_command, gateway.speakers.changed,
+                                  gateway.speakers.art_changed)
+        await gateway.airplay.apply()
         doorbell = Doorbell(intercom, gateway.speakers.door_event,
                             lambda pid: getattr(store.panels.get(pid), "name", None))
         doorbell_task = asyncio.create_task(doorbell.run())
@@ -77,6 +81,7 @@ async def main() -> None:
             doorbell_task.cancel()
             links_task.cancel()
             await intercom.stop()
+            await gateway.airplay.stop()
             if zc:
                 await browser.close()
                 await zc.async_close()

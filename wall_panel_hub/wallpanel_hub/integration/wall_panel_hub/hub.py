@@ -10,6 +10,7 @@ opened); and the result of each command.
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -36,6 +37,8 @@ class HubLink:
         # The intercom's doors (and doorbells) by target ("door:<id>", "contact:<id>"), and its
         # external servers ("server:<id>", kind "server").
         self.doors: dict[str, dict[str, Any]] = {}
+        # Each panel's cover (AirPlay's): (hash, type, bytes); its speaker state names it by hash.
+        self.arts: dict[str, tuple[str, str, bytes]] = {}
         self.synced = False
         self._listeners: list[Callable[[], None]] = []
         self._door_listeners: list[Callable[[dict[str, Any]], None]] = []
@@ -113,6 +116,14 @@ class HubLink:
             self.doors = {d["target"]: d for d in msg.get("doors") or [] if isinstance(d, dict) and d.get("target")}
             self.synced = True
             self._changed()
+        elif msg.get("type") == "art":
+            try:
+                data = base64.b64decode(msg.get("data") or "")
+            except ValueError:
+                return
+            if msg.get("panel_id") and msg.get("hash"):
+                self.arts[msg["panel_id"]] = (msg["hash"], str(msg.get("mime") or "image/jpeg"), data)
+                self._changed()
         elif msg.get("type") == "door_event":
             for listener in list(self._door_listeners):
                 listener(msg)

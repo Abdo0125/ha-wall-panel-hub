@@ -24,6 +24,7 @@ import re
 import aiohttp
 from aiohttp import WSMsgType, web
 
+from .airplay import AirPlayInvalid
 from .intercom import DOMAIN, networks
 from . import relay as sound
 from . import door_open
@@ -176,9 +177,18 @@ class PanelConnection:
             if kind == "wallpanel/panel/get":
                 result = panel_settings.get(store, self.panel_id, await _areas(self.gateway),
                                             self.gateway.installed_apps.get(self.panel_id, []))
+                if getattr(self.gateway, "airplay", None) is not None:
+                    result["airplay"] = self.gateway.airplay.view(self.panel_id)
             elif kind == "wallpanel/panel/update":
                 areas = {a["id"] for a in await _areas(self.gateway)}
-                panel_settings.update(store, self.panel_id, role, msg.get("changes") or {}, areas)
+                changes = msg.get("changes") or {}
+                airplay = changes.get("airplay")
+                if isinstance(airplay, dict) and getattr(self.gateway, "airplay", None) is not None:
+                    try:
+                        self.gateway.airplay.update(self.panel_id, airplay)
+                    except AirPlayInvalid as e:
+                        raise panel_settings.Refused(str(e)) from e
+                panel_settings.update(store, self.panel_id, role, {k: v for k, v in changes.items() if k != "airplay"}, areas)
                 result = None
             elif kind == "wallpanel/panel/pin":
                 panel_settings.set_pin(store, self.panel_id, str(msg.get("role") or ""), msg.get("new_pin"))
@@ -187,6 +197,9 @@ class PanelConnection:
                 # Unpaired: told first, then cut off; it pairs again from its connection page.
                 await self.send({"id": mid, "type": "result", "success": True, "result": None})
                 store.revoke(self.panel_id)
+                if getattr(self.gateway, "airplay", None) is not None:
+                    self.gateway.airplay.forget(self.panel_id)
+                    await self.gateway.airplay.apply()
                 await self.gateway.disconnect(self.panel_id)
                 return
         except panel_settings.Refused as e:
@@ -642,6 +655,8 @@ class Gateway:
         self.speakers = None
         # The intercom (intercom.Intercom).
         self.intercom = None
+        # Panels as AirPlay speakers (airplay.AirPlay).
+        self.airplay = None
 
     async def open_door(self, target: str, panel_id: str | None, calls: bool = True) -> dict | str:
         """Opens [target] for a panel (or HA: panel_id None): {"opened"}, or {"dtmf": code} for
@@ -776,6 +791,9 @@ class Gateway:
 
     async def notify_config(self, panel_id: str | None = None) -> None:
         """New effective configuration for one panel, or for all (site change)."""
+        # A panel renamed: its AirPlay name too.
+        if getattr(self, "airplay", None) is not None:
+            await self.airplay.apply()
         for pid, conns in list(self.connections.items()):
             if panel_id in (None, pid):
                 for conn in list(conns):

@@ -69,6 +69,29 @@ class PanelSpeaker(PanelEntity, MediaPlayerEntity):
     def media_title(self) -> str | None:
         return (self.speaker or {}).get("title")
 
+    # What AirPlay plays on the panel (none for HA's own sounds).
+    @property
+    def media_artist(self) -> str | None:
+        return (self.speaker or {}).get("artist")
+
+    @property
+    def media_album_name(self) -> str | None:
+        return (self.speaker or {}).get("album")
+
+    @property
+    def source(self) -> str | None:
+        return (self.speaker or {}).get("source")
+
+    @property
+    def media_image_hash(self) -> str | None:
+        return (self.speaker or {}).get("art")
+
+    async def async_get_media_image(self) -> tuple[bytes | None, str | None]:
+        art = self.link.arts.get(self.panel_id)
+        if art is None or art[0] != (self.speaker or {}).get("art"):
+            return None, None
+        return art[2], art[1]
+
     async def async_play_media(self, media_type: str, media_id: str, **kwargs: Any) -> None:
         if media_source.is_media_source_id(media_id):
             item = await media_source.async_resolve_media(self.hass, media_id, self.entity_id)
