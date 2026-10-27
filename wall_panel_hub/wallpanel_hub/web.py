@@ -23,7 +23,7 @@ from .intercom import addresses as intercom_addresses
 from .catalog import CatalogCache
 from .config import ConfigInvalid
 from .pins import PinInvalid, hash_pin
-from .gateway import Gateway
+from .gateway import Gateway, public
 from .settings import VERSION
 from .store import LayoutConflict, LayoutInvalid, Store
 
@@ -175,7 +175,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         if catalog is None:
             raise web.HTTPServiceUnavailable(text="no Home Assistant connection")
         try:
-            return web.json_response(await catalog.get(refresh=request.query.get("refresh") == "1"))
+            return web.json_response(public(await catalog.get(refresh=request.query.get("refresh") == "1")))
         except Exception as e:  # HA down, auth... shown in the editor's message pane
             log.warning("catalog failed: %s", e)
             return web.json_response({"error": str(e)}, status=502)

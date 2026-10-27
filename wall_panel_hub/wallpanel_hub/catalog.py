@@ -80,6 +80,8 @@ def build(floors: list, areas: list, devices: list, registry: list, states: list
             key=lambda a: a["name"].lower(),
         ),
         "entities": entities,
+        # Every entity HA has, hidden ones too: the hub checks panels' layouts by it.
+        "known": sorted(s["entity_id"] for s in states if s.get("entity_id")),
         # Devices the panels have no card for yet: shown as coming soon.
         "upcoming": sorted(upcoming, key=lambda e: (e["name"].lower(), e["entity_id"])),
     }

@@ -59,10 +59,12 @@ def update(store: Store, changes: dict) -> None:
     store.save_site(site)  # validated: ConfigInvalid on a bad entity id
 
 
-def set_pin(store: Store, which: str, new_pin: str | None) -> None:
+def set_pin(store: Store, which: str, new_pin: str | None, role: str = "installer") -> None:
     """The project's PIN for a role, hashed here; None removes it (the user's, or the
-    installer's, which leaves every panel's settings open)."""
+    installer's, which leaves every panel's settings open). The installer's is the installer's."""
     if which not in ("installer", "user"):
         raise Refused("role must be installer or user")
+    if which == "installer" and role != "installer":
+        raise Refused("only the installer changes the installer PIN")
     site = store.get_site()
     store.save_site({**site, f"{which}_pin": hash_pin(str(new_pin)) if new_pin else None})

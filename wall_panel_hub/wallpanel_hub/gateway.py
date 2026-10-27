@@ -43,9 +43,6 @@ log = logging.getLogger(__name__)
 READ_ONLY = {
     "get_states",
     "get_config",
-    "config/area_registry/list",
-    "config/device_registry/list",
-    "config/entity_registry/list",
     "ping",
     "unsubscribe_events",
 }
@@ -57,6 +54,26 @@ READS = {("homeassistant", "update_entity")}
 # A camera's video from HA, for the panel's own cameras: its HLS address (camera/stream)
 # and a WebRTC session through HA's go2rtc (offer, candidates, ICE servers).
 CAMERA_VIDEO = {"camera/stream", "camera/webrtc/offer", "camera/webrtc/candidate", "camera/webrtc/get_client_config"}
+
+# The services a panel may call, by its device's type: what its cards do, nothing that writes
+# files (camera.snapshot), reaches other devices (media_player.join) or changes HA.
+_ONOFF = {"turn_on", "turn_off", "toggle"}
+SERVICES = {
+    "light": _ONOFF,
+    "switch": _ONOFF,
+    "input_boolean": _ONOFF,
+    "automation": _ONOFF,
+    "fan": _ONOFF | {"set_percentage", "set_preset_mode", "oscillate", "set_direction"},
+    "cover": {"open_cover", "close_cover", "stop_cover", "toggle", "set_cover_position", "open_cover_tilt",
+              "close_cover_tilt", "stop_cover_tilt", "toggle_cover_tilt", "set_cover_tilt_position"},
+    "climate": _ONOFF | {"set_temperature", "set_hvac_mode", "set_fan_mode", "set_swing_mode", "set_preset_mode",
+                         "set_humidity"},
+    "lock": {"lock", "unlock", "open"},
+    "scene": {"turn_on"},
+    "script": _ONOFF,
+    "button": {"press"},
+    "input_button": {"press"},
+}
 
 # Targets that would reach entities beyond the ones listed.
 WIDE_TARGETS = ("area_id", "device_id", "floor_id", "label_id")
@@ -101,8 +118,12 @@ def check_command(msg: dict, allowed: set[str]) -> tuple[dict | None, str | None
         for e in ids:
             if e not in allowed:
                 return None, f"{e} is not on this panel"
-            if e.split(".", 1)[0] != msg.get("domain") and (msg.get("domain"), msg.get("service")) not in READS:
+            if (msg.get("domain"), msg.get("service")) in READS:
+                continue
+            if e.split(".", 1)[0] != msg.get("domain"):
                 return None, f"{msg.get('domain')}.{msg.get('service')} cannot target {e}"
+            if msg.get("service") not in SERVICES.get(msg.get("domain"), ()):
+                return None, f"{msg.get('domain')}.{msg.get('service')} is not allowed for panels"
         return msg, None
 
     return None, f"{kind} is not allowed for panels"
@@ -145,7 +166,7 @@ class PanelConnection:
     async def project_settings(self, mid, kind: str, msg: dict) -> None:
         store = self.gateway.store
         try:
-            project_settings.allowed(store, self.panel_id, msg.get("pin"))
+            role = project_settings.allowed(store, self.panel_id, msg.get("pin"))
             if kind == "wallpanel/project/get":
                 entities = []
                 if self.gateway.catalog is not None:
@@ -158,7 +179,7 @@ class PanelConnection:
                 project_settings.update(store, msg.get("changes") or {})
                 result = None
             else:
-                project_settings.set_pin(store, str(msg.get("role") or ""), msg.get("new_pin"))
+                project_settings.set_pin(store, str(msg.get("role") or ""), msg.get("new_pin"), role)
                 result = None
         except project_settings.Refused as e:
             await self.send(_error(mid, "forbidden", str(e)))
@@ -191,7 +212,7 @@ class PanelConnection:
                 panel_settings.update(store, self.panel_id, role, {k: v for k, v in changes.items() if k != "airplay"}, areas)
                 result = None
             elif kind == "wallpanel/panel/pin":
-                panel_settings.set_pin(store, self.panel_id, str(msg.get("role") or ""), msg.get("new_pin"))
+                panel_settings.set_pin(store, self.panel_id, str(msg.get("role") or ""), msg.get("new_pin"), role)
                 result = None
             else:
                 # Unpaired: told first, then cut off; it pairs again from its connection page.
@@ -439,7 +460,17 @@ class PanelConnection:
             await self.send({"id": sub, "type": "event", "event": {"layout": layout}})
 
     async def handle_local(self, msg: dict) -> None:
-        """wallpanel/* commands, answered by the hub."""
+        """wallpanel/* commands, answered by the hub. One that fails unexpectedly is answered
+        with internal_error: the panel's connection (its cameras, its call) goes on."""
+        try:
+            await self._handle_local(msg)
+        except (asyncio.CancelledError, ConnectionResetError):
+            raise
+        except Exception:
+            log.exception("panel %s: %s failed", self.panel_id, msg.get("type"))
+            await self.send(_error(msg.get("id"), "internal_error", "the hub could not do this"))
+
+    async def _handle_local(self, msg: dict) -> None:
         mid, kind = msg.get("id"), msg.get("type")
         store = self.gateway.store
         if kind in ("wallpanel/layout/get", "wallpanel/layout/subscribe") and msg.get("schema") == SCHEMA:
@@ -454,7 +485,8 @@ class PanelConnection:
         elif kind == "wallpanel/layout/save":
             # The PIN entered on the panel says who edits: installer, user or guest.
             try:
-                saved = store.save_from_panel(self.panel_id, msg.get("layout") or {}, msg.get("pin"))
+                saved = store.save_from_panel(self.panel_id, msg.get("layout") or {}, msg.get("pin"),
+                                              await _known(self.gateway))
             except LayoutInvalid as e:
                 await self.send(_error(mid, "invalid_layout", str(e)))
                 return
@@ -542,7 +574,7 @@ class PanelConnection:
             except Exception as e:  # HA restarting...
                 await self.send(_error(mid, "unavailable", str(e)))
                 return
-            await self.send({"id": mid, "type": "result", "success": True, "result": cat})
+            await self.send({"id": mid, "type": "result", "success": True, "result": public(cat)})
         elif kind == "wallpanel/area/picture":
             # HA's picture of one of this panel's rooms: the panel has no HA token.
             area = str(msg.get("area_id") or "")
@@ -577,6 +609,21 @@ class PanelConnection:
             await self.send({"id": mid, "type": "result", "success": True, "result": REGISTRY})
         else:
             await self.send(_error(mid, "unknown_command", f"{kind} is not known"))
+
+
+async def _known(gateway) -> set[str] | None:
+    """Every entity HA has now, to check a panel's layout by; None when HA cannot say (restarting)."""
+    if gateway.catalog is None:
+        return None
+    try:
+        return set((await gateway.catalog.get())["known"])
+    except Exception:
+        return None
+
+
+def public(catalog: dict) -> dict:
+    """The catalog as panels and the add-on's page get it (without every entity's id)."""
+    return {k: v for k, v in catalog.items() if k != "known"}
 
 
 async def _areas(gateway) -> list[dict]:
@@ -864,7 +911,14 @@ class Gateway:
             async for m in ws:
                 if m.type != WSMsgType.TEXT:
                     break
-                msg = json.loads(m.data)
+                # Unreadable: dropped, the connection goes on.
+                try:
+                    msg = json.loads(m.data)
+                except ValueError:
+                    msg = None
+                if not isinstance(msg, dict):
+                    log.warning("panel %s sent an unreadable message", panel.id)
+                    continue
                 if str(msg.get("type", "")).startswith("wallpanel/"):
                     await conn.handle_local(msg)
                     continue

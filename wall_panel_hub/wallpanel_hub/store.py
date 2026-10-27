@@ -88,6 +88,17 @@ def layout_entities(layout: dict | None) -> set[str]:
     return {e for c in cards for e in card_entities(c)}
 
 
+def only_known(layout: dict, known: set[str]) -> dict:
+    """[layout] without the cards showing a device HA does not have."""
+    def keep(cards: list) -> list:
+        return [c for c in cards if all(e in known for e in card_entities(c))]
+
+    out = {**layout, "pages": [{**p, "cards": keep(p.get("cards", []))} for p in layout.get("pages", [])]}
+    if layout.get("dashboard"):
+        out["dashboard"] = {**layout["dashboard"], "cards": keep(layout["dashboard"].get("cards", []))}
+    return out
+
+
 def _hash(key: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()
 
@@ -438,14 +449,25 @@ class Store:
             overrides["screensaver"] = {**(overrides.get("screensaver") or {}), **display["screensaver"]}
         return self.save_panel_config(panel_id, {**doc, "overrides": overrides})
 
-    def save_from_panel(self, panel_id: str, layout: dict, pin: str | None) -> dict:
-        """A layout edited on the panel: only changes the role may make (access.py).
-        A panel with no layout yet (just paired) uploads its own as the starting point."""
+    def save_from_panel(self, panel_id: str, layout: dict, pin: str | None, known: set[str] | None = None) -> dict:
+        """A layout edited on the panel: only changes the role may make (access.py), and only
+        devices HA has ([known]: every entity HA has now; None when HA cannot say, then not
+        checked). A panel with no layout yet is checked as an edit of an empty one, and keeps
+        only HA's devices: a panel moved from another HA brings none of that one's."""
         current = self.get_layout(panel_id)
-        if current is not None:
-            edited = {k: v for k, v in upgrade(layout, current).items() if k != "panel"}
-            eff = self.effective_config(panel_id)
-            allowed = {a["package"] for a in eff.get("apps", [])}
-            sources = set(eff.get("sources", {}).values())
-            check_panel_edit(current, edited, role_caps(eff, self.role_for(panel_id, pin)), allowed, sources)
+        if current is None:
+            layout = upgrade(layout)
+            if known is not None:
+                layout = only_known(layout, known)
+        base = current if current is not None else {"pages": [], "dashboard": None, "floors": []}
+        edited = {k: v for k, v in upgrade(layout, current).items() if k != "panel"}
+        eff = self.effective_config(panel_id)
+        allowed = {a["package"] for a in eff.get("apps", [])}
+        sources = set(eff.get("sources", {}).values())
+        check_panel_edit(base, edited, role_caps(eff, self.role_for(panel_id, pin)), allowed, sources)
+        if known is not None:
+            new = layout_entities(edited) - layout_entities(base)
+            missing = sorted(new - known)
+            if missing:
+                raise EditRefused(f"not in this Home Assistant: {', '.join(missing[:5])}")
         return self.save_layout(panel_id, layout)

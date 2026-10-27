@@ -70,7 +70,12 @@ def update(store: Store, panel_id: str, role: str, changes: dict, area_ids: set[
         access = changes["access"] or {}
         if set(access) != set(ROLES):
             raise Refused("access needs guest, user and installer")
-        clean = {r: [c for c in dict.fromkeys(access[r]) if c in ALL_CAPS] for r in ROLES}
+        asked = {r: [c for c in dict.fromkeys(access[r]) if c in ALL_CAPS] for r in ROLES}
+        # A role changes only the permissions it holds itself: the others stay as they were in
+        # every role (no one gives themselves or another the project, or takes it away).
+        mine = role_caps(store.effective_config(panel_id), role)
+        before = store.effective_config(panel_id)["access"]
+        clean = {r: [c for c in ALL_CAPS if (c in asked[r] if c in mine else c in before.get(r, []))] for r in ROLES}
         if "panel" not in clean[role]:
             raise Refused("you would lose the panel permission on this panel; change it from the add-on")
         doc["access"] = clean
@@ -82,10 +87,13 @@ def update(store: Store, panel_id: str, role: str, changes: dict, area_ids: set[
         store.place(panel_id, area)
 
 
-def set_pin(store: Store, panel_id: str, which: str, new_pin: str | None) -> None:
-    """This panel's own PIN for a role (hashed here, never kept as typed), or None for the project's."""
+def set_pin(store: Store, panel_id: str, which: str, new_pin: str | None, role: str = "installer") -> None:
+    """This panel's own PIN for a role (hashed here, never kept as typed), or None for the project's.
+    The installer's PIN is changed by the installer only."""
     if which not in ("installer", "user"):
         raise Refused("role must be installer or user")
+    if which == "installer" and role != "installer":
+        raise Refused("only the installer changes the installer PIN")
     doc = store.get_panel_config(panel_id)
     if new_pin:
         doc[f"{which}_pin"] = hash_pin(str(new_pin))

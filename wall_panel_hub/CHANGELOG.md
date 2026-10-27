@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.46.0
+
+- Security review, part 1 (docs/audit-1-connection.md). The hub is the last guard:
+  - No role grants or takes away a permission it does not hold itself; the installer PIN is
+    changed by the installer only (on the panel and for the project).
+  - Panels no longer read Home Assistant's registries directly (rooms, devices and entities
+    come through the catalog, with the rooms or devices permission).
+  - A panel calls only the services its cards use, for each kind of device (no
+    camera.snapshot, media_player.join and the like).
+  - A layout takes only devices this Home Assistant has: a panel's first layout keeps those
+    alone and is checked as an edit of an empty one; a device added later that Home Assistant
+    does not have is refused (one that left Home Assistant since stays).
+  - A message a panel sends that cannot be read, or a command that fails in the hub, no longer
+    closes the panel's connection (its cameras and call go on).
+- App 0.46.0: a panel no longer sends its own layout to a hub that has none (a panel moved
+  from another Home Assistant starts empty), keeps its connection when one subscription
+  fails, logs no states on release builds, never falls back to plain http for an address on
+  the internet, waits through network errors while pairing, and checks PINs off the main
+  thread.
+
 ## 0.45.0
 
 - AirPlay: a panel can be an AirPlay speaker named after it, for iPhones, iPads and Macs on
