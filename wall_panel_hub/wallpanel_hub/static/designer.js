@@ -382,7 +382,6 @@ function redo() {
 
 function problems(layout) {
   const out = [];
-  if (!layout.pages.length) out.push(t("No rooms."));
   const pages = new Set(layout.pages.map((p) => p.id));
   const roomGone = (c) => kindOfCard(c.card) === "room" && !pages.has(c.options?.page) ? t("Its room is no longer on the panel. Delete the card.") : null;
   for (const page of layout.pages) {
@@ -645,7 +644,7 @@ function renderDesign(view) {
   view.append(el("p", { class: "muted" }, S.menu
     ? t("Floors are tabs: the pencil for name, icon and deleting, + to add a floor. Drag a room to any cell, or onto another to swap them; + in an empty cell adds a room. A room's pencil sets its name, shape and size; tapping it opens it.")
     : t("Tap the page's name for the rooms menu. Tap + to add a device, an app or a widget, and a card to change its shape, size and name. Drag a card to any empty cell to put it there, or onto another to swap them.")));
-  const issues = problems(layout).filter((x) => x !== t("No rooms."));
+  const issues = problems(layout);
   for (const m of issues) view.append(el("div", { class: "msg error" }, m));
 }
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.46.2
+
+- The designer sends a panel with no rooms (my dashboard only); it refused with "No rooms.".
+
 ## 0.46.1
 
 - A panel's layout may have no rooms (my dashboard only): a new panel's first save was refused
