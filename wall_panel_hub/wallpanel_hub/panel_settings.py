@@ -68,13 +68,14 @@ def update(store: Store, panel_id: str, role: str, changes: dict, area_ids: set[
         doc["apps"] = list(changes["apps"] or [])
     if "access" in changes:
         access = changes["access"] or {}
-        if set(access) != set(ROLES):
-            raise Refused("access needs guest, user and installer")
-        asked = {r: [c for c in dict.fromkeys(access[r]) if c in ALL_CAPS] for r in ROLES}
+        if not isinstance(access, dict) or not access or not set(access) <= set(ROLES):
+            raise Refused("access is guest, user and installer")
+        before = store.effective_config(panel_id)["access"]
+        # A role not sent keeps its permissions (apps up to 0.46.3 left out one at its defaults).
+        asked = {r: [c for c in dict.fromkeys(access.get(r, before.get(r, []))) if c in ALL_CAPS] for r in ROLES}
         # A role changes only the permissions it holds itself: the others stay as they were in
         # every role (no one gives themselves or another the project, or takes it away).
         mine = role_caps(store.effective_config(panel_id), role)
-        before = store.effective_config(panel_id)["access"]
         clean = {r: [c for c in ALL_CAPS if (c in asked[r] if c in mine else c in before.get(r, []))] for r in ROLES}
         if "panel" not in clean[role]:
             raise Refused("you would lose the panel permission on this panel; change it from the add-on")

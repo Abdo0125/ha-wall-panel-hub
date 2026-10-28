@@ -200,6 +200,7 @@ class PanelConnection:
                 project_settings.set_pin(store, str(msg.get("role") or ""), msg.get("new_pin"), role)
                 result = None
         except project_settings.Refused as e:
+            log.warning("panel %s: project settings refused: %s", self.panel_id, e)
             await self.send(_error(mid, "forbidden", str(e)))
             return
         except (ConfigInvalid, PinInvalid, ValueError, TypeError) as e:
@@ -242,6 +243,7 @@ class PanelConnection:
                 await self.gateway.disconnect(self.panel_id)
                 return
         except panel_settings.Refused as e:
+            log.warning("panel %s: panel settings refused: %s", self.panel_id, e)
             await self.send(_error(mid, "forbidden", str(e)))
             return
         except (ConfigInvalid, PinInvalid, ValueError, TypeError) as e:

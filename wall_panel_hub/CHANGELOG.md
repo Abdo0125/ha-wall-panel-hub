@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.46.5
+
+- A panel's permissions changed from the panel were refused when a role was at its defaults
+  ("access needs guest, user and installer"): a role not sent keeps its permissions. A panel
+  or project setting refused is logged.
+- App 0.46.4:
+  - The permissions save again (every role is sent).
+  - "Saved", or why not, shows at the bottom of the settings screen, wherever the page is
+    scrolled to; only the hub's reason, not its whole answer.
+  - After a PIN, no PIN again until the screensaver, 5 minutes without a touch, or Lock (the
+    PIN in memory only; the hub still checks it on each edit). A PIN changed ends it.
+  - The guest goes on without a PIN as far as its permissions go (settings, edit mode); a PIN
+    button there gives more, the edit kept. The PIN is asked only where the guest may do nothing.
+  - The PIN window says "Enter PIN" (the user's PIN is taken too); the security page shows the
+    current role, guest included.
+
 ## 0.46.4
 
 - A panel gets the states of its layout's devices only, also from a subscription made before
