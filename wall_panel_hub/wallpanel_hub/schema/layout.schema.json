@@ -24,8 +24,8 @@
       "$ref": "#/$defs/panel"
     },
     "pages": {
+      "description": "The rooms. None on a new panel (my dashboard only) until rooms are added.",
       "type": "array",
-      "minItems": 1,
       "items": {
         "$ref": "#/$defs/page"
       }

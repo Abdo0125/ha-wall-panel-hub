@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.46.1
+
+- A panel's layout may have no rooms (my dashboard only): a new panel's first save was refused
+  ("pages should be non-empty"). App 0.46.1: its empty start is version 1 (0 was refused).
+
 ## 0.46.0
 
 - Security review, part 1 (docs/audit-1-connection.md). The hub is the last guard:
