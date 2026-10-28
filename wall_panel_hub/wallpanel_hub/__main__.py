@@ -62,7 +62,9 @@ async def main() -> None:
         runners = []
         for app, port in ((panel_api(store, gateway), cfg.panel_port),
                           (management_ui(store, gateway, cfg.ui_allowed, catalog, browser, intercom), cfg.ui_port)):
-            runner = web.AppRunner(app)
+            # No line per request: the add-on page asks every few seconds and a camera's video
+            # in many small parts, burying what the hub itself logs.
+            runner = web.AppRunner(app, access_log=None)
             await runner.setup()
             await web.TCPSite(runner, "0.0.0.0", port).start()
             runners.append(runner)

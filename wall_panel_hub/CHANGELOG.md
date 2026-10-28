@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.46.3
+
+- The add-on's log no longer has a line for every request (the add-on page asking every few
+  seconds, a camera's video in small parts): what the hub itself logs shows again.
+- App 0.46.2: a hub that lost a panel's layout (the add-on reinstalled) gets the panel's copy
+  back, checked like any edit; refused (no permission without a PIN), the copy stays on the
+  panel and goes with the next edit saved with a PIN. Only a layout from another hub (a panel
+  moved to another Home Assistant) gives way to an empty start.
+
 ## 0.46.2
 
 - The designer sends a panel with no rooms (my dashboard only); it refused with "No rooms.".
