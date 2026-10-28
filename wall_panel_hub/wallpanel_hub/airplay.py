@@ -82,7 +82,8 @@ def shairport_conf(name: str, slot: int, password: str | None, interface: str | 
         # What plays, to the hub only (loopback); the cover kept in memory, not cached on disk.
         "metadata = {", '  enabled = "yes";', '  include_cover_art = "yes";', '  cover_art_cache_directory = "";',
         '  socket_address = "127.0.0.1";', f"  socket_port = {META_BASE + slot};", "  socket_msglength = 65000;", "};",
-        "diagnostics = {", "  log_verbosity = 0;", "};", "",
+        # Connections and what goes wrong with them, to find where a slow start loses its time.
+        "diagnostics = {", "  log_verbosity = 1;", "};", "",
     ])
 
 
@@ -167,6 +168,7 @@ class Session:
         self.readers: set[asyncio.Queue] = set()
         self.paused = False
         self.heard_at = time.monotonic()
+        self.started_at = self.heard_at
 
     def feed(self, data: bytes) -> None:
         self.heard_at = time.monotonic()
@@ -197,6 +199,11 @@ class Speaker:
         self.art: tuple[str, str, bytes] | None = None
         # The sender's volume, as last told (it may come before the sound).
         self.volume: float | None = None
+        # When the last sender connected: the log tells how long each step of its start took.
+        self.connected_at: float | None = None
+
+    def since(self) -> str:
+        return f"+{time.monotonic() - self.connected_at:.1f} s" if self.connected_at else "no sender seen"
         self.metadata = Metadata(lambda kind, code, data: None)
 
 
@@ -433,14 +440,25 @@ class AirPlay:
             return
         if kind != b"ssnc":
             return
+        if code == b"clip":
+            sp.connected_at = time.monotonic()
+            log.info("AirPlay on %s: a sender connected", sp.panel_id)
+        elif code == b"snua":
+            log.info("AirPlay on %s: sender %s (%s)", sp.panel_id, data.decode(errors="replace")[:60], sp.since())
+        elif code == b"stal":
+            log.warning("AirPlay on %s: the sender stalled (%s)", sp.panel_id, sp.since())
         if code == b"pbeg":
+            log.info("AirPlay on %s: play begins (%s)", sp.panel_id, sp.since())
             asyncio.ensure_future(self._begin(sp))
         elif code == b"pend":
+            log.info("AirPlay on %s: play ends (%s)", sp.panel_id, sp.since())
             asyncio.ensure_future(self._end_session(sp))
         elif code == b"pfls" and sp.session:
+            log.info("AirPlay on %s: paused (%s)", sp.panel_id, sp.since())
             sp.session.paused = True
             self._changed_soon()
         elif code == b"prsm" and sp.session:
+            log.info("AirPlay on %s: resumed (%s)", sp.panel_id, sp.since())
             sp.session.paused = False
             self._changed_soon()
         elif code == b"pvol":
@@ -462,7 +480,7 @@ class AirPlay:
             return
         sp.session = Session()
         asyncio.create_task(self._keep_fed(sp, sp.session))
-        log.info("AirPlay on %s: playing", sp.panel_id)
+        log.info("AirPlay on %s: playing, the panel told (%s)", sp.panel_id, sp.since())
         await self.speaker_command(sp.panel_id, {"command": "play_media", "hub_path": f"/api/airplay/{sp.session.token}",
                                                  "title": "AirPlay", "announce": False})
         if sp.volume is not None:
@@ -503,8 +521,11 @@ class AirPlay:
         session.readers.clear()
         queue: asyncio.Queue = asyncio.Queue(QUEUE_CHUNKS)
         session.readers.add(queue)
+        log.info("AirPlay on %s: the panel asked for the sound (%s, %.1f s after playing began)",
+                 sp.panel_id, sp.since(), time.monotonic() - session.started_at)
         response = web.StreamResponse(headers={"Content-Type": "audio/wav", "Cache-Control": "no-store"})
         await response.prepare(request)
+        first = True
         try:
             await response.write(wav_header())
             while True:
@@ -512,6 +533,9 @@ class AirPlay:
                 if data is None:
                     break
                 await response.write(data)
+                if first:
+                    first = False
+                    log.info("AirPlay on %s: first sound sent to the panel (%s)", sp.panel_id, sp.since())
         except (ConnectionResetError, asyncio.CancelledError):
             pass
         finally:

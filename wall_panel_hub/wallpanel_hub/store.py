@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import json
+import logging
 import os
 import secrets
 import time
@@ -16,6 +17,8 @@ from .access import EditRefused, check_panel_edit, role_caps
 from .cards import card_entities, check_card
 from .migrate import is_current, upgrade
 from .pins import verify_pin
+
+log = logging.getLogger(__name__)
 
 # Display settings that live in the panel configuration once a hub manages the panel.
 DISPLAY = ("lang", "theme", "screensaver", "home_title")
@@ -86,6 +89,12 @@ def layout_entities(layout: dict | None) -> set[str]:
     cards = [c for p in layout.get("pages", []) for c in p.get("cards", [])]
     cards += (layout.get("dashboard") or {}).get("cards", [])
     return {e for c in cards for e in card_entities(c)}
+
+
+def layout_summary(layout: dict) -> str:
+    """One line for the log: version, rooms and devices."""
+    return (f"v{layout.get('version')}, {len(layout.get('pages', []))} rooms, "
+            f"{len(layout_entities(layout))} devices")
 
 
 def only_known(layout: dict, known: set[str]) -> dict:
@@ -458,7 +467,12 @@ class Store:
         if current is None:
             layout = upgrade(layout)
             if known is not None:
+                before = layout_entities(layout)
                 layout = only_known(layout, known)
+                dropped = before - layout_entities(layout)
+                if dropped:
+                    log.info("panel %s: first layout without devices this HA does not have: %s",
+                             panel_id, ", ".join(sorted(dropped)[:5]))
         base = current if current is not None else {"pages": [], "dashboard": None, "floors": []}
         edited = {k: v for k, v in upgrade(layout, current).items() if k != "panel"}
         eff = self.effective_config(panel_id)

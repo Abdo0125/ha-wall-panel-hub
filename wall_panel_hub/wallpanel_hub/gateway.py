@@ -34,7 +34,7 @@ from . import panel_settings, project_settings
 from .config import ConfigInvalid
 from .pins import PinInvalid
 from .migrate import SCHEMA, downgrade
-from .store import LayoutInvalid, Store, layout_entities
+from .store import LayoutInvalid, Store, layout_entities, layout_summary
 
 PACKAGE = re.compile(r"[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+")
 PROVIDER = re.compile(PACKAGE.pattern + r"/[A-Za-z0-9_.$]+")
@@ -83,6 +83,24 @@ def _ids(value) -> list[str]:
     if value is None:
         return []
     return [value] if isinstance(value, str) else list(value)
+
+
+def only_allowed(event: dict, allowed: set[str]) -> dict | None:
+    """A subscribe_entities event cut to [allowed]: a subscription made before the panel's
+    layout lost a device sends nothing more of it. None when nothing is left."""
+    out = {}
+    for key in ("a", "c"):
+        if isinstance(event.get(key), dict):
+            kept = {e: v for e, v in event[key].items() if e in allowed}
+            if kept:
+                out[key] = kept
+    if isinstance(event.get("r"), list):
+        kept = [e for e in event["r"] if e in allowed]
+        if kept:
+            out["r"] = kept
+    if not out and any(event.get(k) for k in ("a", "c", "r")):
+        return None
+    return out
 
 
 def check_command(msg: dict, allowed: set[str]) -> tuple[dict | None, str | None]:
@@ -488,12 +506,15 @@ class PanelConnection:
                 saved = store.save_from_panel(self.panel_id, msg.get("layout") or {}, msg.get("pin"),
                                               await _known(self.gateway))
             except LayoutInvalid as e:
+                log.warning("panel %s layout invalid: %s", self.panel_id, e)
                 await self.send(_error(mid, "invalid_layout", str(e)))
                 return
             except EditRefused as e:
                 log.warning("panel %s edit refused: %s", self.panel_id, e)
                 await self.send(_error(mid, "forbidden", str(e)))
                 return
+            log.info("panel %s layout saved from the panel (%s): %s", self.panel_id,
+                     store.role_for(self.panel_id, msg.get("pin")), layout_summary(saved))
             await self.send({"id": mid, "type": "result", "success": True, "result": {"version": saved["version"]}})
             await self.gateway.notify_layout(self.panel_id)
         elif kind in ("wallpanel/panel/get", "wallpanel/panel/update", "wallpanel/panel/pin", "wallpanel/panel/unpair"):
@@ -891,11 +912,20 @@ class Gateway:
 
         # get_states asked by the panel: HA answers with every entity; the panel gets its own.
         state_requests: set = set()
+        # The panel's subscribe_entities: their events carry only what its layout has now.
+        entity_subs: set = set()
 
         async def from_ha():
             async for m in upstream:
                 if m.type != WSMsgType.TEXT:
                     break
+                if entity_subs and '"event"' in m.data:
+                    msg = json.loads(m.data)
+                    if msg.get("type") == "event" and msg.get("id") in entity_subs:
+                        event = only_allowed(msg.get("event") or {}, conn.allowed)
+                        if event is not None:
+                            await ws.send_json({**msg, "event": event})
+                        continue
                 if state_requests and '"result"' in m.data:
                     msg = json.loads(m.data)
                     if msg.get("type") == "result" and msg.get("id") in state_requests:
@@ -926,6 +956,10 @@ class Gateway:
                 if forward is not None:
                     if forward.get("type") == "get_states":
                         state_requests.add(forward.get("id"))
+                    elif forward.get("type") == "subscribe_entities":
+                        entity_subs.add(forward.get("id"))
+                    elif forward.get("type") == "unsubscribe_events":
+                        entity_subs.discard(forward.get("subscription"))
                     await upstream.send_json(forward)
                 elif reason == "empty":
                     # Nothing on the panel yet: answer like HA would for zero entities.

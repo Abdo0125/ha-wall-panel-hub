@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.46.4
+
+- A panel gets the states of its layout's devices only, also from a subscription made before
+  the layout lost a device.
+- Each layout saved is logged: from the panel (by whom) or the designer, its version, rooms
+  and devices; a layout refused as invalid too, and a first layout's devices this Home
+  Assistant does not have.
+- AirPlay: each step of a sender's start is logged with its time (connected, play begins,
+  the panel told, the panel asks for the sound, the first sound sent), to find where a slow
+  start loses its time. What plays is still not logged.
+- App 0.46.3: a layout with other devices changes the panel's subscription on the same
+  connection; cameras, a call and the speaker are no longer cut. The address of a sound to
+  play is no longer logged, its server only (it may carry a token).
+
 ## 0.46.3
 
 - The add-on's log no longer has a line for every request (the add-on page asking every few

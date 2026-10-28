@@ -25,7 +25,7 @@ from .config import ConfigInvalid
 from .pins import PinInvalid, hash_pin
 from .gateway import Gateway, public
 from .settings import VERSION
-from .store import LayoutConflict, LayoutInvalid, Store
+from .store import LayoutConflict, LayoutInvalid, Store, layout_summary
 
 STATIC = Path(__file__).parent / "static"
 log = logging.getLogger(__name__)
@@ -223,9 +223,11 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         except KeyError:
             raise web.HTTPNotFound(text="nothing to send")
         except LayoutInvalid as e:
+            log.warning("panel %s layout from the designer invalid: %s", pid, e)
             return web.json_response({"error": str(e)}, status=422)
         except LayoutConflict as e:
             return web.json_response({"conflict": True, "current": e.current}, status=409)
+        log.info("panel %s layout saved from the designer: %s", pid, layout_summary(saved))
         await gateway.notify_layout(pid)
         return web.json_response({"version": saved["version"], "online": gateway.online(pid)})
 
