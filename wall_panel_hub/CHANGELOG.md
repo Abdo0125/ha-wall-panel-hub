@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.46.9
+
+- Each panel's devices are read from its layout once after each change, not again for every
+  event from Home Assistant and every camera picture: less work for the hub's processor and disk.
+- A camera with no live stream in Home Assistant: its pictures are asked of it twice a second at
+  most, which cheap cameras keep up with.
+- The cameras' video path on the home network refuses any step out of the stream's own files.
+
 ## 0.46.8
 
 - A server set to "its devices only": a device's number typed on a panel goes through, as

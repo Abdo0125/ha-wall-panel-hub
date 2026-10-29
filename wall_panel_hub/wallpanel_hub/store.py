@@ -162,6 +162,9 @@ class Store:
             self.panels = {p["id"]: Panel(**p) for p in raw}
         # Pairing requests live in memory only: a restart simply asks the panel to retry.
         self.pending: dict[str, PairRequest] = {}
+        # One more at each write: what was read from the files may have changed (gateway.py keeps
+        # each panel's devices until then).
+        self.generation = 0
 
     # ---- persistence ----
 
@@ -169,6 +172,7 @@ class Store:
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(tmp, path)  # atomic: a power cut never leaves half a file
+        self.generation += 1
 
     def _save_panels(self) -> None:
         self._write(self.panels_file, [asdict(p) for p in self.panels.values()])
@@ -255,6 +259,7 @@ class Store:
         self._save_panels()
         self.delete_draft(panel_id)
         self._config_file(panel_id).unlink(missing_ok=True)
+        self.generation += 1
 
     # ---- layouts ----
 

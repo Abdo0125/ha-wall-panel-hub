@@ -167,10 +167,18 @@ class PanelConnection:
         self.relays: dict[str, sound.Relay] = {}
         self.frames: asyncio.Queue | None = None
         self.frames_task: asyncio.Task | None = None
+        # [allowed] as last read, and what it was read from.
+        self._allowed: tuple[tuple, set[str]] | None = None
 
     @property
     def allowed(self) -> set[str]:
-        return layout_entities(self.gateway.store.get_layout(self.panel_id)) | self.door_cameras()
+        """The panel's devices: its layout's, and its doors' cameras. Read from the files again only
+        after something was saved (each HA event and camera picture asks)."""
+        ic = getattr(self.gateway, "intercom", None)
+        read = (self.gateway.store.generation, id(ic), getattr(ic, "generation", None))
+        if self._allowed is None or self._allowed[0] != read:
+            self._allowed = read, layout_entities(self.gateway.store.get_layout(self.panel_id)) | self.door_cameras()
+        return self._allowed[1]
 
     def door_cameras(self) -> set[str]:
         """The cameras of the doors that ring this panel and of the project's devices (intercom)."""
@@ -812,6 +820,9 @@ class Gateway:
 
     # A live stream that gives no picture this long is given up for the camera's pictures.
     FIRST_FRAME_S = 10
+    # Those pictures at most this often: each one is asked of the camera itself, which a cheap one
+    # cannot keep up with.
+    STILLS_FPS = 2.0
 
     async def camera_frames(self, entity_id: str, fps: float, width: int | None = None):
         """A camera's live picture: (type, bytes), at most [fps] a second. From HA's MJPEG stream;
@@ -828,13 +839,14 @@ class Gateway:
                 raise
             log.info("camera %s: no live stream from HA (%s), its pictures instead", entity_id, e or type(e).__name__)
         loop = asyncio.get_running_loop()
+        pace = min(fps, self.STILLS_FPS)
         while True:
             began = loop.time()
             still = await self.camera_still(entity_id, width)
             if still is None:
                 raise RuntimeError("no picture from the camera")
             yield still
-            await asyncio.sleep(max(0.0, 1 / fps - (loop.time() - began)))
+            await asyncio.sleep(max(0.0, 1 / pace - (loop.time() - began)))
 
     async def _mjpeg_frames(self, entity_id: str, fps: float):
         timeout = aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=self.FIRST_FRAME_S)

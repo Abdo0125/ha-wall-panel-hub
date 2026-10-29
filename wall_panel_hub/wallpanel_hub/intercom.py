@@ -363,6 +363,8 @@ class Intercom:
         self.panel_names = lambda: {}
         # Each external server's registration, as last read (watch): server id -> Registered...
         self.links: dict[str, str] = {}
+        # One more at each change saved: the doors' cameras may have changed (gateway.py).
+        self.generation = 0
 
     # ---- settings ----
 
@@ -370,6 +372,7 @@ class Intercom:
         tmp = self.file.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.settings, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(self.file)
+        self.generation += 1
 
     @property
     def servers(self) -> list[dict]:
@@ -395,6 +398,7 @@ class Intercom:
         """{"enabled"?, "sip_log"?, "servers"?, "doors"?, "contacts"?, "numbers_via"?}: in each
         list, one without id is new, one left out is removed; a secret left out is kept. The
         devices of a server removed go with it."""
+        self.generation += 1  # even when refused halfway
         if "enabled" in changes:
             self.settings["enabled"] = bool(changes["enabled"])
         if "sip_log" in changes:

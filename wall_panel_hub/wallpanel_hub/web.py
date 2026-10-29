@@ -89,6 +89,9 @@ def panel_api(store: Store, gateway: Gateway) -> web.Application:
         The address carries HA's own token for the stream, handed out to a panel for its own
         cameras only; HA serves these without a login too. Panels connected through HA's
         address fetch them from HA itself."""
+        # Within the stream's own files: no step out of it.
+        if any(part in ("", ".", "..") for part in request.match_info["tail"].split("/")):
+            raise web.HTTPNotFound()
         url = f"{gateway.ha_http}/api/hls/{request.match_info['token']}/{request.match_info['tail']}"
         timeout = aiohttp.ClientTimeout(total=60, sock_connect=10)
         try:
