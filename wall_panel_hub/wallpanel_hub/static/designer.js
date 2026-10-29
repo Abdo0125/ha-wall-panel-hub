@@ -265,8 +265,13 @@ function device(id) {
     icon: d.icon || (e?.icon && e.icon.startsWith("mdi:") ? e.icon : null),
     area: e?.area_id || null,
     known: !!e,
+    // What it can do that an option needs ("requires" in the registry): dimming, speeds.
+    features: e?.features || [],
   };
 }
+
+// An option offered for this card: one needing a feature only for a card of one device that has it.
+const optionFits = (c, opt) => !opt.requires || (c.entities.length === 1 && device(c.entities[0]).features.includes(opt.requires));
 
 // The icon a card shows (off state), close to the app's cardIcon.
 function cardIcon(c) {
@@ -661,7 +666,7 @@ function cardCell(pl, page) {
     ? [el("div", { class: "ring" }, icon(cardIcon(c)), el("span", { class: "lbl" }, cardLabel(c)))]
     : size === "2x1"
       ? [icon(cardIcon(c), { style: { fontSize: "32px" } }), el("span", { class: "lbl" }, cardLabel(c)),
-         (c.card === "light" && c.options?.dimming !== false) || c.card === "cover" ? el("span", { class: "bar" }) : null]
+         (c.card === "light" && c.options?.dimming !== false && optionFits(c, R.cards.light.options.dimming)) || c.card === "cover" ? el("span", { class: "bar" }) : null]
       : [icon(cardIcon(c)), el("span", { class: "lbl" }, cardLabel(c))];
   let roomCls = "", roomBg = "";
   if (kindOfCard(c.card) === "room") {
@@ -774,14 +779,16 @@ function cardSheet(index) {
   const redraw = () => cardSheet(page.cards.indexOf(c));
   const edit = (fn) => { change(() => fn()); redraw(); };
   const variants = variantsFor(c);
-  const optionFields = Object.entries(spec.options || {}).map(([key, opt]) => {
+  const optionFields = Object.entries(spec.options || {}).filter(([, opt]) => optionFits(c, opt)).map(([key, opt]) => {
     const value = c.options?.[key];
     const set = (v) => edit(() => {
       if (v === undefined) { if (c.options) delete c.options[key]; if (c.options && !Object.keys(c.options).length) delete c.options; }
       else c.options = { ...(c.options || {}), [key]: v };
     });
     const label = OPTION_NAMES[key] || key;
-    if (opt.type === "bool") return field(label, chips([["", t("Default")], ["true", t("Yes")], ["false", t("No")]], value === undefined ? "" : String(value), (v) => set(v === "" ? undefined : v === "true")));
+    // Yes or no, the default shown chosen; the default is left out of the layout.
+    if (opt.type === "bool") return field(label, chips([["true", t("Yes")], ["false", t("No")]], String(value ?? opt.default ?? false),
+      (v) => set(v === String(opt.default) ? undefined : v === "true")));
     if (opt.type === "enum") return field(label, chips([["", t("Default")], ...opt.values.map((v) => [v, v])], value ?? "", (v) => set(v || undefined)));
     if (opt.type === "int") return field(label, el("input", { type: "number", min: opt.min, max: opt.max, value: value ?? "", placeholder: opt.default ?? "",
       onchange: (e) => set(e.target.value === "" ? undefined : Number(e.target.value)) }));

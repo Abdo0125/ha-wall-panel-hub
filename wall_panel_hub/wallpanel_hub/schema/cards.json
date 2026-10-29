@@ -1,5 +1,5 @@
 {
-  "$comment": "Card registry. One card per function: a kind's main card is named as the kind (light, cover...), its other cards kind.name (scene.bar, room.card); what a device can do (dimming, colours, tilt, speeds) comes from Home Assistant, what the installer chooses is an option. free_size: any WxH up to the grid (6x4), sizes then only offered as presets. The add-on validates layouts against it and builds the editor's card picker and property fields from it; the app mirrors the kinds in CardKind.kt (a unit test keeps them in step). entities.domains '*' accepts any domain. Options of type 'entity' must be named *_entity.",
+  "$comment": "Card registry. One card per function: a kind's main card is named as the kind (light, cover...), its other cards kind.name (scene.bar, room.card); what a device can do (dimming, colours, tilt, speeds) comes from Home Assistant, what the installer chooses is an option. free_size: any WxH up to the grid (6x4), sizes then only offered as presets. The add-on validates layouts against it and builds the editor's card picker and property fields from it; the app mirrors the kinds in CardKind.kt (a unit test keeps them in step). entities.domains '*' accepts any domain. Options of type 'entity' must be named *_entity. An option with 'requires' is offered only for a card of one device that can do it (dimming: a light with a colour mode other than on/off; speeds: a fan with HA's SET_SPEED feature).",
   "version": 2,
   "sizes": [
     "1x1",
@@ -128,7 +128,8 @@
       "options": {
         "dimming": {
           "type": "bool",
-          "default": true
+          "default": true,
+          "requires": "dimming"
         }
       },
       "targets": [
@@ -208,7 +209,8 @@
       "options": {
         "speeds": {
           "type": "bool",
-          "default": true
+          "default": true,
+          "requires": "speeds"
         }
       },
       "targets": [

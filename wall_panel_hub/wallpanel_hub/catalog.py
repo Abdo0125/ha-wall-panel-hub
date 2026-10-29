@@ -28,6 +28,18 @@ UPCOMING = ("media_player", "alarm_control_panel", "vacuum", "water_heater", "hu
             "siren", "remote", "number", "input_number", "select", "input_select")
 
 
+def features(entity_id: str, attrs: dict) -> list[str]:
+    """What the device can do that a card's option needs ("requires" in cards.json); the app
+    reads them from the same attributes (EntityState.can)."""
+    domain = entity_id.split(".", 1)[0]
+    found = []
+    if domain == "light" and any(m != "onoff" for m in attrs.get("supported_color_modes") or []):
+        found.append("dimming")
+    if domain == "fan" and int(attrs.get("supported_features") or 0) & 1:  # FanEntityFeature.SET_SPEED
+        found.append("speeds")
+    return found
+
+
 def build(floors: list, areas: list, devices: list, registry: list, states: list) -> dict:
     device_area = {d["id"]: d.get("area_id") for d in devices if "id" in d}
     reg = {e["entity_id"]: e for e in registry if "entity_id" in e}
@@ -64,6 +76,7 @@ def build(floors: list, areas: list, devices: list, registry: list, states: list
             "device_class": attrs.get("device_class"),
             "unit": attrs.get("unit_of_measurement"),
             "icon": attrs.get("icon") or (r or {}).get("icon"),
+            "features": features(eid, attrs),
         })
     entities.sort(key=lambda e: (e["name"].lower(), e["entity_id"]))
 

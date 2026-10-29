@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.47.1
+
+- A card's setting a device cannot use is not offered: dimming only for a light that dims,
+  speed buttons only for a fan with speeds. The designer's preview shows a brightness bar
+  for a light that dims only.
+- On/off settings read Yes or No, the default already chosen.
+
 ## 0.47.0
 
 - One card per function: light, switch, shutter, climate, fan, lock, scene, script, button,
