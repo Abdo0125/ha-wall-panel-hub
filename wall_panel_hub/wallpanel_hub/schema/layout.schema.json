@@ -12,8 +12,8 @@
   "additionalProperties": false,
   "properties": {
     "schema": {
-      "description": "Layout format. Files without it are version 1 (tiles) and are migrated on read.",
-      "const": 2
+      "description": "Layout format. Files without it are version 1 (tiles), version 2 had a card type per shape (light.dimmer...); both are migrated on read.",
+      "const": 3
     },
     "version": {
       "description": "Layout revision. The add-on increments it on every change; a panel only applies a layout newer than the one it holds.",
@@ -255,9 +255,9 @@
           "pattern": "^[a-z0-9_]+$"
         },
         "card": {
-          "description": "Card type from cards.json, as kind.variant (e.g. light.dimmer).",
+          "description": "Card type from cards.json: a kind's main card is the kind (e.g. light), its others kind.name (e.g. scene.bar).",
           "type": "string",
-          "pattern": "^[a-z_]+\\.[a-z_]+$"
+          "pattern": "^[a-z_]+(\\.[a-z_]+)?$"
         },
         "entities": {
           "description": "Home Assistant entity ids. How many, and of which domains, depends on the card type.",

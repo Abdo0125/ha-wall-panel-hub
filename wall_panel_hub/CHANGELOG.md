@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.47.0
+
+- One card per function: light, switch, shutter, climate, fan, lock, scene, script, button,
+  value and camera, instead of a card type per shape. What a device can do (dimming,
+  colours, tilt, speeds) comes from Home Assistant; what the installer chooses is a setting
+  of the card: dimming, speed buttons, live video, a power sensor.
+- Layouts are converted on their own, nothing lost. Panels with an older app keep getting
+  the card types they know, and their edits come back converted.
+- Update this add-on before the panels' app (0.48.0): an older add-on does not know the new
+  layouts.
+
 ## 0.46.10
 
 - An edit saved on a panel no longer replaces a newer layout sent from the designer meanwhile:

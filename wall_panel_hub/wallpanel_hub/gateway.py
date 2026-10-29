@@ -29,7 +29,7 @@ from .intercom import DOMAIN, networks
 from . import relay as sound
 from . import door_open
 from .access import EditRefused, role_caps
-from .cards import REGISTRY
+from .cards import REGISTRY, REGISTRY_V2
 from . import panel_settings, project_settings
 from .config import ConfigInvalid
 from .pins import PinInvalid
@@ -154,7 +154,7 @@ class PanelConnection:
         self.ws = ws
         self.layout_subs: set[int] = set()
         self.config_subs: set[int] = set()
-        # Layout format the panel's app reads: 1 until it asks for 2.
+        # Layout format the panel's app reads: 1 until it says.
         self.schema = 1
         # Live cameras the panel watches, by the id of its wallpanel/camera/stream.
         self.streams: dict[int, asyncio.Task] = {}
@@ -478,10 +478,12 @@ class PanelConnection:
         layout = store.get_layout(self.panel_id)
         if layout is None or self.schema >= SCHEMA:
             return layout
-        # An older app reads its display settings from the layout.
+        if self.schema == 2:
+            return downgrade(layout, 2)
+        # An app older still reads its display settings from the layout.
         eff = store.effective_config(self.panel_id)
         panel = {"name": eff["name"] or "Panel", **{k: eff[k] for k in ("lang", "theme", "screensaver")}}
-        return {**downgrade(layout), "panel": panel}
+        return {**downgrade(layout, 1), "panel": panel}
 
     async def push_config(self) -> None:
         config = self.gateway.store.effective_config(self.panel_id)
@@ -507,8 +509,9 @@ class PanelConnection:
     async def _handle_local(self, msg: dict) -> None:
         mid, kind = msg.get("id"), msg.get("type")
         store = self.gateway.store
-        if kind in ("wallpanel/layout/get", "wallpanel/layout/subscribe") and msg.get("schema") == SCHEMA:
-            self.schema = SCHEMA
+        # The layout format the panel's app reads: 1 when it does not say.
+        if kind in ("wallpanel/layout/get", "wallpanel/layout/subscribe") and isinstance(msg.get("schema"), int):
+            self.schema = min(msg["schema"], SCHEMA)
         if kind == "wallpanel/layout/get":
             await self.send({"id": mid, "type": "result", "success": True,
                              "result": {"layout": self.layout_for_panel()}})
@@ -647,7 +650,9 @@ class PanelConnection:
                       "wallpanel/intercom/state"):
             await self.intercom(mid, kind, msg)
         elif kind == "wallpanel/registry/get":
-            await self.send({"id": mid, "type": "result", "success": True, "result": REGISTRY})
+            # An older app edits its cards with the card types it knows.
+            registry = REGISTRY if self.schema >= SCHEMA else REGISTRY_V2
+            await self.send({"id": mid, "type": "result", "success": True, "result": registry})
         else:
             await self.send(_error(mid, "unknown_command", f"{kind} is not known"))
 

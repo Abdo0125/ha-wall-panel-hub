@@ -1,6 +1,6 @@
 {
-  "$comment": "Card registry. free_size: any WxH up to the grid (6x4), sizes then only offered as presets. The add-on validates layouts against it and builds the editor's card picker and property fields from it; the app mirrors the kinds in CardKind.kt (a unit test keeps them in step). entities.domains '*' accepts any domain. Options of type 'entity' must be named *_entity.",
-  "version": 1,
+  "$comment": "Card registry. One card per function: a kind's main card is named as the kind (light, cover...), its other cards kind.name (scene.bar, room.card); what a device can do (dimming, colours, tilt, speeds) comes from Home Assistant, what the installer chooses is an option. free_size: any WxH up to the grid (6x4), sizes then only offered as presets. The add-on validates layouts against it and builds the editor's card picker and property fields from it; the app mirrors the kinds in CardKind.kt (a unit test keeps them in step). entities.domains '*' accepts any domain. Options of type 'entity' must be named *_entity.",
+  "version": 2,
   "sizes": [
     "1x1",
     "2x1",
@@ -18,7 +18,7 @@
       "domains": [
         "light"
       ],
-      "default": "light.toggle",
+      "default": "light",
       "controllable": true
     },
     "switch": {
@@ -26,49 +26,49 @@
         "switch",
         "input_boolean"
       ],
-      "default": "switch.toggle",
+      "default": "switch",
       "controllable": true
     },
     "cover": {
       "domains": [
         "cover"
       ],
-      "default": "cover.buttons",
+      "default": "cover",
       "controllable": true
     },
     "climate": {
       "domains": [
         "climate"
       ],
-      "default": "climate.compact",
+      "default": "climate",
       "controllable": true
     },
     "fan": {
       "domains": [
         "fan"
       ],
-      "default": "fan.toggle",
+      "default": "fan",
       "controllable": true
     },
     "lock": {
       "domains": [
         "lock"
       ],
-      "default": "lock.lock",
+      "default": "lock",
       "controllable": true
     },
     "scene": {
       "domains": [
         "scene"
       ],
-      "default": "scene.action",
+      "default": "scene",
       "controllable": true
     },
     "script": {
       "domains": [
         "script"
       ],
-      "default": "script.action",
+      "default": "script",
       "controllable": true
     },
     "button": {
@@ -76,7 +76,7 @@
         "button",
         "input_button"
       ],
-      "default": "button.action",
+      "default": "button",
       "controllable": true
     },
     "sensor": {
@@ -85,14 +85,14 @@
         "binary_sensor",
         "automation"
       ],
-      "default": "sensor.value",
+      "default": "sensor",
       "controllable": false
     },
     "camera": {
       "domains": [
         "camera"
       ],
-      "default": "camera.view",
+      "default": "camera",
       "controllable": true
     },
     "app": {
@@ -114,88 +114,30 @@
     }
   },
   "cards": {
-    "light.toggle": {
+    "light": {
       "entities": {
         "min": 1,
-        "max": 1
-      },
-      "sizes": [
-        "1x1",
-        "2x1",
-        "2x2"
-      ],
-      "default_size": "1x1",
-      "targets": [
-        "android",
-        "esp32",
-        "phone"
-      ]
-    },
-    "light.dimmer": {
-      "entities": {
-        "min": 1,
-        "max": 1
-      },
-      "sizes": [
-        "2x1",
-        "2x2"
-      ],
-      "default_size": "2x1",
-      "targets": [
-        "android",
-        "esp32",
-        "phone"
-      ],
-      "options": {
-        "min_brightness": {
-          "type": "int",
-          "min": 1,
-          "max": 100,
-          "default": 1
-        },
-        "show_percent": {
-          "type": "bool",
-          "default": true
-        }
-      }
-    },
-    "light.color": {
-      "entities": {
-        "min": 1,
-        "max": 1
-      },
-      "sizes": [
-        "2x2"
-      ],
-      "default_size": "2x2",
-      "targets": [
-        "android",
-        "phone"
-      ]
-    },
-    "light.group": {
-      "entities": {
-        "min": 2,
         "max": 12
       },
       "sizes": [
+        "1x1",
         "2x1",
         "2x2"
       ],
-      "default_size": "2x1",
+      "default_size": "1x1",
+      "options": {
+        "dimming": {
+          "type": "bool",
+          "default": true
+        }
+      },
       "targets": [
         "android",
         "esp32",
         "phone"
-      ],
-      "options": {
-        "dimmer": {
-          "type": "bool",
-          "default": false
-        }
-      }
+      ]
     },
-    "switch.toggle": {
+    "switch": {
       "entities": {
         "min": 1,
         "max": 1
@@ -205,30 +147,6 @@
         "2x1"
       ],
       "default_size": "1x1",
-      "targets": [
-        "android",
-        "esp32",
-        "phone"
-      ]
-    },
-    "switch.outlet": {
-      "entities": {
-        "min": 1,
-        "max": 1,
-        "domains": [
-          "switch"
-        ]
-      },
-      "sizes": [
-        "1x1",
-        "2x1"
-      ],
-      "default_size": "2x1",
-      "targets": [
-        "android",
-        "esp32",
-        "phone"
-      ],
       "options": {
         "power_entity": {
           "type": "entity",
@@ -236,81 +154,23 @@
             "sensor"
           ]
         }
-      }
-    },
-    "cover.buttons": {
-      "entities": {
-        "min": 1,
-        "max": 1
       },
-      "sizes": [
-        "1x1",
-        "2x1",
-        "2x2"
-      ],
-      "default_size": "1x1",
       "targets": [
         "android",
         "esp32",
         "phone"
       ]
     },
-    "cover.position": {
+    "cover": {
       "entities": {
         "min": 1,
-        "max": 1
-      },
-      "sizes": [
-        "2x1",
-        "2x2"
-      ],
-      "default_size": "2x1",
-      "targets": [
-        "android",
-        "esp32",
-        "phone"
-      ]
-    },
-    "cover.tilt": {
-      "entities": {
-        "min": 1,
-        "max": 1
-      },
-      "sizes": [
-        "2x1",
-        "2x2"
-      ],
-      "default_size": "2x1",
-      "targets": [
-        "android",
-        "phone"
-      ]
-    },
-    "cover.group": {
-      "entities": {
-        "min": 2,
         "max": 12
       },
       "sizes": [
+        "1x1",
         "2x1",
         "2x2"
       ],
-      "default_size": "2x1",
-      "targets": [
-        "android",
-        "esp32",
-        "phone"
-      ]
-    },
-    "climate.compact": {
-      "entities": {
-        "min": 1,
-        "max": 1
-      },
-      "sizes": [
-        "1x1",
-        "2x1"
-      ],
       "default_size": "1x1",
       "targets": [
         "android",
@@ -318,31 +178,46 @@
         "phone"
       ]
     },
-    "climate.thermostat": {
+    "climate": {
       "entities": {
         "min": 1,
         "max": 1
       },
       "sizes": [
+        "1x1",
+        "2x1",
         "2x2"
       ],
-      "default_size": "2x2",
+      "default_size": "1x1",
       "targets": [
         "android",
+        "esp32",
         "phone"
+      ]
+    },
+    "fan": {
+      "entities": {
+        "min": 1,
+        "max": 1
+      },
+      "sizes": [
+        "1x1",
+        "2x1"
       ],
+      "default_size": "1x1",
       "options": {
-        "step": {
-          "type": "enum",
-          "values": [
-            "0.5",
-            "1"
-          ],
-          "default": "0.5"
+        "speeds": {
+          "type": "bool",
+          "default": true
         }
-      }
+      },
+      "targets": [
+        "android",
+        "esp32",
+        "phone"
+      ]
     },
-    "fan.toggle": {
+    "lock": {
       "entities": {
         "min": 1,
         "max": 1
@@ -358,38 +233,7 @@
         "phone"
       ]
     },
-    "fan.speed": {
-      "entities": {
-        "min": 1,
-        "max": 1
-      },
-      "sizes": [
-        "2x1"
-      ],
-      "default_size": "2x1",
-      "targets": [
-        "android",
-        "esp32",
-        "phone"
-      ]
-    },
-    "lock.lock": {
-      "entities": {
-        "min": 1,
-        "max": 1
-      },
-      "sizes": [
-        "1x1",
-        "2x1"
-      ],
-      "default_size": "1x1",
-      "targets": [
-        "android",
-        "esp32",
-        "phone"
-      ]
-    },
-    "scene.action": {
+    "scene": {
       "entities": {
         "min": 1,
         "max": 1
@@ -420,7 +264,7 @@
         "phone"
       ]
     },
-    "script.action": {
+    "script": {
       "entities": {
         "min": 1,
         "max": 1
@@ -436,7 +280,7 @@
         "phone"
       ]
     },
-    "button.action": {
+    "button": {
       "entities": {
         "min": 1,
         "max": 1
@@ -452,7 +296,7 @@
         "phone"
       ]
     },
-    "sensor.value": {
+    "sensor": {
       "entities": {
         "min": 1,
         "max": 1,
@@ -490,26 +334,7 @@
         "phone"
       ]
     },
-    "sensor.binary": {
-      "entities": {
-        "min": 1,
-        "max": 1,
-        "domains": [
-          "binary_sensor"
-        ]
-      },
-      "sizes": [
-        "1x1",
-        "2x1"
-      ],
-      "default_size": "1x1",
-      "targets": [
-        "android",
-        "esp32",
-        "phone"
-      ]
-    },
-    "camera.view": {
+    "camera": {
       "entities": {
         "min": 1,
         "max": 1
@@ -523,30 +348,10 @@
       "default_size": "2x2",
       "free_size": true,
       "options": {
-        "enlarge": {
+        "live": {
           "type": "bool",
-          "default": true
-        }
-      },
-      "targets": [
-        "android",
-        "phone"
-      ]
-    },
-    "camera.live": {
-      "entities": {
-        "min": 1,
-        "max": 1
-      },
-      "sizes": [
-        "2x1",
-        "2x2",
-        "3x2",
-        "4x2"
-      ],
-      "default_size": "2x2",
-      "free_size": true,
-      "options": {
+          "default": false
+        },
         "enlarge": {
           "type": "bool",
           "default": true

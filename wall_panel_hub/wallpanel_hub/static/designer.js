@@ -67,15 +67,12 @@ const sizeOf = (c) => c.size || R.cards[c.card]?.default_size || "1x1";
 const area = (s) => s.split("x").reduce((x, y) => x * y, 1);
 const smallestSize = (type) => [...(R.cards[type]?.sizes || ["1x1"])].sort((a, b) => area(a) - area(b))[0];
 
-// Plain names: the installer never sees card ids or entity ids.
+// Plain names: the installer never sees card ids or entity ids. One card per function: what
+// the device can do comes from Home Assistant, what the installer chooses is an option.
 const SHAPES = {
-  "light.toggle": t("Switch"), "light.dimmer": t("Dimmer"), "light.color": t("Colour"), "light.group": t("Group"),
-  "switch.toggle": t("Switch"), "switch.outlet": t("Outlet with power"),
-  "cover.buttons": t("Buttons"), "cover.position": t("Position"), "cover.tilt": t("Tilt"), "cover.group": t("Group"),
-  "climate.compact": t("Compact"), "climate.thermostat": t("Thermostat"),
-  "fan.toggle": t("Switch"), "fan.speed": t("Speeds"), "lock.lock": t("Lock"),
-  "scene.action": t("Button"), "scene.bar": t("Scene bar"), "script.action": t("Button"), "button.action": t("Button"),
-  "sensor.value": t("Value"), "sensor.multi": t("Several values"), "sensor.binary": t("State"), "app.launch": t("App"), "camera.view": t("Picture every few seconds"), "camera.live": t("Live"), "room.card": t("Room picture"), "room.summary": t("Room details"), "widget.clock": t("Clock"),
+  light: t("Light"), switch: t("Switch"), cover: t("Shutter"), climate: t("Climate"), fan: t("Fan"), lock: t("Lock"),
+  scene: t("Scene"), "scene.bar": t("Scene bar"), script: t("Script"), button: t("Button"),
+  sensor: t("Value"), "sensor.multi": t("Several values"), "app.launch": t("App"), camera: t("Camera"), "room.card": t("Room picture"), "room.summary": t("Room details"), "widget.clock": t("Clock"),
   "widget.weather": t("Weather"), "widget.android": t("Android widget"), "widget.temperature": t("Outdoor temperature"), "widget.power": t("Power now"),
 };
 // Sizes in cells, columns × rows, as the panel names them.
@@ -85,8 +82,8 @@ const SIZES = Object.fromEntries(["1x1", "2x1", "2x2", "3x2", "4x2"].map((v) => 
 const PLATFORMS = { android: t("Android panel"), esp32: t("ESP32 panel"), phone: t("Phone") };
 const TYPES = { android_11: t("Android 11\""), android_4: t("Android 4\""), esp32_4: 'ESP32 4"', phone: t("Phone") };
 const OPTION_NAMES = {
-  enlarge: t("Tap to enlarge"), min_brightness: t("Minimum brightness (%)"), show_percent: t("Show percentage"), dimmer: t("Group dimming"),
-  power_entity: t("Power sensor"), step: t("Temperature step"), package: t("App (package name)"), return_seconds: t("Return after (seconds)"),
+  enlarge: t("Tap to enlarge"), dimming: t("Dimming"), speeds: t("Speed buttons"), live: t("Live video"),
+  power_entity: t("Power sensor"), package: t("App (package name)"), return_seconds: t("Return after (seconds)"),
 };
 const KIND_NAMES = {
   light: t("Lights"), switch: t("Switches"), cover: t("Covers"), climate: t("Climate"), fan: t("Fans"), lock: t("Locks"),
@@ -284,9 +281,9 @@ function cardIcon(c) {
   if (d?.icon && c.entities.length === 1) return d.icon;
   const type = d?.type;
   const m = {
-    light: c.card === "light.group" ? "lightbulb-group-outline" : "lightbulb-outline",
+    light: c.entities.length > 1 ? "lightbulb-group-outline" : "lightbulb-outline",
     switch: { outlet: "power-socket-eu", heater: "radiator", boiler: "water-boiler", pump: "pump", fan: "fan", light: "lightbulb-outline", valve: "valve" }[type]
-      || (c.card === "switch.outlet" ? "power-socket-eu" : domainOf(c.entities[0] || "") === "input_boolean" ? "toggle-switch-off-outline" : "toggle-switch-variant-off"),
+      || (c.options?.power_entity ? "power-socket-eu" : domainOf(c.entities[0] || "") === "input_boolean" ? "toggle-switch-off-outline" : "toggle-switch-variant-off"),
     cover: { blind: "blinds", curtain: "curtains-closed", garage: "garage", gate: "gate", door: "door-closed", window: "window-closed",
              awning: "awning-outline", shade: "roller-shade-closed", damper: "valve-closed" }[type] || "window-shutter",
     climate: "thermostat", fan: "fan", lock: "lock", scene: "palette-outline", script: "script-text-outline",
@@ -664,7 +661,7 @@ function cardCell(pl, page) {
     ? [el("div", { class: "ring" }, icon(cardIcon(c)), el("span", { class: "lbl" }, cardLabel(c)))]
     : size === "2x1"
       ? [icon(cardIcon(c), { style: { fontSize: "32px" } }), el("span", { class: "lbl" }, cardLabel(c)),
-         ["light.dimmer", "cover.position", "cover.tilt"].includes(c.card) ? el("span", { class: "bar" }) : null]
+         (c.card === "light" && c.options?.dimming !== false) || c.card === "cover" ? el("span", { class: "bar" }) : null]
       : [icon(cardIcon(c)), el("span", { class: "lbl" }, cardLabel(c))];
   let roomCls = "", roomBg = "";
   if (kindOfCard(c.card) === "room") {
@@ -679,7 +676,7 @@ function cardCell(pl, page) {
   }
   if (kindOfCard(c.card) === "camera" && known && c.entities[0]) {
     // The camera's picture now, as the panel shows it; again at most once a minute.
-    body.splice(0, body.length, el("div", { class: "rname" }, el("b", {}, cardLabel(c)), el("span", {}, c.card === "camera.live" ? t("Live") : "")));
+    body.splice(0, body.length, el("div", { class: "rname" }, el("b", {}, cardLabel(c)), el("span", {}, c.options?.live ? t("Live") : "")));
     roomCls = " rtile pic";
     roomBg = `url("api/editor/camera/${enc(c.entities[0])}?m=${Math.floor(Date.now() / 60000)}"), linear-gradient(#3a3f44, #3a3f44)`;
   }
@@ -2018,7 +2015,7 @@ function renderDevices(view) {
     const d = list[e.entity_id] || {};
     const types = DEVICE_TYPES[devFilter];
     const haType = types?.find(([v]) => v === e.device_class)?.[1] || e.device_class || t("General");
-    const probe = () => ({ card: R.kinds[kindOf(e.entity_id)]?.default || "sensor.value", entities: [e.entity_id] });
+    const probe = () => ({ card: R.kinds[kindOf(e.entity_id)]?.default || "sensor", entities: [e.entity_id] });
     const preview = icon(cardIcon(probe()), { style: { fontSize: "22px" } });
     const refreshIcon = () => preview.replaceWith(Object.assign(icon(cardIcon(probe()), { style: { fontSize: "22px" } })));
     table.append(el("tr", {},

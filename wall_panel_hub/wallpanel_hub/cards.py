@@ -9,6 +9,8 @@ import re
 from pathlib import Path
 
 REGISTRY: dict = json.loads((Path(__file__).parent / "schema" / "cards.json").read_text(encoding="utf-8"))
+# The registry as apps reading layout format 2 know it (a card type per shape): their editor's.
+REGISTRY_V2: dict = json.loads((Path(__file__).parent / "schema" / "cards.v2.json").read_text(encoding="utf-8"))
 KINDS: dict = REGISTRY["kinds"]
 CARDS: dict = REGISTRY["cards"]
 
