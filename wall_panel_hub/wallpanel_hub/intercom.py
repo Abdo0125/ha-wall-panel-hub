@@ -233,8 +233,17 @@ def extensions_conf(doors: list[dict] = (), panels: dict[str, str] | None = None
         if via is not None:
             lines += through(f"c_{c['id']}", via, c["number"])
     server = typed_through(list(servers), numbers_via)
-    lines += through("_[0-9*#+]!", server, "${EXTEN}") if server else [
-        "exten => _[0-9*#+]!,1,Congestion(5)", " same => n,Hangup()"]
+    if server:
+        lines += through("_[0-9*#+]!", server, "${EXTEN}")
+    else:
+        # Its devices only: their numbers typed still go through it, any other is refused.
+        taken = {ECHO, *(d["username"] for d in doors), *panels.values()}
+        via = default_server(list(servers), numbers_via)
+        for c in extra:
+            if via is not None and c.get("via") == via["id"] and c["number"] not in taken:
+                taken.add(c["number"])
+                lines += through(c["number"], via, c["number"])
+        lines += ["exten => _[0-9*#+]!,1,Congestion(5)", " same => n,Hangup()"]
     lines.append("")
     return "\n".join(lines)
 

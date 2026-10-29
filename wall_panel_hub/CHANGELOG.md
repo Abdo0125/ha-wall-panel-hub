@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.46.8
+
+- A server set to "its devices only": a device's number typed on a panel goes through, as
+  picking it by name does; any other number is still refused.
+
 ## 0.46.7
 
 - The add-on's page shows its new version after an update, without clearing the browser:
