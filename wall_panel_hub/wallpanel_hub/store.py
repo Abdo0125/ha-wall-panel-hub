@@ -467,8 +467,13 @@ class Store:
         """A layout edited on the panel: only changes the role may make (access.py), and only
         devices HA has ([known]: every entity HA has now; None when HA cannot say, then not
         checked). A panel with no layout yet is checked as an edit of an empty one, and keeps
-        only HA's devices: a panel moved from another HA brings none of that one's."""
+        only HA's devices: a panel moved from another HA brings none of that one's. An edit
+        begun on an older version than the stored one (the designer sent one meanwhile) is
+        refused: LayoutConflict, nothing of the newer one lost."""
         current = self.get_layout(panel_id)
+        sent = layout.get("version")
+        if current is not None and isinstance(sent, int) and sent < current.get("version", 0):
+            raise LayoutConflict(current)
         if current is None:
             layout = upgrade(layout)
             if known is not None:

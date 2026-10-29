@@ -34,7 +34,7 @@ from . import panel_settings, project_settings
 from .config import ConfigInvalid
 from .pins import PinInvalid
 from .migrate import SCHEMA, downgrade
-from .store import LayoutInvalid, Store, layout_entities, layout_summary
+from .store import LayoutConflict, LayoutInvalid, Store, layout_entities, layout_summary
 
 PACKAGE = re.compile(r"[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+")
 PROVIDER = re.compile(PACKAGE.pattern + r"/[A-Za-z0-9_.$]+")
@@ -528,6 +528,10 @@ class PanelConnection:
             except EditRefused as e:
                 log.warning("panel %s edit refused: %s", self.panel_id, e)
                 await self.send(_error(mid, "forbidden", str(e)))
+                return
+            except LayoutConflict:
+                log.warning("panel %s edit refused: the layout changed since it began", self.panel_id)
+                await self.send(_error(mid, "conflict", "the layout changed since this edit began"))
                 return
             log.info("panel %s layout saved from the panel (%s): %s", self.panel_id,
                      store.role_for(self.panel_id, msg.get("pin")), layout_summary(saved))

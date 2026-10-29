@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.46.10
+
+- An edit saved on a panel no longer replaces a newer layout sent from the designer meanwhile:
+  it is refused, and the panel says the layout changed elsewhere and shows the new one.
+
 ## 0.46.9
 
 - Each panel's devices are read from its layout once after each change, not again for every
