@@ -28,6 +28,10 @@ from .settings import VERSION
 from .store import LayoutConflict, LayoutInvalid, Store, layout_summary
 
 STATIC = Path(__file__).parent / "static"
+# The page's files, under a path that changes with each version and has no "/static/" in it:
+# Home Assistant's service worker (before 2026.10) kept any ".../static/..." file forever,
+# whatever its "?v=", so an updated add-on showed its old page until the browser was cleared.
+ASSETS = f"ui/{VERSION}/"
 log = logging.getLogger(__name__)
 
 
@@ -128,19 +132,19 @@ def _allowed(remote: str | None, networks: list) -> bool:
 
 
 def _page(name: str) -> web.Response:
-    """A page that is never kept by the browser, whose files carry the add-on version: after
-    an update the browser loads the new scripts instead of the ones it cached."""
+    """A page that is never kept by the browser, its files under this version's path: after
+    an update the browser loads the new scripts, as no cache has them under that path."""
     html = (STATIC / name).read_text(encoding="utf-8")
-    html = re.sub(r'(src|href)="(static/[^"?#]+)"', lambda m: f'{m[1]}="{m[2]}?v={VERSION}"', html)
+    html = re.sub(r'(src="|href="|url\(")static/', lambda m: m[1] + ASSETS, html)
     return web.Response(text=html, content_type="text/html", headers={"Cache-Control": "no-store"})
 
 
 @web.middleware
-async def _revalidate_static(request: web.Request, handler):
-    """Static files are checked with the add-on on every load (cheap: 304 when unchanged)."""
+async def _keep_assets(request: web.Request, handler):
+    """A version's files never change: the browser keeps them without asking again."""
     response = await handler(request)
-    if request.path.startswith("/static/"):
-        response.headers["Cache-Control"] = "no-cache"
+    if request.path.startswith("/" + ASSETS):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response
 
 
@@ -163,7 +167,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
             raise web.HTTPForbidden(text=f"Open Wall Panels from the Home Assistant sidebar. ({request.remote})")
         return await handler(request)
 
-    app = web.Application(middlewares=[ingress_only, _revalidate_static])
+    app = web.Application(middlewares=[ingress_only, _keep_assets])
 
     async def index(_):
         return _page("index.html")
@@ -518,7 +522,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
 
     # Paths are relative in the page, so they work behind the ingress prefix.
     app.router.add_get("/", index)
-    app.router.add_static("/static/", STATIC)
+    app.router.add_static("/" + ASSETS, STATIC)
     app.router.add_get("/api/editor/catalog", editor_catalog)
     app.router.add_get("/api/editor/state", editor_state)
     app.router.add_get("/api/editor/cards", editor_cards)

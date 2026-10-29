@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.46.7
+
+- The add-on's page shows its new version after an update, without clearing the browser:
+  its files are under a path named for the version, with no "/static/" in it (Home
+  Assistant's service worker kept any such file, whatever its "?v="). They are kept by the
+  browser for good, so the page opens faster.
+
 ## 0.46.6
 
 - Intercom (audit part 2):

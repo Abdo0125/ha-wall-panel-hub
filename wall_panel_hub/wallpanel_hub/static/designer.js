@@ -3,6 +3,9 @@
 // Layout changes go to a draft on the hub (kept across reloads); "send" applies them.
 "use strict";
 
+// This version's files (vendor icons...), where this script came from.
+const ASSETS = document.currentScript.src.replace(/[^/]*$/, "");
+
 // ---------- helpers ----------
 
 // Text only: names come from HA and panels, never render them as HTML.
@@ -2133,7 +2136,7 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("veil").hidden) closeSheet(); });
 
 (async () => {
-  const cp = await fetch("static/vendor/mdi/codepoints.json").then((r) => r.json()).catch(() => ({}));
+  const cp = await fetch(ASSETS + "vendor/mdi/codepoints.json").then((r) => r.json()).catch(() => ({}));
   CODEPOINTS = cp;
   const reg = await api("api/editor/cards");
   if (reg.ok) R = reg.body;
