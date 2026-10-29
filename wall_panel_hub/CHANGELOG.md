@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.48.1
+
+- A room deleted takes its room cards with it, on my dashboard and in other rooms, from the
+  designer, the panel or the hub. A layout that still had one (a room deleted before) is
+  sent again without it, instead of the designer refusing to send it.
+
 ## 0.48.0
 
 - Every card is sized freely, width and height cell by cell up to the grid, tall ones too

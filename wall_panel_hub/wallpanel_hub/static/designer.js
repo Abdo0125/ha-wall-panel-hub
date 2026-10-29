@@ -386,26 +386,35 @@ function redo() {
   w.unsent = true; scheduleSave(S.view.pid); render();
 }
 
+// A room deleted takes its room cards (on my dashboard, in other rooms) with it; the hub does the same.
+// True when one was taken.
+function dropLostRooms(layout) {
+  const rooms = new Set(layout.pages.map((p) => p.id));
+  const keep = (cards) => cards.filter((c) => kindOfCard(c.card) !== "room" || rooms.has(c.options?.page));
+  let dropped = false;
+  for (const holder of [...layout.pages, ...(layout.dashboard ? [layout.dashboard] : [])]) {
+    const kept = keep(holder.cards || []);
+    if (kept.length !== (holder.cards || []).length) { holder.cards = kept; dropped = true; }
+  }
+  return dropped;
+}
+
 function problems(layout) {
   const out = [];
-  const pages = new Set(layout.pages.map((p) => p.id));
-  const roomGone = (c) => kindOfCard(c.card) === "room" && !pages.has(c.options?.page) ? t("Its room is no longer on the panel. Delete the card.") : null;
   for (const page of layout.pages) {
     if (!page.title?.trim()) out.push(t("A room has no name."));
     for (const c of page.cards) {
-      const p = cardProblem(c) || roomGone(c);
+      const p = cardProblem(c);
       if (p) out.push(`${page.title} ← ${cardLabel(c)}: ${p}`);
     }
-  }
-  for (const c of layout.dashboard?.cards || []) {
-    const p = roomGone(c);
-    if (p) out.push(t("My dashboard → {0}: {1}", cardLabel(c), p));
   }
   return out;
 }
 
 async function send(force) {
   const pid = S.view.pid;
+  // Cards of a room deleted before (an older version kept them): taken off, nothing to ask.
+  if (dropLostRooms(JSON.parse(JSON.stringify(L())))) change((lay) => { dropLostRooms(lay); });
   const issues = problems(L());
   if (issues.length) { alert(t("Cannot send:\n") + issues.join("\n")); return; }
   clearTimeout(saveTimers[pid]);
@@ -1321,7 +1330,7 @@ function roomTileSheet(i, floorId) {
       } }, t("Remove from this floor")) : null,
       el("button", { class: "danger", onclick: () => {
         if (!confirm(t("Delete the room \"{0}\" and all its cards from this panel?", p.title))) return;
-        change((lay) => { lay.pages.splice(i, 1); S.page = DASH; S.sel = null; });
+        change((lay) => { lay.pages.splice(i, 1); dropLostRooms(lay); S.page = DASH; S.sel = null; });
         closeSheet();
       } }, t("Delete room"))),
   );

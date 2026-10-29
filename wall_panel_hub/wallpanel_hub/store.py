@@ -14,7 +14,7 @@ from jsonschema import Draft202012Validator
 
 from . import config as panel_config
 from .access import EditRefused, check_panel_edit, role_caps
-from .cards import card_entities, check_card
+from .cards import card_entities, check_card, kind_of_card
 from .migrate import is_current, upgrade
 from .pins import verify_pin
 
@@ -81,6 +81,20 @@ def validate_layout(layout: dict) -> None:
             problem = check_card(card)
             if problem:
                 raise LayoutInvalid(f"{where}: {problem}")
+
+
+def without_lost_rooms(layout: dict) -> dict:
+    """[layout] without the room cards whose room is no longer on the panel: a room deleted
+    takes its cards on my dashboard and in other rooms with it."""
+    rooms = {p.get("id") for p in layout.get("pages", [])}
+
+    def keep(cards: list) -> list:
+        return [c for c in cards if kind_of_card(c.get("card", "")) != "room" or (c.get("options") or {}).get("page") in rooms]
+
+    out = {**layout, "pages": [{**p, "cards": keep(p.get("cards", []))} for p in layout.get("pages", [])]}
+    if layout.get("dashboard"):
+        out["dashboard"] = {**layout["dashboard"], "cards": keep(layout["dashboard"].get("cards", []))}
+    return out
 
 
 def layout_entities(layout: dict | None) -> set[str]:
@@ -379,7 +393,7 @@ class Store:
         """Stores a new revision. Its version is above both the stored and the submitted one.
         A v1 layout (from an older app) is upgraded first, keeping the stored cards' settings."""
         current = self.get_layout(panel_id)
-        layout = self._move_display_settings(panel_id, upgrade(layout, current))
+        layout = without_lost_rooms(self._move_display_settings(panel_id, upgrade(layout, current)))
         validate_layout(layout)
         version = max(layout.get("version", 1), current["version"] if current else 0) + 1
         saved = {**layout, "version": version}
