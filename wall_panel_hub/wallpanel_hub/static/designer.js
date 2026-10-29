@@ -62,7 +62,8 @@ const kindOf = (entityId) => Object.keys(R.kinds).find((k) => R.kinds[k].domains
 const kindOfCard = (type) => type.split(".")[0];
 const cardDomains = (type) => R.cards[type]?.entities.domains || R.kinds[kindOfCard(type)]?.domains || [];
 // A size a card type takes: one of its sizes, or any WxH up to the grid for a free-size type.
-const sizeOk = (spec, size) => spec.sizes.includes(size) || (!!spec.free_size && /^[1-6]x[1-4]$/.test(size || ""));
+const sizeOk = (spec, size) => spec.sizes.includes(size) || (!!spec.free_size && /^[1-6]x[1-4]$/.test(size || "")
+  && spanOf(size)[0] >= spanOf(spec.min_size || "1x1")[0] && spanOf(size)[1] >= spanOf(spec.min_size || "1x1")[1]);
 const sizeOf = (c) => c.size || R.cards[c.card]?.default_size || "1x1";
 const area = (s) => s.split("x").reduce((x, y) => x * y, 1);
 const smallestSize = (type) => [...(R.cards[type]?.sizes || ["1x1"])].sort((a, b) => area(a) - area(b))[0];
@@ -659,15 +660,19 @@ function cardCell(pl, page) {
   const c = pl.card;
   const index = page.cards.indexOf(c);
   const known = !S.catalog.entities.length || c.entities.every((id) => entities()[id]);
-  const size = `${pl.w}x${pl.h}`;
-  const big = pl.w >= 2 && pl.h >= 2;
-  const cls = ["cell", "card", size === "2x1" ? "wide" : "", big ? "big" : "", S.sel === index ? "selected" : "", known ? "" : "missing"].join(" ");
-  const body = big
+  // As the panel draws it at this size: large a dial, wide a bar across, tall a bar up.
+  const single = c.entities.length === 1;
+  const dial = pl.w >= 2 && pl.h >= 2 && (c.card === "climate" || (single && ["light", "cover"].includes(c.card)));
+  const wide = pl.h === 1 && pl.w >= 2, tall = pl.w === 1 && pl.h >= 2;
+  const barred = single && ((c.card === "light" && c.options?.dimming !== false && optionFits(c, R.cards.light.options.dimming)) || c.card === "cover");
+  const cls = ["cell", "card", wide ? "wide" : "", tall ? "tall" : "", dial ? "big" : "", S.sel === index ? "selected" : "", known ? "" : "missing"].join(" ");
+  const body = dial
     ? [el("div", { class: "ring" }, icon(cardIcon(c)), el("span", { class: "lbl" }, cardLabel(c)))]
-    : size === "2x1"
-      ? [icon(cardIcon(c), { style: { fontSize: "32px" } }), el("span", { class: "lbl" }, cardLabel(c)),
-         (c.card === "light" && c.options?.dimming !== false && optionFits(c, R.cards.light.options.dimming)) || c.card === "cover" ? el("span", { class: "bar" }) : null]
-      : [icon(cardIcon(c)), el("span", { class: "lbl" }, cardLabel(c))];
+    : wide
+      ? [icon(cardIcon(c), { style: { fontSize: "32px" } }), el("span", { class: "lbl" }, cardLabel(c)), barred ? el("span", { class: "bar" }) : null]
+      : tall
+        ? [icon(cardIcon(c)), el("span", { class: "lbl" }, cardLabel(c)), barred ? el("span", { class: "vbar" }) : null]
+        : [icon(cardIcon(c)), el("span", { class: "lbl" }, cardLabel(c))];
   let roomCls = "", roomBg = "";
   if (kindOfCard(c.card) === "room") {
     const room = L().pages.find((p) => p.id === c.options?.page);
@@ -760,12 +765,14 @@ function iconInput(value, placeholder, onCommit) {
 }
 
 // A free size: width and height in cells, each up to the grid's.
-function freeSizeFields(size, set) {
+// Width and height in cells, any up to the grid, none below the card's minimum ([min], e.g. "2x1").
+function freeSizeFields(size, set, min = "1x1") {
   const [w, h] = spanOf(size);
-  const n = (count) => Array.from({ length: count }, (_, i) => [String(i + 1), String(i + 1)]);
+  const [mw, mh] = spanOf(min);
+  const n = (count, least) => Array.from({ length: count }, (_, i) => [String(i + 1), String(i + 1), i + 1 < least]);
   return el("div", {},
-    field(t("Width"), chips(n(COLS), String(w), (v) => set(`${v}x${h}`))),
-    field(t("Height"), chips(n(ROWS), String(h), (v) => set(`${w}x${v}`))));
+    field(t("Width"), chips(n(COLS, mw), String(w), (v) => set(`${v}x${h}`))),
+    field(t("Height"), chips(n(ROWS, mh), String(h), (v) => set(`${w}x${v}`))));
 }
 
 // A card: shape, size, name, icon, confirmation, options, remove.
@@ -806,7 +813,7 @@ function cardSheet(index) {
     el("p", { class: "muted" }, d ? `${KIND_NAMES[kindOfCard(c.card)] || ""} · ${S.catalog.areas.find((a) => a.id === d.area)?.name || t("No room")}` : SHAPES[c.card]),
     // Widgets are each their own thing: no shape to switch to.
     variants.length > 1 && kindOfCard(c.card) !== "widget" ? field(t("Shape"), chips(variants.map((v) => [v, SHAPES[v] || v]), c.card, (v) => edit(() => setCardType(c, v)))) : null,
-    spec.free_size ? freeSizeFields(sizeOf(c), (v) => edit(() => { c.size = v; }))
+    spec.free_size ? freeSizeFields(sizeOf(c), (v) => edit(() => { c.size = v; }), spec.min_size)
       : field(t("Size"), chips(R.sizes.map((v) => [v, SIZES[v], !spec.sizes.includes(v)]), sizeOf(c), (v) => edit(() => { c.size = v; }))),
     field(t("Name on the panel"), el("input", { value: c.label || "", placeholder: d?.name || "",
       onchange: (e) => edit(() => { const v = e.target.value.trim(); v ? c.label = v : delete c.label; }) })),

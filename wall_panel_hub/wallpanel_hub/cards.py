@@ -72,8 +72,15 @@ FREE_SIZE = re.compile(r"^[1-6]x[1-4]$")
 
 
 def size_allowed(spec: dict, size) -> bool:
-    """One of the card type's sizes; for a free-size type (free_size) any WxH up to the 6x4 grid."""
-    return size in spec["sizes"] or (spec.get("free_size", False) and isinstance(size, str) and bool(FREE_SIZE.match(size)))
+    """One of the card type's sizes; for a free-size type (free_size) any WxH from its min_size
+    up to the 6x4 grid."""
+    if size in spec["sizes"]:
+        return True
+    if not (spec.get("free_size", False) and isinstance(size, str) and FREE_SIZE.match(size)):
+        return False
+    w, h = (int(n) for n in size.split("x"))
+    mw, mh = (int(n) for n in spec.get("min_size", "1x1").split("x"))
+    return w >= mw and h >= mh
 
 
 def check_card(card: dict) -> str | None:

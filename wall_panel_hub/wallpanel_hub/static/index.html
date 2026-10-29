@@ -127,6 +127,9 @@
   .card .kind { position: absolute; top: 6px; inset-inline-start: 8px; font-size: 10px; color: var(--dmuted); }
   .card.wide { flex-direction: row; justify-content: flex-start; padding-inline: 18px; gap: 12px; }
   .card.wide .bar { position: absolute; bottom: 14px; inset-inline: 18px; height: 10px; border-radius: 5px; background: color-mix(in srgb, var(--active) 30%, transparent); }
+  /* A tall card: icon and name on top, the bar going up below. */
+  .card.tall { justify-content: flex-start; padding-top: 22px; }
+  .card.tall .vbar { flex: 1; width: 10px; margin-top: 8px; border-radius: 5px; background: color-mix(in srgb, var(--active) 30%, transparent); }
   /* A room card on a page: as in the rooms menu, its name at the bottom. */
   .card.rtile, .card.rtile.wide { flex-direction: column; align-items: flex-start; justify-content: flex-end; text-align: start; padding: 10px; }
   .card.rtile .ricon { top: 22px; font-size: 28px; }

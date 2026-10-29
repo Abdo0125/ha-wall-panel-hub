@@ -1,5 +1,5 @@
 {
-  "$comment": "Card registry. One card per function: a kind's main card is named as the kind (light, cover...), its other cards kind.name (scene.bar, room.card); what a device can do (dimming, colours, tilt, speeds) comes from Home Assistant, what the installer chooses is an option. free_size: any WxH up to the grid (6x4), sizes then only offered as presets. The add-on validates layouts against it and builds the editor's card picker and property fields from it; the app mirrors the kinds in CardKind.kt (a unit test keeps them in step). entities.domains '*' accepts any domain. Options of type 'entity' must be named *_entity. An option with 'requires' is offered only for a card of one device that can do it (dimming: a light with a colour mode other than on/off; speeds: a fan with HA's SET_SPEED feature).",
+  "$comment": "Card registry. One card per function: a kind's main card is named as the kind (light, cover...), its other cards kind.name (scene.bar, room.card); what a device can do (dimming, colours, tilt, speeds) comes from Home Assistant, what the installer chooses is an option. free_size: any WxH from min_size up to the grid (6x4), vertical ones too (1x3...), the content fitted to the space; sizes are only presets. The add-on validates layouts against it and builds the editor's card picker and property fields from it; the app mirrors the kinds in CardKind.kt (a unit test keeps them in step). entities.domains '*' accepts any domain. Options of type 'entity' must be named *_entity. An option with 'requires' is offered only for a card of one device that can do it (dimming: a light with a colour mode other than on/off; speeds: a fan with HA's SET_SPEED feature).",
   "version": 2,
   "sizes": [
     "1x1",
@@ -125,6 +125,8 @@
         "2x2"
       ],
       "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
       "options": {
         "dimming": {
           "type": "bool",
@@ -148,6 +150,8 @@
         "2x1"
       ],
       "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
       "options": {
         "power_entity": {
           "type": "entity",
@@ -173,6 +177,8 @@
         "2x2"
       ],
       "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
       "targets": [
         "android",
         "esp32",
@@ -190,6 +196,8 @@
         "2x2"
       ],
       "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
       "targets": [
         "android",
         "esp32",
@@ -206,6 +214,8 @@
         "2x1"
       ],
       "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
       "options": {
         "speeds": {
           "type": "bool",
@@ -229,6 +239,8 @@
         "2x1"
       ],
       "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
       "targets": [
         "android",
         "esp32",
@@ -245,6 +257,8 @@
         "2x1"
       ],
       "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
       "targets": [
         "android",
         "esp32",
@@ -260,6 +274,8 @@
         "2x1"
       ],
       "default_size": "2x1",
+      "min_size": "2x1",
+      "free_size": true,
       "targets": [
         "android",
         "esp32",
@@ -276,6 +292,8 @@
         "2x1"
       ],
       "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
       "targets": [
         "android",
         "esp32",
@@ -292,6 +310,8 @@
         "2x1"
       ],
       "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
       "targets": [
         "android",
         "esp32",
@@ -311,6 +331,8 @@
         "2x1"
       ],
       "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
       "targets": [
         "android",
         "esp32",
@@ -330,6 +352,8 @@
         "2x2"
       ],
       "default_size": "2x1",
+      "min_size": "2x1",
+      "free_size": true,
       "targets": [
         "android",
         "esp32",
@@ -348,6 +372,7 @@
         "4x2"
       ],
       "default_size": "2x2",
+      "min_size": "1x1",
       "free_size": true,
       "options": {
         "live": {
@@ -374,9 +399,8 @@
         "2x1"
       ],
       "default_size": "1x1",
-      "targets": [
-        "android"
-      ],
+      "min_size": "1x1",
+      "free_size": true,
       "options": {
         "package": {
           "type": "string",
@@ -388,7 +412,10 @@
           "min": 30,
           "max": 3600
         }
-      }
+      },
+      "targets": [
+        "android"
+      ]
     },
     "widget.clock": {
       "entities": {
@@ -400,6 +427,8 @@
         "2x1"
       ],
       "default_size": "2x2",
+      "min_size": "2x1",
+      "free_size": true,
       "targets": [
         "android"
       ]
@@ -417,6 +446,8 @@
         "2x1"
       ],
       "default_size": "2x2",
+      "min_size": "2x1",
+      "free_size": true,
       "targets": [
         "android",
         "phone"
@@ -435,6 +466,8 @@
         "2x1"
       ],
       "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
       "targets": [
         "android",
         "phone"
@@ -453,6 +486,8 @@
         "2x1"
       ],
       "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
       "targets": [
         "android",
         "phone"
@@ -470,17 +505,18 @@
         "4x2"
       ],
       "default_size": "2x2",
+      "min_size": "2x1",
       "free_size": true,
-      "targets": [
-        "android"
-      ],
       "options": {
         "provider": {
           "type": "string",
           "pattern": "^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+/[A-Za-z0-9_.$]+$",
           "required": true
         }
-      }
+      },
+      "targets": [
+        "android"
+      ]
     },
     "room.card": {
       "entities": {
@@ -493,17 +529,18 @@
         "2x2"
       ],
       "default_size": "2x2",
+      "min_size": "1x1",
       "free_size": true,
-      "targets": [
-        "android"
-      ],
       "options": {
         "page": {
           "type": "string",
           "pattern": "^[a-z0-9_]+$",
           "required": true
         }
-      }
+      },
+      "targets": [
+        "android"
+      ]
     },
     "room.summary": {
       "entities": {
@@ -515,16 +552,18 @@
         "2x1"
       ],
       "default_size": "2x1",
-      "targets": [
-        "android"
-      ],
+      "min_size": "1x1",
+      "free_size": true,
       "options": {
         "page": {
           "type": "string",
           "pattern": "^[a-z0-9_]+$",
           "required": true
         }
-      }
+      },
+      "targets": [
+        "android"
+      ]
     }
   }
 }

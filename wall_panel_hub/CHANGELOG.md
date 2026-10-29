@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.48.0
+
+- Every card is sized freely, width and height cell by cell up to the grid, tall ones too
+  (1x3, 1x4...) and wide ones (3x1...), from its smallest (2x1 for a scene bar, a clock,
+  the weather). The designer draws each as the panel does at that size: a dial when large,
+  a bar across when wide, a bar going up when tall.
+
 ## 0.47.1
 
 - A card's setting a device cannot use is not offered: dimming only for a light that dims,

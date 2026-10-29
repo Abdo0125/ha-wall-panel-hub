@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-VERSION = "0.47.1"
+VERSION = "0.48.0"
 
 # Home Assistant's internal network (hassio). Ingress requests come from the Supervisor
 # inside it; with host networking the exact source address in it varies by install.
