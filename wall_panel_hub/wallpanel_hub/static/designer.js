@@ -1896,10 +1896,14 @@ function renderIntercom(view) {
     const server = el("input", { value: s.server || "", placeholder: "192.168.1.108", dir: "ltr" });
     const user = el("input", { value: s.user || "", placeholder: "9901", dir: "ltr" });
     const secret = el("input", { type: "password", autocomplete: "new-password", placeholder: s.secret_set ? t("(unchanged)") : "" });
+    // A PBX with outside lines: its devices only, so no panel calls out.
+    const numbers = selectEl([["any", t("Allowed")], ["devices", t("Its devices only")]], s.numbers || "any");
     const rows = el("div", { class: "form" }, el("label", {}, t("Name")), name, el("label", {}, t("Server's address")), server,
-      el("label", {}, t("Account on the server")), user, el("label", {}, t("Password")), secret);
+      el("label", {}, t("Account on the server")), user, el("label", {}, t("Password")), secret,
+      el("label", {}, t("Numbers typed on panels")), numbers);
     const value = () => {
-      const v = { ...(s.id ? { id: s.id } : {}), name: name.value.trim(), server: server.value.trim(), user: user.value.trim() };
+      const v = { ...(s.id ? { id: s.id } : {}), name: name.value.trim(), server: server.value.trim(), user: user.value.trim(),
+        numbers: numbers.value };
       if (secret.value) v.secret = secret.value;
       return v;
     };

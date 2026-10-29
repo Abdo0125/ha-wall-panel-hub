@@ -40,6 +40,14 @@ class Doorbell:
         # Calls ringing or taken, by Asterisk's linkedid: {"target", "answered"}.
         self.calls: dict[str, dict] = {}
 
+    async def restarted(self) -> None:
+        """Asterisk heard again (it restarted, or the hub lost it): a call ringing then ended
+        unheard; one not taken is told missed."""
+        calls, self.calls = self.calls, {}
+        for c in calls.values():
+            if not c["answered"]:
+                await self.emit(c["target"], "missed", {"status": "restart"})
+
     async def handle(self, ev: dict) -> None:
         name = ev.get("UserEvent")
         call = ev.get("Call") or ""
@@ -88,6 +96,7 @@ class Doorbell:
                     raise ConnectionError
                 log.info("doorbell: hearing the doors' calls")
                 attempt = 0
+                await self.restarted()
                 while True:
                     ev = parse((await reader.readuntil(b"\r\n\r\n")).decode(errors="replace"))
                     if ev.get("Event") == "UserEvent":

@@ -41,6 +41,9 @@ RELAY_DB = "wallpanel_relay"
 ECHO = "600"
 # How long a door's call rings the panels.
 RING_S = 30
+# A call with no sound this long either way is over: its other end gone (power, network) and
+# its BYE lost.
+RTP_TIMEOUT_S = 30
 # How often the servers' registrations are read, for HA.
 LINK_CHECK_S = 20
 NAME = re.compile(r"[^\n\r\[\];=\"]{1,40}")
@@ -100,6 +103,7 @@ def _endpoint(user: str, context: str) -> list[str]:
         # One codec in the answer: a phone told of several sends an UPDATE to keep one,
         # which a door's server may refuse (481), ending the call.
         "preferred_codec_only=yes",
+        f"rtp_timeout={RTP_TIMEOUT_S}",
     ]
 
 
@@ -134,19 +138,22 @@ def pjsip_conf(doors: list[dict], sip_port: int, panels: list[dict] = (), server
             f"[{user}]", "type=aor", f"contact=sip:{host}", "",
             # The server's calls are known by where they come from.
             f"[{user}]", "type=identify", f"endpoint={user}", f"match={host.split(':')[0]}", ""]
+    # A panel's account works through the hub only (its SIP WebSocket, from this machine): not
+    # from the network, even with its password.
+    hub_only = ["deny=0.0.0.0/0.0.0.0", "permit=127.0.0.1/255.255.255.255", f"rtp_timeout={RTP_TIMEOUT_S}"]
     for p in panels:
         user = p["username"]
         name = NAME_UNSAFE.sub("", p.get("name") or "Panel")[:40] or "Panel"
         lines += [
             f"[{user}]", "type=endpoint", "context=from-panel", "disallow=all", "allow=ulaw,alaw",
             "webrtc=yes", "dtls_auto_generate_cert=yes", "timers=no", f"callerid=\"{name}\" <{user}>",
-            f"auth={user}", f"aors={user}", "",
+            *hub_only, f"auth={user}", f"aors={user}", "",
             f"[{user}]", "type=auth", "auth_type=userpass", f"username={user}", f"password={p['password']}", "",
             f"[{user}]", "type=aor", "max_contacts=1", "remove_existing=yes", "",
             # The same panel, its sound through the hub (relay.py): plain RTP, on this machine.
             f"[{relay_user(user)}]", "type=endpoint", "context=from-panel", "disallow=all", "allow=ulaw,alaw",
             "transport=transport-ws", "direct_media=no", "rtp_symmetric=yes", "timers=no",
-            f"callerid=\"{name}\" <{user}>", f"auth={user}", f"aors={user}", "",
+            f"callerid=\"{name}\" <{user}>", *hub_only, f"auth={user}", f"aors={user}", "",
         ]
     return "\n".join(lines) + "\n"
 
@@ -225,11 +232,18 @@ def extensions_conf(doors: list[dict] = (), panels: dict[str, str] | None = None
         via = by_id.get(c.get("via"))
         if via is not None:
             lines += through(f"c_{c['id']}", via, c["number"])
-    server = default_server(list(servers), numbers_via)
+    server = typed_through(list(servers), numbers_via)
     lines += through("_[0-9*#+]!", server, "${EXTEN}") if server else [
         "exten => _[0-9*#+]!,1,Congestion(5)", " same => n,Hangup()"]
     lines.append("")
     return "\n".join(lines)
+
+
+def typed_through(servers: list[dict], numbers_via: str | None) -> dict | None:
+    """The server a number typed on a panel goes through; None when that server takes its own
+    devices only (a PBX with outside lines: no calls out from any panel)."""
+    server = default_server(servers, numbers_via)
+    return server if server and server.get("numbers", "any") == "any" else None
 
 
 def through(ext: str, server: dict, number: str) -> list[str]:
@@ -269,7 +283,7 @@ def contacts(doors: list[dict], accounts: dict[str, dict], names: dict[str, str]
               for c in extra if c.get("via") in ids and _rings(c, panel_id)]
     found += sorted(({"name": names.get(pid) or "Panel", "number": a["username"], "kind": "panel"}
                      for pid, a in accounts.items() if pid != panel_id), key=lambda c: c["name"].lower())
-    server = default_server(list(servers), numbers_via)
+    server = typed_through(list(servers), numbers_via)
     return {"contacts": found, "via": server["name"] if server else None, "echo": ECHO,
             "doors": [{"id": d["id"], "name": d["name"], "camera": d.get("camera"), "camera_sub": d.get("camera_sub"), "open": _opens(d.get("open")),
                        "in_call": _in_call(d.get("open")), "target": f"door:{d['id']}"} for d in mine]}
@@ -476,6 +490,11 @@ class Intercom:
         if not USER.fullmatch(user):
             raise IntercomInvalid("the account on the server: 1 to 40 letters, digits or _ . + # * -")
         server.update(server=host, user=user)
+        # Numbers typed on panels: any (as through a door station's server), or its devices only.
+        numbers = w.get("numbers", server.get("numbers", "any"))
+        if numbers not in ("any", "devices"):
+            raise IntercomInvalid("numbers typed: any, or the server's devices only")
+        server["numbers"] = numbers
         if "secret" in w:
             secret = str(w["secret"] or "")
             if len(secret) > 64 or re.search(r"[\r\n]", secret):

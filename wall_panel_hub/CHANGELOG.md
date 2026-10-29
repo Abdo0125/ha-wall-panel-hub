@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.46.6
+
+- Intercom (audit part 2):
+  - A panel's SIP account works through the hub only: not from the network, even with its
+    password. A panel unpaired from its own settings loses its account, as from the add-on.
+  - A call with no sound for 30 s either way ends (its other end gone, its hang-up lost).
+  - Each external server: numbers typed on panels allowed, or its devices only (a PBX with
+    outside lines: no calls out from a panel).
+  - A door's user or password wrong is said so, not "try again in a moment".
+  - A doorbell ringing when Asterisk restarted is told missed in Home Assistant.
+- App 0.46.5: no screensaver during a call (the door's video stays on); a call that comes no
+  longer waits for the hub's list of devices.
+
 ## 0.46.5
 
 - A panel's permissions changed from the panel were refused when a role was at its defaults

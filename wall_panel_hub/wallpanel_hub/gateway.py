@@ -237,6 +237,9 @@ class PanelConnection:
                 # Unpaired: told first, then cut off; it pairs again from its connection page.
                 await self.send({"id": mid, "type": "result", "success": True, "result": None})
                 store.revoke(self.panel_id)
+                # As from the add-on (web.revoke): its intercom account goes, and it rings for nothing.
+                if getattr(self.gateway, "intercom", None) is not None:
+                    await self.gateway.intercom.forget(self.panel_id)
                 if getattr(self.gateway, "airplay", None) is not None:
                     self.gateway.airplay.forget(self.panel_id)
                     await self.gateway.airplay.apply()
@@ -359,8 +362,11 @@ class PanelConnection:
             if isinstance(result, dict):
                 await self.send({"id": mid, "type": "result", "success": True, "result": result})
             else:
-                # The door said no: as when it opened a moment ago (its time between openings).
-                await self.send(_error(mid, "refused" if "answered 4" in result else "failed", result))
+                # The door said no: its user or password wrong (the add-on's settings), or as when
+                # it opened a moment ago (its time between openings).
+                code = ("denied" if re.search(r"answered 40[13]\b", result)
+                        else "refused" if "answered 4" in result else "failed")
+                await self.send(_error(mid, code, result))
         elif kind == "wallpanel/intercom/state":
             # {state, with?}: the panel's call, for HA; no answer.
             if self.gateway.speakers is not None:
