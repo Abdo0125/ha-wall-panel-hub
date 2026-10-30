@@ -33,8 +33,16 @@ def features(entity_id: str, attrs: dict) -> list[str]:
     reads them from the same attributes (EntityState.can)."""
     domain = entity_id.split(".", 1)[0]
     found = []
-    if domain == "light" and any(m != "onoff" for m in attrs.get("supported_color_modes") or []):
+    modes = attrs.get("supported_color_modes") or []
+    if domain == "light" and any(m != "onoff" for m in modes):
         found.append("dimming")
+    if domain == "light" and "color_temp" in modes:
+        found.append("white")
+    if domain == "light" and any(m in ("hs", "xy", "rgb", "rgbw", "rgbww") for m in modes):
+        found.append("color")
+    # A Home Assistant group (a light group): its members in entity_id.
+    if domain == "light" and isinstance(attrs.get("entity_id"), list) and attrs["entity_id"]:
+        found.append("group")
     if domain == "fan" and int(attrs.get("supported_features") or 0) & 1:  # FanEntityFeature.SET_SPEED
         found.append("speeds")
     return found

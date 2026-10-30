@@ -85,6 +85,14 @@ const TYPES = { android_11: t("Android 11\""), android_4: t("Android 4\""), esp3
 const OPTION_NAMES = {
   enlarge: t("Tap to enlarge"), dimming: t("Dimming"), speeds: t("Speed buttons"), live: t("Live video"),
   power_entity: t("Power sensor"), package: t("App (package name)"), return_seconds: t("Return after (seconds)"),
+  modes: t("Modes on the card"), start_mode: t("Starts on"), show_values: t("Show % and K"),
+  long_press: t("Long press opens the popup"), group_members: t("Group lights in the popup"),
+};
+// A line under a setting's name, where it says more than the name.
+const OPTION_NOTES = { modes: t("The popup always shows all"), group_members: t("Only for a Home Assistant group") };
+// A setting's values: their names and icons (a light card's modes).
+const OPTION_VALUES = {
+  brightness: [t("Brightness"), "mdi:brightness-6"], white: [t("Tone"), "mdi:thermometer"], color: [t("Colour"), "mdi:palette"],
 };
 const KIND_NAMES = {
   light: t("Lights"), switch: t("Switches"), cover: t("Covers"), climate: t("Climate"), fan: t("Fans"), lock: t("Locks"),
@@ -272,7 +280,10 @@ function device(id) {
 }
 
 // An option offered for this card: one needing a feature only for a card of one device that has it.
-const optionFits = (c, opt) => !opt.requires || (c.entities.length === 1 && device(c.entities[0]).features.includes(opt.requires));
+const optionFits = (c, opt) => !opt.hidden && (!opt.requires || (c.entities.length === 1 && device(c.entities[0]).features.includes(opt.requires)));
+// The values of a set (or of the enum drawn from it) this card's device can use; every one for several devices.
+const valuesFit = (c, opt) => opt.values.filter((v) => !opt.value_requires?.[v] || c.entities.length !== 1 ||
+  device(c.entities[0]).features.includes(opt.value_requires[v]));
 
 // The icon a card shows (off state), close to the app's cardIcon.
 function cardIcon(c) {
@@ -676,7 +687,8 @@ function cardCell(pl, page) {
   const barred = single && ((c.card === "light" && c.options?.dimming !== false && optionFits(c, R.cards.light.options.dimming)) || c.card === "cover");
   // A light (but the dial): its pad, the power button and the name, laid out as on the panel.
   const lamp = c.card === "light" && !dial;
-  const padded = c.options?.dimming !== false && (!single || optionFits(c, R.cards.light.options.dimming));
+  const lightModes = c.options?.modes ?? (c.options?.dimming === false ? [] : null);
+  const padded = (lightModes === null || lightModes.length > 0) && (!single || device(c.entities[0]).features.some((f) => ["dimming", "white", "color"].includes(f)));
   const cls = ["cell", "card", lamp ? "lamp" : "", wide ? "wide" : "", tall ? "tall" : "", dial ? "big" : "", S.sel === index ? "selected" : "", known ? "" : "missing"].join(" ");
   const body = lamp
     ? [el("span", { class: "pad" }, padded ? el("span", { class: "fill" }) : icon(cardIcon(c))),
@@ -767,6 +779,18 @@ function sheet(...content) {
 }
 function closeSheet() { $("veil").hidden = true; $("veil").replaceChildren(); }
 function field(label, input) { return el("div", { class: "field" }, el("label", {}, label), input); }
+// On or off, as the panel's switch.
+function toggle(on, onChange) {
+  return el("button", { class: "switch" + (on ? " on" : ""), role: "switch", "aria-checked": String(on), onclick: () => onChange(!on) });
+}
+// A setting as a row, as on the panel: its name (and a note) on one side, its control on the other.
+function optionRow(label, note, control) {
+  return el("div", { class: "optrow" }, el("div", { class: "lbl" }, label, note ? el("div", { class: "note" }, note) : null), control);
+}
+function valueChip(v, on, disabled, onClick) {
+  const [name, ic] = OPTION_VALUES[v] || [v];
+  return el("span", { class: "chip" + (on ? " on" : "") + (disabled ? " off" : ""), onclick: () => { if (!disabled) onClick(); } }, ic ? icon(ic) : null, name);
+}
 function chips(options, value, onPick) {
   return el("div", { class: "chips" }, options.map(([v, label, disabled]) =>
     el("span", { class: "chip" + (v === value ? " on" : "") + (disabled ? " off" : ""), onclick: () => { if (!disabled) onPick(v); } }, label)));
@@ -808,9 +832,26 @@ function cardSheet(index) {
       else c.options = { ...(c.options || {}), [key]: v };
     });
     const label = OPTION_NAMES[key] || key;
-    // Yes or no, the default shown chosen; the default is left out of the layout.
-    if (opt.type === "bool") return field(label, chips([["true", t("Yes")], ["false", t("No")]], String(value ?? opt.default ?? false),
-      (v) => set(v === String(opt.default) ? undefined : v === "true")));
+    const note = OPTION_NOTES[key];
+    // On or off, the default shown; the default is left out of the layout.
+    if (opt.type === "bool") return optionRow(label, note, toggle(value ?? opt.default ?? false, (on) => set(on === opt.default ? undefined : on)));
+    // Some of the values (all those the device can use when none is set: left out of the layout).
+    if (opt.type === "set") {
+      const fit = valuesFit(c, opt);
+      const now = value ?? (key === "modes" && c.options?.dimming === false ? [] : fit);
+      return optionRow(label, note, el("div", { class: "chips" }, fit.map((v) => valueChip(v, now.includes(v), false, () => {
+        const next = fit.filter((x) => (x === v ? !now.includes(v) : now.includes(x)));
+        set(next.length === fit.length ? undefined : next);
+      }))));
+    }
+    // One of the values; drawn from a set ("of"): only those chosen there.
+    if (opt.type === "enum" && opt.of) {
+      const fit = valuesFit(c, spec.options[opt.of] || opt);
+      const among = c.options?.[opt.of] ?? (opt.of === "modes" && c.options?.dimming === false ? [] : fit);
+      const now = value ?? opt.default;
+      return optionRow(label, note, el("div", { class: "chips" }, fit.map((v) =>
+        valueChip(v, v === now, !among.includes(v), () => set(v === opt.default ? undefined : v)))));
+    }
     if (opt.type === "enum") return field(label, chips([["", t("Default")], ...opt.values.map((v) => [v, v])], value ?? "", (v) => set(v || undefined)));
     if (opt.type === "int") return field(label, el("input", { type: "number", min: opt.min, max: opt.max, value: value ?? "", placeholder: opt.default ?? "",
       onchange: (e) => set(e.target.value === "" ? undefined : Number(e.target.value)) }));

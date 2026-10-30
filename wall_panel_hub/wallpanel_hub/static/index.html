@@ -68,6 +68,17 @@
   .chip { border: 1px solid var(--line); border-radius: 16px; padding: 4px 12px; cursor: pointer; user-select: none; font-size: 13px; }
   .chip.on { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
   .chip.off { opacity: .4; cursor: default; }
+  .chip .mdi { margin-inline-end: 4px; }
+  /* A card's settings as rows, as on the panel: the name, its control at the end. */
+  .optrow { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .optrow .lbl { flex: 1; }
+  .optrow .note { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .switch { width: 46px; height: 26px; padding: 0; border: none; background: var(--line); position: relative; cursor: pointer; flex: none; }
+  .switch::after { content: ""; position: absolute; top: 3px; inset-inline-start: 3px; width: 20px; height: 20px; background: #fff; transition: inset-inline-start .15s; }
+  .switch.on { background: var(--accent); }
+  .switch.on::after { inset-inline-start: 23px; }
+  .switch:hover:not(:disabled) { background: color-mix(in srgb, var(--line) 70%, var(--accent)); }
+  .switch.on:hover:not(:disabled) { background: var(--accent); }
 
   /* ---- the panel, as it looks on the wall ---- */
   .device { --cell: #fff; --divider: #d7dade; --icon: #5f656c; --active: #f2b300; --text: #2b2f33; --dmuted: #8c9298; --side: #f1f2f4;

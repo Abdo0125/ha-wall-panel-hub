@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.49.0
+
+- A light card's own settings (app 0.52.0), in the designer as on the panel:
+  - which modes the card offers: brightness, tone, colour, of those the light has (none: on / off only);
+  - the mode it starts on;
+  - whether the level and tone show in its pad;
+  - whether a long press opens the popup;
+  - for a Home Assistant light group: whether its lights show in the popup.
+  The popup always shows all the light can do. A layout's old dimming setting still counts.
+- Card settings that are on or off are switches, as on the panel.
+- The device list knows which lights take a tone or a colour, and which are groups.
+
 ## 0.48.3
 
 - The designer draws a tall light card as a 1x1 one, as the panel now does (app 0.50.2):

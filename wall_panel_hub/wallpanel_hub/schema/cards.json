@@ -128,10 +128,47 @@
       "min_size": "1x1",
       "free_size": true,
       "options": {
+        "modes": {
+          "type": "set",
+          "values": [
+            "brightness",
+            "white",
+            "color"
+          ],
+          "value_requires": {
+            "brightness": "dimming",
+            "white": "white",
+            "color": "color"
+          }
+        },
+        "start_mode": {
+          "type": "enum",
+          "values": [
+            "brightness",
+            "white",
+            "color"
+          ],
+          "default": "brightness",
+          "of": "modes"
+        },
+        "show_values": {
+          "type": "bool",
+          "default": true
+        },
+        "long_press": {
+          "type": "bool",
+          "default": true
+        },
+        "group_members": {
+          "type": "bool",
+          "default": true,
+          "requires": "group"
+        },
         "dimming": {
           "type": "bool",
           "default": true,
-          "requires": "dimming"
+          "requires": "dimming",
+          "hidden": true
         }
       },
       "targets": [

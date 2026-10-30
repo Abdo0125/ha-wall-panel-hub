@@ -132,6 +132,12 @@ def _check_option(opt: dict, value) -> str | None:
         if not isinstance(value, str):
             return "must be text"
         return None if re.fullmatch(opt.get("pattern", ".*"), value) else "has the wrong format"
+    if kind == "set":
+        # Some of the values, each once (none: e.g. a light card with no pad).
+        if not isinstance(value, list) or len(set(map(str, value))) != len(value):
+            return "must be a list of distinct values"
+        bad = [v for v in value if v not in opt["values"]]
+        return f"must be among {', '.join(opt['values'])}" if bad else None
     if kind == "entity":
         if not isinstance(value, str) or not ENTITY.match(value):
             return "must be an entity id"
