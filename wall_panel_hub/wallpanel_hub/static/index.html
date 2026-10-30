@@ -130,6 +130,17 @@
   /* A tall card: icon and name on top, the bar going up below. */
   .card.tall { justify-content: flex-start; padding-top: 22px; }
   .card.tall .vbar { flex: 1; width: 10px; margin-top: 8px; border-radius: 5px; background: color-mix(in srgb, var(--active) 30%, transparent); }
+  /* A light: pad, power button and name in a grid; wide: name and button over the pad, tall: the pad on top. */
+  .card.lamp { display: grid; grid-template: "pad pwr" 1fr "lbl lbl" auto / 1fr auto; gap: 6px; padding: 8px; text-align: start; }
+  .card.lamp.wide { grid-template: "lbl pwr" auto "pad pad" 1fr / 1fr auto; padding-inline: 8px; }
+  .card.lamp.tall { grid-template: "pad" 1fr "pwr" auto "lbl" auto / 1fr; padding-top: 8px; justify-items: center; }
+  .card.lamp .pad { grid-area: pad; align-self: stretch; justify-self: stretch; border-radius: 8px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--icon) 14%, transparent); }
+  .card.lamp .pad .fill { position: absolute; inset: 40% 0 0 0; background: color-mix(in srgb, var(--active) 45%, transparent); }
+  .card.lamp.wide .pad .fill { inset-block: 0; inset-inline: 0 40%; }
+  .card.lamp .pwr { grid-area: pwr; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px;
+    background: color-mix(in srgb, var(--icon) 14%, transparent); }
+  .card.lamp .lbl { grid-area: lbl; }
   /* A room card on a page: as in the rooms menu, its name at the bottom. */
   .card.rtile, .card.rtile.wide { flex-direction: column; align-items: flex-start; justify-content: flex-end; text-align: start; padding: 10px; }
   .card.rtile .ricon { top: 22px; font-size: 28px; }

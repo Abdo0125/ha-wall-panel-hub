@@ -674,8 +674,14 @@ function cardCell(pl, page) {
   const dial = pl.w >= 2 && pl.h >= 2 && (c.card === "climate" || (single && ["light", "cover"].includes(c.card)));
   const wide = pl.h === 1 && pl.w >= 2, tall = pl.w === 1 && pl.h >= 2;
   const barred = single && ((c.card === "light" && c.options?.dimming !== false && optionFits(c, R.cards.light.options.dimming)) || c.card === "cover");
-  const cls = ["cell", "card", wide ? "wide" : "", tall ? "tall" : "", dial ? "big" : "", S.sel === index ? "selected" : "", known ? "" : "missing"].join(" ");
-  const body = dial
+  // A light (but the dial): its pad, the power button and the name, laid out as on the panel.
+  const lamp = c.card === "light" && !dial;
+  const padded = c.options?.dimming !== false && (!single || optionFits(c, R.cards.light.options.dimming));
+  const cls = ["cell", "card", lamp ? "lamp" : "", wide ? "wide" : "", tall ? "tall" : "", dial ? "big" : "", S.sel === index ? "selected" : "", known ? "" : "missing"].join(" ");
+  const body = lamp
+    ? [el("span", { class: "pad" }, padded ? el("span", { class: "fill" }) : icon(cardIcon(c))),
+       el("span", { class: "pwr" }, icon("mdi:power")), el("span", { class: "lbl" }, cardLabel(c))]
+    : dial
     ? [el("div", { class: "ring" }, icon(cardIcon(c)), el("span", { class: "lbl" }, cardLabel(c)))]
     : wide
       ? [icon(cardIcon(c), { style: { fontSize: "32px" } }), el("span", { class: "lbl" }, cardLabel(c)), barred ? el("span", { class: "bar" }) : null]

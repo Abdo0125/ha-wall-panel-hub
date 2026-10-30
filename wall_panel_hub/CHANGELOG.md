@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.48.2
+
+- The designer shows a light card as the panel draws it (app 0.50.0): its pad, the power
+  button and the name; across when wide, standing when tall. The dial when large.
+
 ## 0.48.1
 
 - A room deleted takes its room cards with it, on my dashboard and in other rooms, from the
