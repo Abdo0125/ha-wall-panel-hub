@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.48.3
+
+- The designer draws a tall light card as a 1x1 one, as the panel now does (app 0.50.2):
+  the pad with the power button at its foot beside it, the name below.
+
 ## 0.48.2
 
 - The designer shows a light card as the panel draws it (app 0.50.0): its pad, the power
