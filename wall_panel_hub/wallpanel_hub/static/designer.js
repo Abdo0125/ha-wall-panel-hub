@@ -688,7 +688,10 @@ function cardCell(pl, page) {
   const lamp = c.card === "light" && !dial && pl.w >= 2 && pl.h >= 2;
   const lightModes = c.options?.modes ?? (c.options?.dimming === false ? [] : null);
   const padded = (lightModes === null || lightModes.length > 0) && (!single || device(c.entities[0]).features.some((f) => ["dimming", "white", "color"].includes(f)));
-  const cls = ["cell", "card", lamp ? "lamp" : "", wide ? "wide" : "", tall ? "tall" : "", dial ? "big" : "", S.sel === index ? "selected" : "", known ? "" : "missing"].join(" ");
+  // One cell high or wide: a small icon and the name, side by side when it is two cells wide.
+  const tiny = pl.w < 2 || pl.h < 2;
+  const cls = ["cell", "card", lamp ? "lamp" : "", wide ? "wide" : "", tall ? "tall" : "", dial ? "big" : "",
+    tiny ? "tiny" : "", tiny && !wide && pl.w >= 2 ? "row" : "", S.sel === index ? "selected" : "", known ? "" : "missing"].join(" ");
   const body = lamp
     ? [el("span", { class: "pad" }, padded ? el("span", { class: "fill" }) : icon(cardIcon(c))),
        el("span", { class: "pwr" }, icon("mdi:power")), el("span", { class: "lbl" }, cardLabel(c))]

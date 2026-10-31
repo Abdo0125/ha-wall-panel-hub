@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.50.1
+
+- The designer draws a card one cell high or wide small: a smaller icon and the name, side
+  by side when it is two cells wide. The name is no longer cut off.
+
 ## 0.50.0
 
 - The fine grid (layout format 4): a 10" panel's screen is 12x8 cells, each a quarter of a
