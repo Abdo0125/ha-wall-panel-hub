@@ -11,6 +11,8 @@ from pathlib import Path
 REGISTRY: dict = json.loads((Path(__file__).parent / "schema" / "cards.json").read_text(encoding="utf-8"))
 # The registry as apps reading layout format 2 know it (a card type per shape): their editor's.
 REGISTRY_V2: dict = json.loads((Path(__file__).parent / "schema" / "cards.v2.json").read_text(encoding="utf-8"))
+# Apps reading layout format 3 (the 6x4 grid): sizes in its cells.
+REGISTRY_V3: dict = json.loads((Path(__file__).parent / "schema" / "cards.v3.json").read_text(encoding="utf-8"))
 KINDS: dict = REGISTRY["kinds"]
 CARDS: dict = REGISTRY["cards"]
 
@@ -68,12 +70,12 @@ def _domains(card_type: str) -> list[str]:
     return spec["entities"].get("domains") or KINDS[kind_of_card(card_type)]["domains"]
 
 
-FREE_SIZE = re.compile(r"^[1-6]x[1-4]$")
+FREE_SIZE = re.compile(r"^([1-9]|1[0-2])x[1-8]$")
 
 
 def size_allowed(spec: dict, size) -> bool:
     """One of the card type's sizes; for a free-size type (free_size) any WxH from its min_size
-    up to the 6x4 grid."""
+    up to the 12x8 grid."""
     if size in spec["sizes"]:
         return True
     if not (spec.get("free_size", False) and isinstance(size, str) and FREE_SIZE.match(size)):

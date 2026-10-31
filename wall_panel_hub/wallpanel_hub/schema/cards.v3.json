@@ -1,0 +1,606 @@
+{
+  "$comment": "Card registry. One card per function: a kind's main card is named as the kind (light, cover...), its other cards kind.name (scene.bar, room.card); what a device can do (dimming, colours, tilt, speeds) comes from Home Assistant, what the installer chooses is an option. free_size: any WxH from min_size up to the grid (6x4), vertical ones too (1x3...), the content fitted to the space; sizes are only presets. The add-on validates layouts against it and builds the editor's card picker and property fields from it; the app mirrors the kinds in CardKind.kt (a unit test keeps them in step). entities.domains '*' accepts any domain. Options of type 'entity' must be named *_entity. An option with 'requires' is offered only for a card of one device that can do it (dimming: a light with a colour mode other than on/off; speeds: a fan with HA's SET_SPEED feature).",
+  "version": 2,
+  "sizes": [
+    "1x1",
+    "2x1",
+    "2x2",
+    "3x2",
+    "4x2"
+  ],
+  "targets": [
+    "android",
+    "esp32",
+    "phone"
+  ],
+  "kinds": {
+    "light": {
+      "domains": [
+        "light"
+      ],
+      "default": "light",
+      "controllable": true
+    },
+    "switch": {
+      "domains": [
+        "switch",
+        "input_boolean"
+      ],
+      "default": "switch",
+      "controllable": true
+    },
+    "cover": {
+      "domains": [
+        "cover"
+      ],
+      "default": "cover",
+      "controllable": true
+    },
+    "climate": {
+      "domains": [
+        "climate"
+      ],
+      "default": "climate",
+      "controllable": true
+    },
+    "fan": {
+      "domains": [
+        "fan"
+      ],
+      "default": "fan",
+      "controllable": true
+    },
+    "lock": {
+      "domains": [
+        "lock"
+      ],
+      "default": "lock",
+      "controllable": true
+    },
+    "scene": {
+      "domains": [
+        "scene"
+      ],
+      "default": "scene",
+      "controllable": true
+    },
+    "script": {
+      "domains": [
+        "script"
+      ],
+      "default": "script",
+      "controllable": true
+    },
+    "button": {
+      "domains": [
+        "button",
+        "input_button"
+      ],
+      "default": "button",
+      "controllable": true
+    },
+    "sensor": {
+      "domains": [
+        "sensor",
+        "binary_sensor",
+        "automation"
+      ],
+      "default": "sensor",
+      "controllable": false
+    },
+    "camera": {
+      "domains": [
+        "camera"
+      ],
+      "default": "camera",
+      "controllable": true
+    },
+    "app": {
+      "domains": [],
+      "default": "app.launch",
+      "controllable": false
+    },
+    "widget": {
+      "domains": [
+        "weather"
+      ],
+      "default": "widget.weather",
+      "controllable": false
+    },
+    "room": {
+      "domains": [],
+      "default": "room.card",
+      "controllable": false
+    }
+  },
+  "cards": {
+    "light": {
+      "entities": {
+        "min": 1,
+        "max": 12
+      },
+      "sizes": [
+        "1x1",
+        "2x1",
+        "2x2"
+      ],
+      "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
+      "options": {
+        "modes": {
+          "type": "set",
+          "values": [
+            "brightness",
+            "white",
+            "color"
+          ],
+          "value_requires": {
+            "brightness": "dimming",
+            "white": "white",
+            "color": "color"
+          }
+        },
+        "start_mode": {
+          "type": "enum",
+          "values": [
+            "brightness",
+            "white",
+            "color"
+          ],
+          "default": "brightness",
+          "of": "modes"
+        },
+        "show_values": {
+          "type": "bool",
+          "default": true
+        },
+        "long_press": {
+          "type": "bool",
+          "default": true
+        },
+        "group_members": {
+          "type": "bool",
+          "default": true,
+          "requires": "group"
+        },
+        "dimming": {
+          "type": "bool",
+          "default": true,
+          "requires": "dimming",
+          "hidden": true
+        }
+      },
+      "targets": [
+        "android",
+        "esp32",
+        "phone"
+      ]
+    },
+    "switch": {
+      "entities": {
+        "min": 1,
+        "max": 1
+      },
+      "sizes": [
+        "1x1",
+        "2x1"
+      ],
+      "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
+      "options": {
+        "power_entity": {
+          "type": "entity",
+          "domains": [
+            "sensor"
+          ]
+        }
+      },
+      "targets": [
+        "android",
+        "esp32",
+        "phone"
+      ]
+    },
+    "cover": {
+      "entities": {
+        "min": 1,
+        "max": 12
+      },
+      "sizes": [
+        "1x1",
+        "2x1",
+        "2x2"
+      ],
+      "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
+      "targets": [
+        "android",
+        "esp32",
+        "phone"
+      ]
+    },
+    "climate": {
+      "entities": {
+        "min": 1,
+        "max": 1
+      },
+      "sizes": [
+        "1x1",
+        "2x1",
+        "2x2"
+      ],
+      "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
+      "targets": [
+        "android",
+        "esp32",
+        "phone"
+      ]
+    },
+    "fan": {
+      "entities": {
+        "min": 1,
+        "max": 1
+      },
+      "sizes": [
+        "1x1",
+        "2x1"
+      ],
+      "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
+      "options": {
+        "speeds": {
+          "type": "bool",
+          "default": true,
+          "requires": "speeds"
+        }
+      },
+      "targets": [
+        "android",
+        "esp32",
+        "phone"
+      ]
+    },
+    "lock": {
+      "entities": {
+        "min": 1,
+        "max": 1
+      },
+      "sizes": [
+        "1x1",
+        "2x1"
+      ],
+      "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
+      "targets": [
+        "android",
+        "esp32",
+        "phone"
+      ]
+    },
+    "scene": {
+      "entities": {
+        "min": 1,
+        "max": 1
+      },
+      "sizes": [
+        "1x1",
+        "2x1"
+      ],
+      "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
+      "targets": [
+        "android",
+        "esp32",
+        "phone"
+      ]
+    },
+    "scene.bar": {
+      "entities": {
+        "min": 2,
+        "max": 6
+      },
+      "sizes": [
+        "2x1"
+      ],
+      "default_size": "2x1",
+      "min_size": "2x1",
+      "free_size": true,
+      "targets": [
+        "android",
+        "esp32",
+        "phone"
+      ]
+    },
+    "script": {
+      "entities": {
+        "min": 1,
+        "max": 1
+      },
+      "sizes": [
+        "1x1",
+        "2x1"
+      ],
+      "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
+      "targets": [
+        "android",
+        "esp32",
+        "phone"
+      ]
+    },
+    "button": {
+      "entities": {
+        "min": 1,
+        "max": 1
+      },
+      "sizes": [
+        "1x1",
+        "2x1"
+      ],
+      "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
+      "targets": [
+        "android",
+        "esp32",
+        "phone"
+      ]
+    },
+    "sensor": {
+      "entities": {
+        "min": 1,
+        "max": 1,
+        "domains": [
+          "*"
+        ]
+      },
+      "sizes": [
+        "1x1",
+        "2x1"
+      ],
+      "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
+      "targets": [
+        "android",
+        "esp32",
+        "phone"
+      ]
+    },
+    "sensor.multi": {
+      "entities": {
+        "min": 2,
+        "max": 4,
+        "domains": [
+          "sensor"
+        ]
+      },
+      "sizes": [
+        "2x1",
+        "2x2"
+      ],
+      "default_size": "2x1",
+      "min_size": "2x1",
+      "free_size": true,
+      "targets": [
+        "android",
+        "esp32",
+        "phone"
+      ]
+    },
+    "camera": {
+      "entities": {
+        "min": 1,
+        "max": 1
+      },
+      "sizes": [
+        "2x1",
+        "2x2",
+        "3x2",
+        "4x2"
+      ],
+      "default_size": "2x2",
+      "min_size": "1x1",
+      "free_size": true,
+      "options": {
+        "live": {
+          "type": "bool",
+          "default": false
+        },
+        "enlarge": {
+          "type": "bool",
+          "default": true
+        }
+      },
+      "targets": [
+        "android",
+        "phone"
+      ]
+    },
+    "app.launch": {
+      "entities": {
+        "min": 0,
+        "max": 0
+      },
+      "sizes": [
+        "1x1",
+        "2x1"
+      ],
+      "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
+      "options": {
+        "package": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+$",
+          "required": true
+        },
+        "return_seconds": {
+          "type": "int",
+          "min": 30,
+          "max": 3600
+        }
+      },
+      "targets": [
+        "android"
+      ]
+    },
+    "widget.clock": {
+      "entities": {
+        "min": 0,
+        "max": 0
+      },
+      "sizes": [
+        "2x2",
+        "2x1"
+      ],
+      "default_size": "2x2",
+      "min_size": "2x1",
+      "free_size": true,
+      "targets": [
+        "android"
+      ]
+    },
+    "widget.weather": {
+      "entities": {
+        "min": 1,
+        "max": 1,
+        "domains": [
+          "weather"
+        ]
+      },
+      "sizes": [
+        "2x2",
+        "2x1"
+      ],
+      "default_size": "2x2",
+      "min_size": "2x1",
+      "free_size": true,
+      "targets": [
+        "android",
+        "phone"
+      ]
+    },
+    "widget.temperature": {
+      "entities": {
+        "min": 1,
+        "max": 1,
+        "domains": [
+          "sensor"
+        ]
+      },
+      "sizes": [
+        "1x1",
+        "2x1"
+      ],
+      "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
+      "targets": [
+        "android",
+        "phone"
+      ]
+    },
+    "widget.power": {
+      "entities": {
+        "min": 1,
+        "max": 1,
+        "domains": [
+          "sensor"
+        ]
+      },
+      "sizes": [
+        "1x1",
+        "2x1"
+      ],
+      "default_size": "1x1",
+      "min_size": "1x1",
+      "free_size": true,
+      "targets": [
+        "android",
+        "phone"
+      ]
+    },
+    "widget.android": {
+      "entities": {
+        "min": 0,
+        "max": 0
+      },
+      "sizes": [
+        "2x1",
+        "2x2",
+        "3x2",
+        "4x2"
+      ],
+      "default_size": "2x2",
+      "min_size": "2x1",
+      "free_size": true,
+      "options": {
+        "provider": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+/[A-Za-z0-9_.$]+$",
+          "required": true
+        }
+      },
+      "targets": [
+        "android"
+      ]
+    },
+    "room.card": {
+      "entities": {
+        "min": 0,
+        "max": 0
+      },
+      "sizes": [
+        "1x1",
+        "2x1",
+        "2x2"
+      ],
+      "default_size": "2x2",
+      "min_size": "1x1",
+      "free_size": true,
+      "options": {
+        "page": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "required": true
+        }
+      },
+      "targets": [
+        "android"
+      ]
+    },
+    "room.summary": {
+      "entities": {
+        "min": 0,
+        "max": 0
+      },
+      "sizes": [
+        "1x1",
+        "2x1"
+      ],
+      "default_size": "2x1",
+      "min_size": "1x1",
+      "free_size": true,
+      "options": {
+        "page": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$",
+          "required": true
+        }
+      },
+      "targets": [
+        "android"
+      ]
+    }
+  }
+}

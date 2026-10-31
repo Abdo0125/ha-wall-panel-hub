@@ -4,6 +4,8 @@ v1 (up to 0.4.0): pages of tiles, one entity per tile.
 v2: pages of cards (schema/cards.json): a card type, one or more entities, a size, options.
 v3 (app 0.48.0): one card type per function (light, cover...): what v2 chose by type (no
 dimming, live, speeds) is an option, what the device can do comes from Home Assistant.
+v4 (add-on 0.50.0): the fine grid. Sizes and places in cells a quarter of v3's (12x8 on a
+10" panel, not 6x4): v3's are doubled, so a layout looks the same until a card is resized.
 
 Stored older layouts are upgraded on read. Panels running an older app still get the
 format they read (see Gateway): the downgrade keeps every card it can express.
@@ -11,9 +13,9 @@ format they read (see Gateway): the downgrade keeps every card it can express.
 
 import copy
 
-from .cards import KINDS, default_size, kind_of_card, next_card_id
+from .cards import CARDS, KINDS, default_size, kind_of_card, next_card_id
 
-SCHEMA = 3
+SCHEMA = 4
 
 # v1 tile types that are not a v2 kind.
 _V1_TO_KIND = {"generic": "sensor"}
@@ -110,14 +112,23 @@ def _cards(layout: dict, fn) -> dict:
 
 
 def upgrade(layout: dict, previous: dict | None = None) -> dict:
-    """To the current format. v2: each card as its v3 type with the options its type stood
-    for. v1: each tile becomes its kind's default card; when [previous] (the stored layout)
-    has a single-entity card of the same kind for an entity, that card is kept, with its id,
-    type, size and options: an older app saving its layout loses nothing."""
+    """To the current format, [previous] being the stored layout (current format).
+    v3: sizes and places doubled; a card an older app left as it was keeps its own.
+    v2: each card as its v3 type with the options its type stood for.
+    v1: each tile becomes its kind's default card; when [previous] has a single-entity card
+    of the same kind for an entity, that card is kept, with its id, type, size and options:
+    an older app saving its layout loses nothing."""
     if is_current(layout):
         return layout
+    if layout.get("schema") == 3:
+        return _fine(layout, previous)
+    old = downgrade(previous, 3) if previous and is_current(previous) else previous
+    return _fine(_to_v3(layout, old), previous)
+
+
+def _to_v3(layout: dict, previous: dict | None) -> dict:
     if layout.get("schema") == 2:
-        return {**_cards(copy.deepcopy(layout), _card_up), "schema": SCHEMA}
+        return {**_cards(copy.deepcopy(layout), _card_up), "schema": 3}
     known: dict[str, dict] = {}
     for page in (previous or {}).get("pages", []):
         for card in page.get("cards", []):
@@ -125,7 +136,7 @@ def upgrade(layout: dict, previous: dict | None = None) -> dict:
                 known.setdefault(card["entities"][0], card)
 
     out = {k: copy.deepcopy(v) for k, v in layout.items() if k != "pages"}
-    out["schema"] = SCHEMA
+    out["schema"] = 3
     taken: set[str] = set()
     pages = []
     for page in layout.get("pages", []):
@@ -141,7 +152,7 @@ def upgrade(layout: dict, previous: dict | None = None) -> dict:
             else:
                 card_type = KINDS[kind]["default"]
                 card = {"id": next_card_id(taken | _reserved(known, taken)), "card": card_type,
-                        "entities": [entity], "size": default_size(card_type)}
+                        "entities": [entity], "size": _half(default_size(card_type))}
             for key in ("label", "icon", "confirm"):
                 if key in tile:
                     card[key] = tile[key]
@@ -160,11 +171,116 @@ def _reserved(known: dict[str, dict], taken: set[str]) -> set[str]:
 
 
 def downgrade(layout: dict, schema: int = 1) -> dict:
-    """The current format as an older app reads it ([schema] 2 or 1)."""
+    """The current format as an older app reads it ([schema] 3, 2 or 1)."""
     if not is_current(layout) or schema >= SCHEMA:
         return layout
-    v2 = {**_cards(copy.deepcopy(layout), _card_down), "schema": 2}
+    v3 = _coarse(layout)
+    if schema == 3:
+        return v3
+    v2 = {**_cards(v3, _card_down), "schema": 2}
     return v2 if schema == 2 else _v1(v2)
+
+
+# ---- v3 <-> v4: the 6x4 grid and the fine one ----
+
+def _half(size: str) -> str:
+    """A fine size as the 6x4 grid's cells that hold it (rounded up)."""
+    w, h = (int(n) for n in size.split("x"))
+    return f"{(w + 1) // 2}x{(h + 1) // 2}"
+
+
+def _double(size: str) -> str:
+    w, h = (int(n) for n in size.split("x"))
+    return f"{w * 2}x{h * 2}"
+
+
+def _cell(pos: dict) -> dict:
+    return {"screen": pos["screen"], "col": pos["col"] // 2, "row": pos["row"] // 2}
+
+
+def _tiles(page: dict) -> list[tuple[str | None, dict]]:
+    """The room's cards in the rooms menu, each with the floor it shows on (None: its own)."""
+    out = [(page.get("floor"), page["tile"])] if page.get("tile") else []
+    return out + [(a["floor"], a["tile"]) for a in page.get("also", []) if a.get("tile")]
+
+
+def _all_cards(layout: dict) -> list[dict]:
+    cards = [c for p in layout.get("pages", []) for c in p.get("cards", [])]
+    return cards + (layout.get("dashboard") or {}).get("cards", [])
+
+
+def _default(card: dict) -> str:
+    return CARDS.get(card.get("card"), {}).get("default_size", "2x2")
+
+
+def _fine(layout: dict, previous: dict | None) -> dict:
+    """v3 -> v4: sizes and places doubled. A card (or room card) [previous] holds whose size or
+    place the older app showed as it was keeps its fine one: saving from an older app changes
+    only what was changed there."""
+    out = copy.deepcopy(layout)
+    out["schema"] = SCHEMA
+    before = {c["id"]: c for c in _all_cards(previous or {}) if "id" in c}
+    for card in _all_cards(out):
+        _refine(card, before.get(card.get("id")), _half(_default(card)))
+    rooms = {p["id"]: p for p in (previous or {}).get("pages", [])}
+    for page in out.get("pages", []):
+        old = dict(_tiles(rooms[page["id"]])) if page.get("id") in rooms else {}
+        for floor, tile in _tiles(page):
+            _refine(tile, old.get(floor), "2x1")
+    return out
+
+
+def _refine(item: dict, old: dict | None, coarse_default: str) -> None:
+    """[item] (v3) in fine cells; [old] (v4) kept where the v3 item is what it showed."""
+    shown = item.get("size", coarse_default)
+    if old and _half(old.get("size", _double(coarse_default))) == shown:
+        if "size" in old:
+            item["size"] = old["size"]
+        else:
+            item.pop("size", None)
+    elif "size" in item:
+        item["size"] = _double(item["size"])
+    if "pos" in item:
+        if old and "pos" in old and _cell(old["pos"]) == item["pos"]:
+            item["pos"] = old["pos"]
+        else:
+            item["pos"] = {**item["pos"], "col": item["pos"]["col"] * 2, "row": item["pos"]["row"] * 2}
+    elif old and "pos" in old:
+        # Left unplaced going down, its cells there taken by another card: still where it was.
+        item["pos"] = old["pos"]
+
+
+def _coarse(layout: dict) -> dict:
+    """v4 -> v3: sizes halved (rounded up), places halved (rounded down). A card whose cells
+    there are taken by one placed before it is left unplaced: the older app lays it out after
+    the placed ones rather than over another."""
+    out = copy.deepcopy(layout)
+    out["schema"] = 3
+    for cards in [p.get("cards", []) for p in out.get("pages", [])] + [(out.get("dashboard") or {}).get("cards", [])]:
+        _coarsen(cards, _default)
+    floors: dict = {}
+    for page in out.get("pages", []):
+        for floor, tile in _tiles(page):
+            floors.setdefault(floor, []).append(tile)
+    for tiles in floors.values():
+        _coarsen(tiles, lambda t: "4x2")
+    return out
+
+
+def _coarsen(items: list[dict], default) -> None:
+    taken: set[tuple[int, int, int]] = set()
+    for item in items:
+        w, h = (int(n) for n in _half(item.get("size") or default(item)).split("x"))
+        if "size" in item:
+            item["size"] = _half(item["size"])
+        if "pos" not in item:
+            continue
+        pos = item["pos"] = _cell(item["pos"])
+        cells = {(pos["screen"], pos["col"] + x, pos["row"] + y) for x in range(w) for y in range(h)}
+        if cells & taken:
+            del item["pos"]
+        else:
+            taken |= cells
 
 
 def _v1(layout: dict) -> dict:

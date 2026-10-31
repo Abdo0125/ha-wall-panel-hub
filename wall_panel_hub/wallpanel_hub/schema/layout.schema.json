@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Abdo0125/ha-wall-panel/schema/layout.schema.json",
-  "title": "Wall panel layout, version 2",
+  "title": "Wall panel layout, format 4",
   "description": "What one panel shows: pages of cards. Shared by the Android app, the ESP32 firmware and the management add-on; it never carries credentials. Which cards exist, what entities, sizes and options each accepts, is defined in cards.json and checked by the add-on on save.",
   "type": "object",
   "required": [
@@ -12,8 +12,8 @@
   "additionalProperties": false,
   "properties": {
     "schema": {
-      "description": "Layout format. Files without it are version 1 (tiles), version 2 had a card type per shape (light.dimmer...); both are migrated on read.",
-      "const": 3
+      "description": "Layout format. Files without it are version 1 (tiles), version 2 had a card type per shape (light.dimmer...), version 3 sized and placed cards on the 6x4 grid (4: the fine grid, each of its cells a quarter of one of those); all are migrated on read.",
+      "const": 4
     },
     "version": {
       "description": "Layout revision. The add-on increments it on every change; a panel only applies a layout newer than the one it holds.",
@@ -129,7 +129,7 @@
           "minLength": 1
         },
         "tile": {
-          "description": "The room's card in the panel's rooms menu; left out: its picture at 2x1, laid out in order.",
+          "description": "The room's card in the panel's rooms menu; left out: its picture at 4x2, laid out in order.",
           "type": "object",
           "additionalProperties": false,
           "properties": {
@@ -141,7 +141,7 @@
             },
             "size": {
               "type": "string",
-              "pattern": "^[1-6]x[1-4]$"
+              "pattern": "^([1-9]|1[0-2])x[1-8]$"
             },
             "pos": {
               "description": "Its place in its floor's grid in the rooms menu (screen, column, row, from the reading side). Omitted: laid out in order after the placed rooms.",
@@ -161,12 +161,12 @@
                 "col": {
                   "type": "integer",
                   "minimum": 0,
-                  "maximum": 11
+                  "maximum": 23
                 },
                 "row": {
                   "type": "integer",
                   "minimum": 0,
-                  "maximum": 11
+                  "maximum": 23
                 }
               }
             }
@@ -186,7 +186,7 @@
                 "type": "string"
               },
               "tile": {
-                "description": "The room's card in the panel's rooms menu; left out: its picture at 2x1, laid out in order.",
+                "description": "The room's card in the panel's rooms menu; left out: its picture at 4x2, laid out in order.",
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
@@ -198,7 +198,7 @@
                   },
                   "size": {
                     "type": "string",
-                    "pattern": "^[1-6]x[1-4]$"
+                    "pattern": "^([1-9]|1[0-2])x[1-8]$"
                   },
                   "pos": {
                     "description": "Its place in its floor's grid in the rooms menu (screen, column, row, from the reading side). Omitted: laid out in order after the placed rooms.",
@@ -218,12 +218,12 @@
                       "col": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 11
+                        "maximum": 23
                       },
                       "row": {
                         "type": "integer",
                         "minimum": 0,
-                        "maximum": 11
+                        "maximum": 23
                       }
                     }
                   }
@@ -268,9 +268,9 @@
           "uniqueItems": true
         },
         "size": {
-          "description": "Grid cells, columns x rows, up to the 6x4 grid; the card type's sizes, or any for a free-size type (cards.json). Omitted: the card type's default size.",
+          "description": "Cells of the fine grid, columns x rows, up to 12x8 (a 10\" panel's whole screen); the card type's sizes, or any for a free-size type (cards.json). Omitted: the card type's default size.",
           "type": "string",
-          "pattern": "^[1-6]x[1-4]$"
+          "pattern": "^([1-9]|1[0-2])x[1-8]$"
         },
         "label": {
           "type": "string"
@@ -304,12 +304,12 @@
             "col": {
               "type": "integer",
               "minimum": 0,
-              "maximum": 11
+              "maximum": 23
             },
             "row": {
               "type": "integer",
               "minimum": 0,
-              "maximum": 11
+              "maximum": 23
             }
           }
         }

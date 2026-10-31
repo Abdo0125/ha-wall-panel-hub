@@ -11,8 +11,9 @@ The hub opens its own connection to HA and forwards only what the panel may do:
 - its speaker (wallpanel/speaker/*): its state for HA's integration, HA's commands to it.
 - the intercom (wallpanel/intercom/*): its SIP to Asterisk (intercom.py), carried here.
 
-Layouts are stored in format v2 (cards). A panel asks for it with "schema": 2 in
-wallpanel/layout/subscribe or /get; an older app, which does not, gets format v1.
+Layouts are stored in the current format (migrate.SCHEMA). A panel names the format its app
+reads with "schema" in wallpanel/layout/subscribe or /get, and gets it; an app that does not
+name one gets format v1.
 """
 
 import asyncio
@@ -29,7 +30,7 @@ from .intercom import DOMAIN, networks
 from . import relay as sound
 from . import door_open
 from .access import EditRefused, role_caps
-from .cards import REGISTRY, REGISTRY_V2
+from .cards import REGISTRY, REGISTRY_V2, REGISTRY_V3
 from . import panel_settings, project_settings
 from .config import ConfigInvalid
 from .pins import PinInvalid
@@ -478,8 +479,8 @@ class PanelConnection:
         layout = store.get_layout(self.panel_id)
         if layout is None or self.schema >= SCHEMA:
             return layout
-        if self.schema == 2:
-            return downgrade(layout, 2)
+        if self.schema in (2, 3):
+            return downgrade(layout, self.schema)
         # An app older still reads its display settings from the layout.
         eff = store.effective_config(self.panel_id)
         panel = {"name": eff["name"] or "Panel", **{k: eff[k] for k in ("lang", "theme", "screensaver")}}
@@ -651,7 +652,7 @@ class PanelConnection:
             await self.intercom(mid, kind, msg)
         elif kind == "wallpanel/registry/get":
             # An older app edits its cards with the card types it knows.
-            registry = REGISTRY if self.schema >= SCHEMA else REGISTRY_V2
+            registry = REGISTRY if self.schema >= SCHEMA else REGISTRY_V3 if self.schema == 3 else REGISTRY_V2
             await self.send({"id": mid, "type": "result", "success": True, "result": registry})
         else:
             await self.send(_error(mid, "unknown_command", f"{kind} is not known"))

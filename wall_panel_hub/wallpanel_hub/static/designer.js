@@ -62,7 +62,7 @@ const kindOf = (entityId) => Object.keys(R.kinds).find((k) => R.kinds[k].domains
 const kindOfCard = (type) => type.split(".")[0];
 const cardDomains = (type) => R.cards[type]?.entities.domains || R.kinds[kindOfCard(type)]?.domains || [];
 // A size a card type takes: one of its sizes, or any WxH up to the grid for a free-size type.
-const sizeOk = (spec, size) => spec.sizes.includes(size) || (!!spec.free_size && /^[1-6]x[1-4]$/.test(size || "")
+const sizeOk = (spec, size) => spec.sizes.includes(size) || (!!spec.free_size && /^([1-9]|1[0-2])x[1-8]$/.test(size || "")
   && spanOf(size)[0] >= spanOf(spec.min_size || "1x1")[0] && spanOf(size)[1] >= spanOf(spec.min_size || "1x1")[1]);
 const sizeOf = (c) => c.size || R.cards[c.card]?.default_size || "1x1";
 const area = (s) => s.split("x").reduce((x, y) => x * y, 1);
@@ -78,7 +78,7 @@ const SHAPES = {
 };
 // Sizes in cells, columns × rows, as the panel names them.
 // Isolated left to right, so 2×1 reads 2×1 on an Arabic page too.
-const SIZES = Object.fromEntries(["1x1", "2x1", "2x2", "3x2", "4x2"].map((v) => [v, "⁦" + v.replace("x", "×") + "⁩"]));
+const SIZES = Object.fromEntries(["1x1", "2x1", "2x2", "4x2", "4x4", "6x4", "8x4"].map((v) => [v, "⁦" + v.replace("x", "×") + "⁩"]));
 // Each kind of device pairs with its own app and has its own rules (docs/ui-plan.md, 5.3).
 const PLATFORMS = { android: t("Android panel"), esp32: t("ESP32 panel"), phone: t("Phone") };
 const TYPES = { android_11: t("Android 11\""), android_4: t("Android 4\""), esp32_4: 'ESP32 4"', phone: t("Phone") };
@@ -144,7 +144,9 @@ function setCardType(c, type) {
 
 // ---------- grid packing (same rule as the app, GridPacking.kt) ----------
 
-const COLS = 6, ROWS = 4;  // the 11" panel: halves and thirds, no odd cell left
+// The fine grid (layout format 4): a 10" panel's screen is 12x8 cells, each a quarter of the
+// 6x4 grid's cell before it.
+const COLS = 12, ROWS = 8;
 
 function spanOf(size) {
   const [w, h] = (size || "1x1").split("x").map(Number);
@@ -257,10 +259,10 @@ function androidWidgetName(provider) {
 
 // The panel's own cards; all but the clock read one of the project's sources.
 const WIDGETS = [
-  { card: "widget.clock", icon: "mdi:clock-outline", size: "2x2" },
-  { card: "widget.weather", icon: "mdi:weather-partly-cloudy", size: "2x2", source: "weather", domain: "weather" },
-  { card: "widget.temperature", icon: "mdi:thermometer", size: "1x1", source: "outdoor_temperature", domain: "sensor", deviceClass: "temperature", units: ["°C", "°F"] },
-  { card: "widget.power", icon: "mdi:flash", size: "1x1", source: "power", domain: "sensor", deviceClass: "power", units: ["W", "kW"] },
+  { card: "widget.clock", icon: "mdi:clock-outline", size: "4x4" },
+  { card: "widget.weather", icon: "mdi:weather-partly-cloudy", size: "4x4", source: "weather", domain: "weather" },
+  { card: "widget.temperature", icon: "mdi:thermometer", size: "2x2", source: "outdoor_temperature", domain: "sensor", deviceClass: "temperature", units: ["°C", "°F"] },
+  { card: "widget.power", icon: "mdi:flash", size: "2x2", source: "power", domain: "sensor", deviceClass: "power", units: ["W", "kW"] },
 ];
 
 // A device as the panels show it: the project's name, type and icon over HA's.
@@ -340,7 +342,7 @@ async function loadEditor() {
     S.editor[p.id] = p;
     if (S.work[p.id]?.unsent) continue;  // keep edits in progress
     if (p.draft) S.work[p.id] = { layout: p.draft.layout, base: p.draft.base_version, unsent: true, undo: [], redo: [] };
-    else S.work[p.id] = { layout: p.sent ? clone(p.sent) : { schema: 2, version: 1, pages: [] }, base: p.sent ? p.sent.version : null, unsent: false, undo: [], redo: [] };
+    else S.work[p.id] = { layout: p.sent ? clone(p.sent) : { schema: 4, version: 1, pages: [] }, base: p.sent ? p.sent.version : null, unsent: false, undo: [], redo: [] };
   }
 }
 
@@ -598,7 +600,7 @@ function defaultDashboard(l) {
   const scenes = l.pages.flatMap((p) => p.cards)
     .filter((c) => kindOfCard(c.card) === "scene" && !seen.has(c.entities.join()) && seen.add(c.entities.join()))
     .map((c) => { const copy = JSON.parse(JSON.stringify(c)); copy.id = "dash_" + c.id; delete copy.pos; return copy; });
-  return [{ id: "dash_clock", card: "widget.clock", entities: [], size: "2x2" }, ...scenes];
+  return [{ id: "dash_clock", card: "widget.clock", entities: [], size: "4x4" }, ...scenes];
 }
 
 // The open room, or my dashboard as a page.
@@ -652,16 +654,13 @@ function renderDesign(view) {
       grid.style.height = "100%";
       if (screens > 1) grid.append(el("span", { class: "screenlabel" }, t("Screen {0} of {1} (swipe)", s + 1, screens)));
       for (const pl of placed.filter((x) => x.screen === s)) grid.append(cardCell(pl, page));
-      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-        if (grids[s][r][c]) continue;
-        grid.append(emptyCell(s, c, r, true));
-      }
+      emptyBlocks(grids[s], (c, r, block) => grid.append(emptyCell(s, c, r, block)));
       screensBox.append(grid);
     }
     // Room for one more screen after the last, as on the panel in edit mode.
     const grid = el("div", { class: "screen" });
     grid.append(el("span", { class: "screenlabel" }, t("Screen {0} (new, kept once a card is added)", screens + 1)));
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) grid.append(emptyCell(screens, c, r, true));
+    emptyBlocks(null, (c, r, block) => grid.append(emptyCell(screens, c, r, block)));
     screensBox.append(grid);
     main.append(screensBox);
   }
@@ -682,11 +681,11 @@ function cardCell(pl, page) {
   const known = !S.catalog.entities.length || c.entities.every((id) => entities()[id]);
   // As the panel draws it at this size: large a dial, wide a bar across, tall a bar up.
   const single = c.entities.length === 1;
-  const dial = pl.w >= 2 && pl.h >= 2 && (c.card === "climate" || (single && ["light", "cover"].includes(c.card)));
-  const wide = pl.h === 1 && pl.w >= 2, tall = pl.w === 1 && pl.h >= 2;
+  const dial = pl.w >= 4 && pl.h >= 4 && (c.card === "climate" || (single && ["light", "cover"].includes(c.card)));
+  const wide = pl.h <= 2 && pl.w >= 4, tall = pl.w <= 2 && pl.h >= 4;
   const barred = single && ((c.card === "light" && c.options?.dimming !== false && optionFits(c, R.cards.light.options.dimming)) || c.card === "cover");
   // A light (but the dial): its pad, the power button and the name, laid out as on the panel.
-  const lamp = c.card === "light" && !dial;
+  const lamp = c.card === "light" && !dial && pl.w >= 2 && pl.h >= 2;
   const lightModes = c.options?.modes ?? (c.options?.dimming === false ? [] : null);
   const padded = (lightModes === null || lightModes.length > 0) && (!single || device(c.entities[0]).features.some((f) => ["dimming", "white", "color"].includes(f)));
   const cls = ["cell", "card", lamp ? "lamp" : "", wide ? "wide" : "", tall ? "tall" : "", dial ? "big" : "", S.sel === index ? "selected" : "", known ? "" : "missing"].join(" ");
@@ -740,12 +739,25 @@ function cardCell(pl, page) {
   return node;
 }
 
-// Any empty cell takes a new card, or a dragged one (free placement).
-function emptyCell(screen, col, row, open) {
+// The free cells of a screen ([taken]: its grid, null when all free), as the panel's edit mode
+// shows them: a 2x2 block with all four free is one cell with +; the free cells of a block a
+// card takes part of are each a cell of their own, taking drops only.
+function emptyBlocks(taken, fn) {
+  const free = (c, r) => !taken || !taken[r][c];
+  for (let r = 0; r < ROWS; r += 2) for (let c = 0; c < COLS; c += 2) {
+    const cells = [[c, r], [c + 1, r], [c, r + 1], [c + 1, r + 1]];
+    if (cells.every(([x, y]) => free(x, y))) fn(c, r, true);
+    else for (const [x, y] of cells) if (free(x, y)) fn(x, y, false);
+  }
+}
+
+// Empty cells take a dragged card (free placement); a 2x2 block ([block]) also a new one (+).
+function emptyCell(screen, col, row, block) {
+  const open = true;
   const node = el("div", {
-    class: "cell" + (open ? " empty" : ""), title: open ? t("Add a card") : "",
-    style: { gridColumn: `${col + 1}`, gridRow: `${row + 1}` },
-    onclick: () => { if (open) addSheet(screen, col, row); },
+    class: "cell" + (block ? " empty" : " gap"), title: block ? t("Add a card") : "",
+    style: { gridColumn: `${col + 1} / span ${block ? 2 : 1}`, gridRow: `${row + 1} / span ${block ? 2 : 1}` },
+    onclick: () => { if (block) addSheet(screen, col, row); },
     ondragover: (ev) => { if ((dragFrom !== null || paletteMake) && open) { ev.preventDefault(); node.classList.add("over"); } },
     ondragleave: () => node.classList.remove("over"),
     ondrop: (ev) => {
@@ -765,7 +777,7 @@ function emptyCell(screen, col, row, open) {
         if (placeCard(cards, from, screen, col, row)) S.sel = cards.indexOf(moved);
       });
     },
-  }, open ? "+" : "");
+  }, block ? "+" : "");
   return node;
 }
 
@@ -1080,7 +1092,7 @@ function addBrowser({ pick, docked = false }) {
         listOf(list.map((a) => {
           const there = page.cards.some((c) => c.options?.package === a.package);
           return row_("mdi:apps", appName(a.package), there ? t("On the page") : "", (l) => (
-            { id: nextCardId(l), card: "app.launch", entities: [], size: "1x1", options: { package: a.package } }), there);
+            { id: nextCardId(l), card: "app.launch", entities: [], size: "2x2", options: { package: a.package } }), there);
         }), t("No apps allowed on this panel.")),
         el("p", { class: "muted small" }, t("Allowed apps are set in the panel's settings.")));
     } else {
@@ -1097,7 +1109,7 @@ function addBrowser({ pick, docked = false }) {
       if (addState.wkind !== "builtin") {
         for (const w of androids().filter((w) => hits(w.label, w.provider))) {
           items.push(row_("mdi:widgets-outline", w.label || w.provider, t("Bound on the panel"),
-            (l) => ({ id: nextCardId(l), card: "widget.android", entities: [], size: "2x2", options: { provider: w.provider } })));
+            (l) => ({ id: nextCardId(l), card: "widget.android", entities: [], size: "4x4", options: { provider: w.provider } })));
         }
       }
       body.replaceChildren(listOf(items, t("No widgets available. Android widgets come from the allowed apps.")));
@@ -1157,15 +1169,15 @@ function tileHolder(l, g, i) {
 // A room as a card of the menu's grid: its shape, size and place on that floor (picture, 2x1).
 function menuCard(l, g, i) {
   const tile = tileHolder(l, g, i)?.tile || {};
-  return { id: l.pages[i].id, card: tile.card || "room.card", size: tile.size || "2x1", pos: tile.pos, entities: [], _i: i };
+  return { id: l.pages[i].id, card: tile.card || "room.card", size: tile.size || "4x2", pos: tile.pos, entities: [], _i: i };
 }
 
 function setTile(l, g, i, values) {
   const h = tileHolder(l, g, i);
-  h.tile = { card: "room.card", size: "2x1", ...(h.tile || {}), ...values };
+  h.tile = { card: "room.card", size: "4x2", ...(h.tile || {}), ...values };
   if (!h.tile.pos) delete h.tile.pos;
   // On its own floor the default (picture at 2x1, in order) is left out, as the panel does.
-  if (h === l.pages[i] && h.tile.card === "room.card" && h.tile.size === "2x1" && !h.tile.pos) delete h.tile;
+  if (h === l.pages[i] && h.tile.card === "room.card" && h.tile.size === "4x2" && !h.tile.pos) delete h.tile;
 }
 
 // Every room of the tab fixed where it shows, so what is added or moved moves no other.
@@ -1199,10 +1211,7 @@ function renderRoomsMenu(main) {
     if (s === screens) grid.append(el("span", { class: "screenlabel" }, t("Screen {0} (new)", screens + 1)));
     else if (screens > 1) grid.append(el("span", { class: "screenlabel" }, t("Screen {0} of {1}", s + 1, screens)));
     for (const pl of placed.filter((x) => x.screen === s)) grid.append(roomTile(pl, g));
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-      if (s < screens && grids[s][r][c]) continue;
-      grid.append(roomCell(g, placed, s, c, r));
-    }
+    emptyBlocks(s < screens ? grids[s] : null, (c, r, block) => grid.append(roomCell(g, placed, s, c, r, block)));
     box.append(grid);
   }
   main.append(box);
@@ -1237,16 +1246,16 @@ function roomTile(pl, g) {
   return node;
 }
 
-// An empty cell of the menu: + adds a room there; a dragged room goes there.
-function roomCell(g, placed, screen, col, row) {
+// An empty cell of the menu: a dragged room goes there; a 2x2 block's + adds a room there.
+function roomCell(g, placed, screen, col, row, block) {
   const node = el("div", {
-    class: "cell empty", title: t("Add a room here"),
-    style: { gridColumn: `${col + 1}`, gridRow: `${row + 1}` },
-    onclick: () => roomAddSheet(g, placed, screen, col, row),
+    class: "cell" + (block ? " empty" : " gap"), title: block ? t("Add a room here") : "",
+    style: { gridColumn: `${col + 1} / span ${block ? 2 : 1}`, gridRow: `${row + 1} / span ${block ? 2 : 1}` },
+    onclick: () => { if (block) roomAddSheet(g, placed, screen, col, row); },
     ondragover: (ev) => { if (roomDrag) { ev.preventDefault(); node.classList.add("over"); } },
     ondragleave: () => node.classList.remove("over"),
     ondrop: (ev) => { ev.preventDefault(); moveRoom(g, roomDrag, screen, col, row); },
-  }, "+");
+  }, block ? "+" : "");
   return node;
 }
 
@@ -1262,14 +1271,14 @@ function moveRoom(g, id, screen, col, row) {
 
 // + in an empty cell: a room of this panel on another floor (shown here too), one of HA's,
 // a whole floor of HA's, or an empty one. One room goes in the cell touched: its picture at
-// 2x1, or 1x1 where 2x1 does not fit.
+// 4x2, or 2x2 where 4x2 does not fit.
 function roomAddSheet(g, placed, screen, col, row) {
   const fits = (size) => {
     const [w, h] = spanOf(size);
     return col + w <= COLS && row + h <= ROWS && !placed.some((p) =>
       p.screen === screen && p.col < col + w && col < p.col + p.w && p.row < row + h && row < p.row + p.h);
   };
-  const size = fits("2x1") ? "2x1" : "1x1";
+  const size = fits("4x2") ? "4x2" : "2x2";
   const spot = { card: "room.card", size, pos: { screen, col, row } };
   const l = L();
   const have = new Set(l.pages.map((p) => p.id));
@@ -1348,9 +1357,9 @@ function roomTileSheet(i, floorId) {
   const g = roomGroups(l).find((x) => x.id === floorId && x.pages.includes(i)) || { id: null, also: new Set(), pages: [i] };
   const isAlso = g.also.has(i);
   const tile = tileHolder(l, g, i)?.tile || {};
-  const shape = tile.card || "room.card", size = tile.size || "2x1";
+  const shape = tile.card || "room.card", size = tile.size || "4x2";
   const edit = (fn) => { change((lay) => fn(lay)); roomTileSheet(i, floorId); };
-  const sizes = shape === "room.summary" ? ["1x1", "2x1"] : ["1x1", "2x1", "2x2"];
+  const sizes = shape === "room.summary" ? ["2x2", "4x2"] : ["2x2", "4x2", "4x4"];
   const ownFloor = roomGroups(l).find((x) => x.pages.includes(i) && !x.also.has(i))?.name;
   sheet(
     el("h3", {}, p.title),
@@ -1358,8 +1367,8 @@ function roomTileSheet(i, floorId) {
     field(t("Name"), el("input", { value: p.title, onchange: (e) => { const v = e.target.value.trim(); if (v) edit((lay) => { lay.pages[i].title = v; }); } })),
     field(t("Icon"), iconInput(p.icon, "mdi:floor-plan", (v) => edit((lay) => { v && validIcon(v) ? lay.pages[i].icon = v : delete lay.pages[i].icon; }))),
     field(t("Its card in the rooms menu"), chips([["room.card", t("Room picture")], ["room.summary", t("Details")]], shape,
-      (v) => edit((lay) => setTile(lay, g, i, { card: v, size: v === "room.summary" && !["1x1", "2x1"].includes(size) ? "2x1" : size })))),
-    shape === "room.card" ? freeSizeFields(size, (v) => edit((lay) => setTile(lay, g, i, { size: v })))
+      (v) => edit((lay) => setTile(lay, g, i, { card: v, size: v === "room.summary" && !["2x2", "4x2"].includes(size) ? "4x2" : size })))),
+    shape === "room.card" ? freeSizeFields(size, (v) => edit((lay) => setTile(lay, g, i, { size: v })), R.cards["room.card"]?.min_size)
       : field(t("Size"), chips(sizes.map((v) => [v, SIZES[v] || v]), size, (v) => edit((lay) => setTile(lay, g, i, { size: v })))),
     !isAlso && effFloors().length ? field(t("Floor on this panel"), (() => {
       const haFloor = effFloors().find((f) => (f.areas || []).includes(p.id))?.name;
@@ -2154,7 +2163,7 @@ function wizard(req) {
       return;
     }
     // Step 3: build the layout and send it.
-    const layout = { schema: 2, version: 1, pages: [] };
+    const layout = { schema: 4, version: 1, pages: [] };
     const ordered = S.catalog.areas.map((a) => a.id).filter((id) => st.rooms.has(id));
     if (st.area && ordered.includes(st.area)) ordered.splice(ordered.indexOf(st.area), 1), ordered.unshift(st.area);
     addRoomPages(layout, ordered);

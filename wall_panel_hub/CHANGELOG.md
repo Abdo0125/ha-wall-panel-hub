@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.50.0
+
+- The fine grid (layout format 4): a 10" panel's screen is 12x8 cells, each a quarter of a
+  cell before, so cards can be made smaller. Stored layouts move over by themselves, every
+  size and place doubled: nothing moves on the screens until a card is resized.
+- The designer shows the new grid: one + for each free 2x2 block; widths 1 to 12, heights
+  1 to 8, none below a card's minimum.
+- Panels running an app before 0.55.0 still get the 6x4 grid: sizes halved (rounded up). A
+  card whose cell there is taken by another is laid out after the placed ones. What such a
+  panel saves keeps the fine size and place of every card it did not change.
+
 ## 0.49.0
 
 - A light card's own settings (app 0.52.0), in the designer as on the panel:
