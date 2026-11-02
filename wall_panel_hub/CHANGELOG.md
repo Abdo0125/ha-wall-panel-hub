@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.51.0
+
+- The cards' redesign (panel app 0.58.0 to 0.66.0): new card options, in the designer and on
+  the panel alike:
+  - Lights: **Light fitting** (`fixture`: ceiling, pendant, spots, LED strip, wall, floor,
+    table, chandelier, glass panel), guessed from the light's name when not chosen; and for an
+    on/off light **When on** (`on_look`: a glow, or a cone of light).
+  - Covers: **Quick positions** (`quick_positions`), up to 8, such as `75, 50, Privacy:30`.
+  - Scenes, scripts and the scene bar: **Hold to run** (`hold_to_run`), so a passing touch does
+    not run them.
+  - Sensors: **Warn when high** (`warn_levels`, on): CO2, PM2.5 and humidity in red when high.
+- The designer's panel preview in the black finish: the top bar on its own strip, rounded tiles
+  with a gap, blank plates where no card is, and the light fittings' icons (from the same file
+  as the panel's).
+
 ## 0.50.1
 
 - The designer draws a card one cell high or wide small: a smaller icon and the name, side

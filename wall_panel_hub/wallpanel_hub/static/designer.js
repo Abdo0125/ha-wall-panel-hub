@@ -87,12 +87,20 @@ const OPTION_NAMES = {
   power_entity: t("Power sensor"), package: t("App (package name)"), return_seconds: t("Return after (seconds)"),
   modes: t("Modes on the card"), start_mode: t("Starts on"), show_values: t("Show % and K"),
   long_press: t("Long press opens the popup"), group_members: t("Group lights in the popup"),
+  fixture: t("Light fitting"), on_look: t("When on"), quick_positions: t("Quick positions"),
+  hold_to_run: t("Hold to run"), warn_levels: t("Warn when high"),
 };
 // A line under a setting's name, where it says more than the name.
-const OPTION_NOTES = { modes: t("The popup always shows all"), group_members: t("Only for a Home Assistant group") };
+const OPTION_NOTES = {
+  modes: t("The popup always shows all"), group_members: t("Only for a Home Assistant group"),
+  quick_positions: t("Up to 8, comma separated: 75, 50, Privacy:30"),
+};
 // A setting's values: their names and icons (a light card's modes).
 const OPTION_VALUES = {
   brightness: [t("Brightness"), "mdi:brightness-6"], white: [t("Tone"), "mdi:thermometer"], color: [t("Colour"), "mdi:palette"],
+  ceiling: [t("Ceiling")], pendant: [t("Pendant")], spot: [t("Spots")], strip: [t("LED strip")], wall: [t("Wall light")],
+  floor: [t("Floor lamp")], table: [t("Table lamp")], chandelier: [t("Chandelier")], panel: [t("Glass panel")],
+  glow: [t("Glow")], cone: [t("Light cone")],
 };
 const KIND_NAMES = {
   light: t("Lights"), switch: t("Switches"), cover: t("Covers"), climate: t("Climate"), fan: t("Fans"), lock: t("Locks"),
@@ -288,6 +296,34 @@ const valuesFit = (c, opt) => opt.values.filter((v) => !opt.value_requires?.[v] 
   device(c.entities[0]).features.includes(opt.value_requires[v]));
 
 // The icon a card shows (off state), close to the app's cardIcon.
+// Light fittings' icons, one source with the panel (schema/fixtures.json, copied here).
+let FIXTURES = null;
+
+// A light card's fitting, as the panel picks it: the card's own icon first, then its option,
+// then HA's icon for the light, else the fitting its name suggests.
+function fixtureOf(c) {
+  if (!FIXTURES || kindOfCard(c.card) !== "light" || c.entities.length !== 1 || c.icon) return null;
+  if (FIXTURES.fixtures[c.options?.fixture]) return c.options.fixture;
+  if (device(c.entities[0])?.icon) return null;
+  const name = (cardLabel(c) || "").toLowerCase();
+  return FIXTURES.order.find((k) => (FIXTURES.fixtures[k].words || []).some((w) => name.includes(w.toLowerCase()))) || "ceiling";
+}
+
+// A card's icon: its light fitting drawn as on the panel, else its Material icon.
+function cardGlyph(c, attrs = {}) {
+  const key = fixtureOf(c);
+  if (!key) return icon(cardIcon(c), attrs);
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  for (const [k, v] of Object.entries({ viewBox: "0 0 24 24", width: "1em", height: "1em", fill: "none", stroke: "currentColor",
+    "stroke-width": "1.6", "stroke-linecap": "round", "stroke-linejoin": "round", class: "mdi fixture " + (attrs.class || "") })) svg.setAttribute(k, v);
+  if (attrs.style?.fontSize) svg.style.fontSize = attrs.style.fontSize;
+  const p = document.createElementNS(NS, "path");
+  p.setAttribute("d", FIXTURES.fixtures[key].path);
+  svg.append(p);
+  return svg;
+}
+
 function cardIcon(c) {
   if (c.icon) return c.icon;
   const kind = kindOfCard(c.card);
@@ -693,15 +729,15 @@ function cardCell(pl, page) {
   const cls = ["cell", "card", lamp ? "lamp" : "", wide ? "wide" : "", tall ? "tall" : "", dial ? "big" : "",
     tiny ? "tiny" : "", tiny && !wide && pl.w >= 2 ? "row" : "", S.sel === index ? "selected" : "", known ? "" : "missing"].join(" ");
   const body = lamp
-    ? [el("span", { class: "pad" }, padded ? el("span", { class: "fill" }) : icon(cardIcon(c))),
+    ? [el("span", { class: "pad" }, padded ? el("span", { class: "fill" }) : cardGlyph(c)),
        el("span", { class: "pwr" }, icon("mdi:power")), el("span", { class: "lbl" }, cardLabel(c))]
     : dial
     ? [el("div", { class: "ring" }, icon(cardIcon(c)), el("span", { class: "lbl" }, cardLabel(c)))]
     : wide
-      ? [icon(cardIcon(c), { style: { fontSize: "32px" } }), el("span", { class: "lbl" }, cardLabel(c)), barred ? el("span", { class: "bar" }) : null]
+      ? [cardGlyph(c, { style: { fontSize: "32px" } }), el("span", { class: "lbl" }, cardLabel(c)), barred ? el("span", { class: "bar" }) : null]
       : tall
-        ? [icon(cardIcon(c)), el("span", { class: "lbl" }, cardLabel(c)), barred ? el("span", { class: "vbar" }) : null]
-        : [icon(cardIcon(c)), el("span", { class: "lbl" }, cardLabel(c))];
+        ? [cardGlyph(c), el("span", { class: "lbl" }, cardLabel(c)), barred ? el("span", { class: "vbar" }) : null]
+        : [cardGlyph(c), el("span", { class: "lbl" }, cardLabel(c))];
   let roomCls = "", roomBg = "";
   if (kindOfCard(c.card) === "room") {
     const room = L().pages.find((p) => p.id === c.options?.page);
@@ -867,7 +903,7 @@ function cardSheet(index) {
       return optionRow(label, note, el("div", { class: "chips" }, fit.map((v) =>
         valueChip(v, v === now, !among.includes(v), () => set(v === opt.default ? undefined : v)))));
     }
-    if (opt.type === "enum") return field(label, chips([["", t("Default")], ...opt.values.map((v) => [v, v])], value ?? "", (v) => set(v || undefined)));
+    if (opt.type === "enum") return field(label, chips([["", opt.default ? t("Default") : t("Automatic")], ...opt.values.map((v) => [v, (OPTION_VALUES[v] || [v])[0]])], value ?? "", (v) => set(!v || v === opt.default ? undefined : v)));
     if (opt.type === "int") return field(label, el("input", { type: "number", min: opt.min, max: opt.max, value: value ?? "", placeholder: opt.default ?? "",
       onchange: (e) => set(e.target.value === "" ? undefined : Number(e.target.value)) }));
     if (opt.type === "entity") {
@@ -2216,6 +2252,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("veil
 
 (async () => {
   const cp = await fetch(ASSETS + "vendor/mdi/codepoints.json").then((r) => r.json()).catch(() => ({}));
+  FIXTURES = await fetch(ASSETS + "fixtures.json").then((r) => r.json()).catch(() => null);
   CODEPOINTS = cp;
   const reg = await api("api/editor/cards");
   if (reg.ok) R = reg.body;

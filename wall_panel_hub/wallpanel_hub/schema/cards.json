@@ -161,6 +161,29 @@
           "type": "bool",
           "default": true
         },
+        "fixture": {
+          "type": "enum",
+          "values": [
+            "ceiling",
+            "pendant",
+            "spot",
+            "strip",
+            "wall",
+            "floor",
+            "table",
+            "chandelier",
+            "panel"
+          ]
+        },
+        "on_look": {
+          "type": "enum",
+          "values": [
+            "glow",
+            "cone"
+          ],
+          "default": "glow",
+          "requires": "onoff"
+        },
         "group_members": {
           "type": "bool",
           "default": true,
@@ -218,6 +241,12 @@
       "default_size": "2x2",
       "min_size": "2x1",
       "free_size": true,
+      "options": {
+        "quick_positions": {
+          "type": "string",
+          "pattern": "^\\s*([^,:]{1,20}:)?\\d{1,3}(\\s*,\\s*([^,:]{1,20}:)?\\d{1,3}){0,7}\\s*$"
+        }
+      },
       "targets": [
         "android",
         "esp32",
@@ -302,7 +331,13 @@
         "android",
         "esp32",
         "phone"
-      ]
+      ],
+      "options": {
+        "hold_to_run": {
+          "type": "bool",
+          "default": false
+        }
+      }
     },
     "scene.bar": {
       "entities": {
@@ -319,7 +354,13 @@
         "android",
         "esp32",
         "phone"
-      ]
+      ],
+      "options": {
+        "hold_to_run": {
+          "type": "bool",
+          "default": false
+        }
+      }
     },
     "script": {
       "entities": {
@@ -337,7 +378,13 @@
         "android",
         "esp32",
         "phone"
-      ]
+      ],
+      "options": {
+        "hold_to_run": {
+          "type": "bool",
+          "default": false
+        }
+      }
     },
     "button": {
       "entities": {
@@ -376,7 +423,13 @@
         "android",
         "esp32",
         "phone"
-      ]
+      ],
+      "options": {
+        "warn_levels": {
+          "type": "bool",
+          "default": true
+        }
+      }
     },
     "sensor.multi": {
       "entities": {
@@ -397,7 +450,13 @@
         "android",
         "esp32",
         "phone"
-      ]
+      ],
+      "options": {
+        "warn_levels": {
+          "type": "bool",
+          "default": true
+        }
+      }
     },
     "camera": {
       "entities": {

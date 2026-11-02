@@ -81,11 +81,14 @@
   .switch.on:hover:not(:disabled) { background: var(--accent); }
 
   /* ---- the panel, as it looks on the wall ---- */
+  /* The black finish's tiles on the ground, rounded, a gap between; blank plates where no card is (docs/cards-design.md §12). */
   .device { --cell: #fff; --divider: #d7dade; --icon: #5f656c; --active: #f2b300; --text: #2b2f33; --dmuted: #8c9298; --side: #f1f2f4;
+            --page: #e6e8eb; --plate: #f2f3f5;
             display: grid; grid-template-columns: 1fr; width: 100%; max-width: 1080px; aspect-ratio: 16 / 10;
             border: 10px solid #222; border-radius: 18px; overflow: hidden; background: var(--divider); color: var(--text);
             box-shadow: 0 8px 30px rgba(0,0,0,.25); }
-  .device.dark { --cell: #1b1e22; --divider: #2b2f35; --icon: #a9afb6; --active: #ffc72c; --text: #e9ebee; --dmuted: #8a9097; --side: #15181b; }
+  .device.dark { --cell: #181818; --divider: #2e2e2e; --icon: #a6a6a6; --active: #ffc24a; --text: #f2f2f2; --dmuted: #8a8a8a; --side: #121212;
+                 --page: #0b0b0b; --plate: #121212; }
   .dside { background: var(--side); display: flex; flex-direction: column; min-height: 0; border-inline-end: 1px solid var(--divider); }
   .dside ul { list-style: none; margin: 0; padding: 6px; overflow: auto; flex: 1; }
   .room { display: flex; align-items: center; gap: 8px; padding: 9px 8px; border-radius: 6px; cursor: pointer; color: var(--text); font-size: 13px; }
@@ -96,8 +99,8 @@
   .room:hover .edit { opacity: .7; }
   .room .grow { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .addroom { margin: 6px; border: 1px dashed var(--dmuted); color: var(--dmuted); font-size: 12px; padding: 6px; }
-  .dmain { display: flex; flex-direction: column; min-height: 0; background: var(--divider); }
-  .dtop { flex: none; height: 44px; background: var(--cell); display: flex; align-items: center; padding: 0 10px; gap: 10px; font-size: 15px; border-bottom: 1px solid var(--divider); }
+  .dmain { display: flex; flex-direction: column; min-height: 0; background: var(--page); }
+  .dtop { flex: none; height: 40px; background: var(--cell); display: flex; align-items: center; padding: 0 10px; gap: 10px; font-size: 15px; margin: 4px 4px 2px; border-radius: 7px; }
   .dtop .clock { margin-inline-start: auto; color: var(--dmuted); }
   .dtitle { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
   .dtitle:hover { background: color-mix(in srgb, var(--dmuted) 15%, transparent); }
@@ -124,15 +127,17 @@
   .rtile.also { outline: 1px dashed var(--dmuted); outline-offset: -4px; }
   .rtile.current { box-shadow: inset 0 0 0 3px var(--active); }
   .rtile.dragging { opacity: .3; }
-  .screen { display: grid; gap: 0; grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(8, 1fr); height: 100%; position: relative; }
+  .screen { display: grid; gap: 4px; padding: 2px 4px 4px; box-sizing: border-box; grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(8, 1fr); height: 100%; position: relative; }
   .screen + .screen { border-top: 3px dashed var(--dmuted); }
   .screenlabel { position: absolute; top: -10px; inset-inline-end: 12px; font-size: 11px; line-height: 16px; padding: 0 6px; background: var(--divider); color: var(--dmuted); z-index: 2; pointer-events: none; }
   .screen:first-child .screenlabel { top: 0; }
-  .cell { background: var(--cell); border: .5px solid var(--divider); display: flex; align-items: center; justify-content: center; min-height: 0; }
+  .cell { background: var(--cell); border-radius: 7px; display: flex; align-items: center; justify-content: center; min-height: 0; min-width: 0; }
+  .cell.empty, .cell.gap { background: var(--plate); }
+  .card svg.fixture { width: 1em; height: 1em; }
   .cell.empty { cursor: pointer; color: color-mix(in srgb, var(--dmuted) 35%, transparent); font-size: 26px; }
   .cell.empty:hover { color: var(--dmuted); }
   .cell.over { outline: 2px dashed var(--accent); outline-offset: -4px; }
-  .cell.gap { border-color: transparent; }
+  .cell.gap { cursor: default; }
   .card { flex-direction: column; gap: 6px; cursor: grab; position: relative; padding: 8px; text-align: center; overflow: hidden; }
   .card .mdi { font-size: 40px; color: var(--icon); }
   .card .lbl { font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

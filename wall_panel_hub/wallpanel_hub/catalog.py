@@ -36,6 +36,9 @@ def features(entity_id: str, attrs: dict) -> list[str]:
     modes = attrs.get("supported_color_modes") or []
     if domain == "light" and any(m != "onoff" for m in modes):
         found.append("dimming")
+    # On / off only: how it looks when on (on_look).
+    if domain == "light" and not any(m != "onoff" for m in modes):
+        found.append("onoff")
     if domain == "light" and "color_temp" in modes:
         found.append("white")
     if domain == "light" and any(m in ("hs", "xy", "rgb", "rgbw", "rgbww") for m in modes):
