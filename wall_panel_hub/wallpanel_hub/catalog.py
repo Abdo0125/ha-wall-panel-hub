@@ -28,6 +28,9 @@ UPCOMING = ("media_player", "alarm_control_panel", "vacuum", "water_heater", "hu
             "siren", "remote", "number", "input_number", "select", "input_select")
 
 
+TONE_MODES = ("color_temp", "hs", "xy", "rgb", "rgbw", "rgbww")
+
+
 def features(entity_id: str, attrs: dict) -> list[str]:
     """What the device can do that a card's option needs ("requires" in cards.json); the app
     reads them from the same attributes (EntityState.can)."""
@@ -39,6 +42,9 @@ def features(entity_id: str, attrs: dict) -> list[str]:
     # On / off only: how it looks when on (on_look).
     if domain == "light" and not any(m != "onoff" for m in modes):
         found.append("onoff")
+    # No tone of its own: the colour its card shows when on (on_color).
+    if domain == "light" and not any(m in TONE_MODES for m in modes):
+        found.append("plain")
     if domain == "light" and "color_temp" in modes:
         found.append("white")
     if domain == "light" and any(m in ("hs", "xy", "rgb", "rgbw", "rgbww") for m in modes):

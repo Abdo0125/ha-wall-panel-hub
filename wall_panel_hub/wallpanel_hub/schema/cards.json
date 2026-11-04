@@ -1,5 +1,5 @@
 {
-  "$comment": "Card registry. One card per function: a kind's main card is named as the kind (light, cover...), its other cards kind.name (scene.bar, room.card); what a device can do (dimming, colours, tilt, speeds) comes from Home Assistant, what the installer chooses is an option. Sizes are in cells of the fine grid (12x8 on a 10\" panel, each a quarter of the 6x4 grid's cell). free_size: any WxH from min_size up to the grid (12x8), vertical ones too (2x6...), the content fitted to the space; sizes are only presets. Apps reading layout format 3 get cards.v3.json, in the 6x4 grid's cells. The add-on validates layouts against it and builds the editor's card picker and property fields from it; the app mirrors the kinds in CardKind.kt (a unit test keeps them in step). entities.domains '*' accepts any domain. Options of type 'entity' must be named *_entity. An option with 'requires' is offered only for a card of one device that can do it (dimming: a light with a colour mode other than on/off; speeds: a fan with HA's SET_SPEED feature).",
+  "$comment": "Card registry. One card per function: a kind's main card is named as the kind (light, cover...), its other cards kind.name (scene.bar, room.card); what a device can do (dimming, colours, tilt, speeds) comes from Home Assistant, what the installer chooses is an option. Sizes are in cells of the fine grid (12x8 on a 10\" panel, each a quarter of the 6x4 grid's cell). free_size: any WxH from min_size up to the grid (12x8), vertical ones too (2x6...), the content fitted to the space; sizes are only presets. Apps reading layout format 3 get cards.v3.json, in the 6x4 grid's cells. The add-on validates layouts against it and builds the editor's card picker and property fields from it; the app mirrors the kinds in CardKind.kt (a unit test keeps them in step). entities.domains '*' accepts any domain. Options of type 'entity' must be named *_entity. An option with 'requires' is offered only for a card of one device that can do it (dimming: a light with a colour mode other than on/off; plain: a light with no white tones or colours of its own; speeds: a fan with HA's SET_SPEED feature).",
   "version": 3,
   "sizes": [
     "1x1",
@@ -130,6 +130,44 @@
       "min_size": "1x1",
       "free_size": true,
       "options": {
+        "fixture": {
+          "type": "enum",
+          "values": [
+            "ceiling",
+            "pendant",
+            "spot",
+            "strip",
+            "wall",
+            "floor",
+            "table",
+            "chandelier",
+            "panel"
+          ]
+        },
+        "on_color": {
+          "type": "enum",
+          "values": [
+            "amber",
+            "warm",
+            "neutral",
+            "cool",
+            "red",
+            "green",
+            "blue",
+            "violet"
+          ],
+          "default": "amber",
+          "requires": "plain"
+        },
+        "on_look": {
+          "type": "enum",
+          "values": [
+            "glow",
+            "cone"
+          ],
+          "default": "glow",
+          "requires": "onoff"
+        },
         "modes": {
           "type": "set",
           "values": [
@@ -160,29 +198,6 @@
         "long_press": {
           "type": "bool",
           "default": true
-        },
-        "fixture": {
-          "type": "enum",
-          "values": [
-            "ceiling",
-            "pendant",
-            "spot",
-            "strip",
-            "wall",
-            "floor",
-            "table",
-            "chandelier",
-            "panel"
-          ]
-        },
-        "on_look": {
-          "type": "enum",
-          "values": [
-            "glow",
-            "cone"
-          ],
-          "default": "glow",
-          "requires": "onoff"
         },
         "group_members": {
           "type": "bool",

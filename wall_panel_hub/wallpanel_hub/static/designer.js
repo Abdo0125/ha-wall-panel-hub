@@ -87,7 +87,7 @@ const OPTION_NAMES = {
   power_entity: t("Power sensor"), package: t("App (package name)"), return_seconds: t("Return after (seconds)"),
   modes: t("Modes on the card"), start_mode: t("Starts on"), show_values: t("Show % and K"),
   long_press: t("Long press opens the popup"), group_members: t("Group lights in the popup"),
-  fixture: t("Light fitting"), on_look: t("When on"), quick_positions: t("Quick positions"),
+  fixture: t("Light fitting"), on_color: t("Colour when on"), on_look: t("When on"), quick_positions: t("Quick positions"),
   hold_to_run: t("Hold to run"), warn_levels: t("Warn when high"),
 };
 // A line under a setting's name, where it says more than the name.
@@ -101,6 +101,8 @@ const OPTION_VALUES = {
   ceiling: [t("Ceiling")], pendant: [t("Pendant")], spot: [t("Spots")], strip: [t("LED strip")], wall: [t("Wall light")],
   floor: [t("Floor lamp")], table: [t("Table lamp")], chandelier: [t("Chandelier")], panel: [t("Glass panel")],
   glow: [t("Glow")], cone: [t("Light cone")],
+  amber: [t("Amber")], warm: [t("Warm white")], neutral: [t("Neutral white")], cool: [t("Cool white")],
+  red: [t("Red")], green: [t("Green")], blue: [t("Blue")], violet: [t("Violet")],
 };
 const KIND_NAMES = {
   light: t("Lights"), switch: t("Switches"), cover: t("Covers"), climate: t("Climate"), fan: t("Fans"), lock: t("Locks"),

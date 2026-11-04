@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.52.0
+
+- Lights: **Colour when on** (`on_color`), for a light with no white tones or colours of its
+  own: amber by default, three whites, red, green, blue or violet. Panel app 0.67.0 or later
+  shows it; the designer offers it for such a light.
+- Lights: the light's own options now come in the order of the panel's settings: fitting first.
+
 ## 0.51.0
 
 - The cards' redesign (panel app 0.58.0 to 0.66.0): new card options, in the designer and on
