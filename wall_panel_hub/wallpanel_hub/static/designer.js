@@ -88,6 +88,7 @@ const OPTION_NAMES = {
   modes: t("Modes on the card"), start_mode: t("Starts on"), show_values: t("Show % and K"),
   long_press: t("Long press opens the popup"), group_members: t("Group lights in the popup"),
   fixture: t("Light fitting"), on_color: t("Colour when on"), on_look: t("When on"), quick_positions: t("Quick positions"),
+  curtain_color: t("Curtain colour"), shutter_color: t("Shutter colour"), blind_color: t("Blind colour"),
   hold_to_run: t("Hold to run"), warn_levels: t("Warn when high"),
 };
 // A line under a setting's name, where it says more than the name.
@@ -103,6 +104,9 @@ const OPTION_VALUES = {
   glow: [t("Glow")], cone: [t("Light cone")],
   amber: [t("Amber")], warm: [t("Warm white")], neutral: [t("Neutral white")], cool: [t("Cool white")],
   red: [t("Red")], green: [t("Green")], blue: [t("Blue")], violet: [t("Violet")],
+  snow: [t("White")], silver: [t("Silver")], mist: [t("Misty blue")], sage: [t("Sage")], rose: [t("Rose")], lilac: [t("Lilac")],
+  stone: [t("Stone")], slate: [t("Slate")], anthracite: [t("Anthracite")], black: [t("Black")],
+  titanium: [t("Titanium")], steel: [t("Steel blue")], graphite: [t("Graphite")],
 };
 const KIND_NAMES = {
   light: t("Lights"), switch: t("Switches"), cover: t("Covers"), climate: t("Climate"), fan: t("Fans"), lock: t("Locks"),
@@ -291,8 +295,11 @@ function device(id) {
   };
 }
 
-// An option offered for this card: one needing a feature only for a card of one device that has it.
-const optionFits = (c, opt) => !opt.hidden && (!opt.requires || (c.entities.length === 1 && device(c.entities[0]).features.includes(opt.requires)));
+// An option offered for this card: one needing a feature only for a card of one device that has it,
+// or for any of its devices that has it (any_device: a group's curtains take the curtains' colour).
+const optionFits = (c, opt) => !opt.hidden && (!opt.requires || (opt.any_device
+  ? c.entities.some((id) => device(id).features.includes(opt.requires))
+  : c.entities.length === 1 && device(c.entities[0]).features.includes(opt.requires)));
 // The values of a set (or of the enum drawn from it) this card's device can use; every one for several devices.
 const valuesFit = (c, opt) => opt.values.filter((v) => !opt.value_requires?.[v] || c.entities.length !== 1 ||
   device(c.entities[0]).features.includes(opt.value_requires[v]));

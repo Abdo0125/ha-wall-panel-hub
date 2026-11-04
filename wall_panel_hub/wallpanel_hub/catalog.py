@@ -54,6 +54,10 @@ def features(entity_id: str, attrs: dict) -> list[str]:
         found.append("group")
     if domain == "fan" and int(attrs.get("supported_features") or 0) & 1:  # FanEntityFeature.SET_SPEED
         found.append("speeds")
+    # How a cover is drawn, so which colours it takes (the app's coverStyle).
+    if domain == "cover":
+        tilts = int(attrs.get("supported_features") or 0) & (16 | 128)  # CoverEntityFeature OPEN_TILT, SET_TILT_POSITION
+        found.append("curtain" if attrs.get("device_class") == "curtain" else "blind" if tilts else "shutter")
     return found
 
 

@@ -257,6 +257,27 @@
       "min_size": "2x1",
       "free_size": true,
       "options": {
+        "curtain_color": {
+          "type": "enum",
+          "values": ["snow", "silver", "mist", "sage", "rose", "lilac"],
+          "default": "silver",
+          "requires": "curtain",
+          "any_device": true
+        },
+        "shutter_color": {
+          "type": "enum",
+          "values": ["snow", "silver", "stone", "slate", "anthracite", "black"],
+          "default": "anthracite",
+          "requires": "shutter",
+          "any_device": true
+        },
+        "blind_color": {
+          "type": "enum",
+          "values": ["snow", "silver", "titanium", "steel", "graphite", "black"],
+          "default": "silver",
+          "requires": "blind",
+          "any_device": true
+        },
         "quick_positions": {
           "type": "string",
           "pattern": "^\\s*([^,:]{1,20}:)?\\d{1,3}(\\s*,\\s*([^,:]{1,20}:)?\\d{1,3}){0,7}\\s*$"

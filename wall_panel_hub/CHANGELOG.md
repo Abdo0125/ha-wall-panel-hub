@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.53.0
+
+- Covers: a card takes the colour of the real thing: **Curtain colour** (`curtain_color`:
+  white, silver, misty blue, sage, rose or lilac), **Shutter colour** (`shutter_color`: white,
+  silver, stone, slate, anthracite or black) and **Blind colour** (`blind_color`: white, silver,
+  titanium, steel blue, graphite or black). Panel app 0.69.0 or later shows them; a group offers
+  one for each style among its covers.
+- The catalog tells a cover's style (`curtain`, `shutter`, `blind`), and an option may ask for a
+  feature of any of a card's devices (`any_device`).
+
 ## 0.52.0
 
 - Lights: **Colour when on** (`on_color`), for a light with no white tones or colours of its
