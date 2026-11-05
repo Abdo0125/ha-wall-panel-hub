@@ -17,10 +17,10 @@ import aiohttp
 from aiohttp import web
 
 from .airplay import AirPlayInvalid
-from .cards import REGISTRY
+from .cards import REGISTRY, offered_options
 from .intercom import ECHO, IntercomInvalid
 from .intercom import addresses as intercom_addresses
-from .catalog import CatalogCache
+from .catalog import CatalogCache, device_types, features_of, with_types
 from .config import ConfigInvalid
 from .pins import PinInvalid, hash_pin
 from .gateway import Gateway, public
@@ -182,13 +182,24 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         if catalog is None:
             raise web.HTTPServiceUnavailable(text="no Home Assistant connection")
         try:
-            return web.json_response(public(await catalog.get(refresh=request.query.get("refresh") == "1")))
+            cat = await catalog.get(refresh=request.query.get("refresh") == "1")
+            return web.json_response(public(with_types(cat, device_types(store.get_site()))))
         except Exception as e:  # HA down, auth... shown in the editor's message pane
             log.warning("catalog failed: %s", e)
             return web.json_response({"error": str(e)}, status=502)
 
     async def editor_cards(_):
         return web.json_response(REGISTRY)
+
+    async def editor_card_options(request: web.Request):
+        if catalog is None:
+            raise web.HTTPServiceUnavailable(text="no Home Assistant connection")
+        try:
+            cat = with_types(await catalog.get(), device_types(store.get_site()))
+        except Exception as e:  # HA down: the sheet says so
+            log.warning("catalog failed: %s", e)
+            return web.json_response({"error": str(e)}, status=502)
+        return web.json_response(offered_options((await request.json()).get("card") or {}, features_of(cat)))
 
     async def editor_state(_):
         return web.json_response({"panels": [
@@ -529,6 +540,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     app.router.add_get("/api/editor/catalog", editor_catalog)
     app.router.add_get("/api/editor/state", editor_state)
     app.router.add_get("/api/editor/cards", editor_cards)
+    app.router.add_post("/api/editor/card_options", editor_card_options)
     app.router.add_get("/api/editor/area_picture/{aid}", area_picture)
     app.router.add_get("/api/editor/camera/{eid}", camera_picture)
     app.router.add_post("/api/panels/{pid}/floor", panel_floor)

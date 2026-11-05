@@ -12,8 +12,8 @@
   "additionalProperties": false,
   "properties": {
     "schema": {
-      "description": "Layout format. Files without it are version 1 (tiles), version 2 had a card type per shape (light.dimmer...), version 3 sized and placed cards on the 6x4 grid (4: the fine grid, each of its cells a quarter of one of those); all are migrated on read.",
-      "const": 4
+      "description": "Layout format. An add-on reads its own and the one before it.",
+      "const": 5
     },
     "version": {
       "description": "Layout revision. The add-on increments it on every change; a panel only applies a layout newer than the one it holds.",

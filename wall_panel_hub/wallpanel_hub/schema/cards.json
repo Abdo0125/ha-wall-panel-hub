@@ -160,6 +160,7 @@
           "requires": "plain"
         },
         "on_look": {
+          "or_empty": "modes",
           "type": "enum",
           "values": [
             "glow",
@@ -192,6 +193,9 @@
           "of": "modes"
         },
         "show_values": {
+          "requires": "dimming",
+          "any_device": true,
+          "not_empty": "modes",
           "type": "bool",
           "default": true
         },
@@ -203,12 +207,6 @@
           "type": "bool",
           "default": true,
           "requires": "group"
-        },
-        "dimming": {
-          "type": "bool",
-          "default": true,
-          "requires": "dimming",
-          "hidden": true
         }
       },
       "targets": [

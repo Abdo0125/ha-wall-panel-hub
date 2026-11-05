@@ -83,7 +83,7 @@ const SIZES = Object.fromEntries(["1x1", "2x1", "2x2", "4x2", "4x4", "6x4", "8x4
 const PLATFORMS = { android: t("Android panel"), esp32: t("ESP32 panel"), phone: t("Phone") };
 const TYPES = { android_11: t("Android 11\""), android_4: t("Android 4\""), esp32_4: 'ESP32 4"', phone: t("Phone") };
 const OPTION_NAMES = {
-  enlarge: t("Tap to enlarge"), dimming: t("Dimming"), speeds: t("Speed buttons"), live: t("Live video"),
+  enlarge: t("Tap to enlarge"), speeds: t("Speed buttons"), live: t("Live video"),
   power_entity: t("Power sensor"), package: t("App (package name)"), return_seconds: t("Return after (seconds)"),
   modes: t("Modes on the card"), start_mode: t("Starts on"), show_values: t("Show % and K"),
   long_press: t("Long press opens the popup"), group_members: t("Group lights in the popup"),
@@ -290,19 +290,17 @@ function device(id) {
     icon: d.icon || (e?.icon && e.icon.startsWith("mdi:") ? e.icon : null),
     area: e?.area_id || null,
     known: !!e,
-    // What it can do that an option needs ("requires" in the registry): dimming, speeds.
+    // What it can do, as the hub says: the drawing here follows it.
     features: e?.features || [],
   };
 }
 
-// An option offered for this card: one needing a feature only for a card of one device that has it,
-// or for any of its devices that has it (any_device: a group's curtains take the curtains' colour).
-const optionFits = (c, opt) => !opt.hidden && (!opt.requires || (opt.any_device
-  ? c.entities.some((id) => device(id).features.includes(opt.requires))
-  : c.entities.length === 1 && device(c.entities[0]).features.includes(opt.requires)));
-// The values of a set (or of the enum drawn from it) this card's device can use; every one for several devices.
-const valuesFit = (c, opt) => opt.values.filter((v) => !opt.value_requires?.[v] || c.entities.length !== 1 ||
-  device(c.entities[0]).features.includes(opt.value_requires[v]));
+// The modes a light card shows, as the panel draws it: those kept, of those its device has.
+function lightCardModes(c) {
+  const opt = R.cards.light.options.modes;
+  const has = opt.values.filter((v) => c.entities.length !== 1 || device(c.entities[0]).features.includes(opt.value_requires[v]));
+  return (c.options?.modes ?? has).filter((v) => has.includes(v));
+}
 
 // The icon a card shows (off state), close to the app's cardIcon.
 // Light fittings' icons, one source with the panel (schema/fixtures.json, copied here).
@@ -387,7 +385,7 @@ async function loadEditor() {
     S.editor[p.id] = p;
     if (S.work[p.id]?.unsent) continue;  // keep edits in progress
     if (p.draft) S.work[p.id] = { layout: p.draft.layout, base: p.draft.base_version, unsent: true, undo: [], redo: [] };
-    else S.work[p.id] = { layout: p.sent ? clone(p.sent) : { schema: 4, version: 1, pages: [] }, base: p.sent ? p.sent.version : null, unsent: false, undo: [], redo: [] };
+    else S.work[p.id] = { layout: p.sent ? clone(p.sent) : { schema: 5, version: 1, pages: [] }, base: p.sent ? p.sent.version : null, unsent: false, undo: [], redo: [] };
   }
 }
 
@@ -728,11 +726,10 @@ function cardCell(pl, page) {
   const single = c.entities.length === 1;
   const dial = pl.w >= 4 && pl.h >= 4 && (c.card === "climate" || (single && ["light", "cover"].includes(c.card)));
   const wide = pl.h <= 2 && pl.w >= 4, tall = pl.w <= 2 && pl.h >= 4;
-  const barred = single && ((c.card === "light" && c.options?.dimming !== false && optionFits(c, R.cards.light.options.dimming)) || c.card === "cover");
+  const barred = single && ((c.card === "light" && lightCardModes(c).includes("brightness")) || c.card === "cover");
   // A light (but the dial): its pad, the power button and the name, laid out as on the panel.
   const lamp = c.card === "light" && !dial && pl.w >= 2 && pl.h >= 2;
-  const lightModes = c.options?.modes ?? (c.options?.dimming === false ? [] : null);
-  const padded = (lightModes === null || lightModes.length > 0) && (!single || device(c.entities[0]).features.some((f) => ["dimming", "white", "color"].includes(f)));
+  const padded = lightCardModes(c).length > 0;
   // One cell high or wide: a small icon and the name, side by side when it is two cells wide.
   const tiny = pl.w < 2 || pl.h < 2;
   const cls = ["cell", "card", lamp ? "lamp" : "", wide ? "wide" : "", tall ? "tall" : "", dial ? "big" : "",
@@ -875,17 +872,24 @@ function freeSizeFields(size, set, min = "1x1") {
 }
 
 // A card: shape, size, name, icon, confirmation, options, remove.
-function cardSheet(index) {
+let sheetAsked = 0;
+async function cardSheet(index) {
   ensureDashboard();
   const page = curPage(L());
   const c = page.cards[index];
   if (!c) return;
+  // What its settings offer is the hub's to say, as it is for the panel: asked again after each change.
+  const asked = ++sheetAsked;
+  const r = await api("api/editor/card_options", { method: "POST", body: JSON.stringify({ card: c }) });
+  if (asked !== sheetAsked) return;
+  const offered = r.ok ? r.body : {};
+  if (!r.ok) toast(t("Could not read this card's settings"));
   const spec = R.cards[c.card] || { sizes: [], options: {} };
   const d = c.entities[0] ? device(c.entities[0]) : null;
   const redraw = () => cardSheet(page.cards.indexOf(c));
   const edit = (fn) => { change(() => fn()); redraw(); };
   const variants = variantsFor(c);
-  const optionFields = Object.entries(spec.options || {}).filter(([, opt]) => optionFits(c, opt)).map(([key, opt]) => {
+  const optionFields = Object.entries(spec.options || {}).filter(([key]) => key in offered).map(([key, opt]) => {
     const value = c.options?.[key];
     const set = (v) => edit(() => {
       if (v === undefined) { if (c.options) delete c.options[key]; if (c.options && !Object.keys(c.options).length) delete c.options; }
@@ -897,8 +901,8 @@ function cardSheet(index) {
     if (opt.type === "bool") return optionRow(label, note, toggle(value ?? opt.default ?? false, (on) => set(on === opt.default ? undefined : on)));
     // Some of the values (all those the device can use when none is set: left out of the layout).
     if (opt.type === "set") {
-      const fit = valuesFit(c, opt);
-      const now = value ?? (key === "modes" && c.options?.dimming === false ? [] : fit);
+      const fit = offered[key].values;
+      const now = value ?? fit;
       return optionRow(label, note, el("div", { class: "chips" }, fit.map((v) => valueChip(v, now.includes(v), false, () => {
         const next = fit.filter((x) => (x === v ? !now.includes(v) : now.includes(x)));
         set(next.length === fit.length ? undefined : next);
@@ -906,8 +910,7 @@ function cardSheet(index) {
     }
     // One of the values; drawn from a set ("of"): only those chosen there.
     if (opt.type === "enum" && opt.of) {
-      const fit = valuesFit(c, spec.options[opt.of] || opt);
-      const among = c.options?.[opt.of] ?? (opt.of === "modes" && c.options?.dimming === false ? [] : fit);
+      const { values: fit, enabled: among } = offered[key];
       const now = value ?? opt.default;
       return optionRow(label, note, el("div", { class: "chips" }, fit.map((v) =>
         valueChip(v, v === now, !among.includes(v), () => set(v === opt.default ? undefined : v)))));
@@ -2211,7 +2214,7 @@ function wizard(req) {
       return;
     }
     // Step 3: build the layout and send it.
-    const layout = { schema: 4, version: 1, pages: [] };
+    const layout = { schema: 5, version: 1, pages: [] };
     const ordered = S.catalog.areas.map((a) => a.id).filter((id) => st.rooms.has(id));
     if (st.area && ordered.includes(st.area)) ordered.splice(ordered.indexOf(st.area), 1), ordered.unshift(st.area);
     addRoomPages(layout, ordered);

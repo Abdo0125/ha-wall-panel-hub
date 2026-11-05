@@ -12,8 +12,10 @@ The hub opens its own connection to HA and forwards only what the panel may do:
 - the intercom (wallpanel/intercom/*): its SIP to Asterisk (intercom.py), carried here.
 
 Layouts are stored in the current format (migrate.SCHEMA). A panel names the format its app
-reads with "schema" in wallpanel/layout/subscribe or /get, and gets it; an app that does not
-name one gets format v1.
+reads with "schema" in wallpanel/layout/subscribe or /get.
+
+What a device can do is the hub's to say (catalog.features): it goes with each state to the panels,
+and what a card's settings offer comes from cards.offered_options.
 """
 
 import asyncio
@@ -30,11 +32,12 @@ from .intercom import DOMAIN, networks
 from . import relay as sound
 from . import door_open
 from .access import EditRefused, role_caps
-from .cards import REGISTRY, REGISTRY_V2, REGISTRY_V3
+from .cards import REGISTRY, offered_options
+from .catalog import DeviceFeatures, device_types, features_of, with_types
 from . import panel_settings, project_settings
 from .config import ConfigInvalid
 from .pins import PinInvalid
-from .migrate import SCHEMA, downgrade
+from .migrate import SCHEMA, for_app
 from .store import LayoutConflict, LayoutInvalid, Store, layout_entities, layout_summary
 
 PACKAGE = re.compile(r"[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+")
@@ -155,8 +158,13 @@ class PanelConnection:
         self.ws = ws
         self.layout_subs: set[int] = set()
         self.config_subs: set[int] = set()
-        # Layout format the panel's app reads: 1 until it says.
-        self.schema = 1
+        # Layout format the panel's app reads, until it says.
+        self.schema = SCHEMA
+        # What each of its devices can do, added to the states going to it.
+        self.features = DeviceFeatures(self.device_types)
+        # Its subscribe_entities, for a change that does not come from HA.
+        self.entity_subs: set = set()
+        self._types: tuple[int, dict] | None = None
         # Live cameras the panel watches, by the id of its wallpanel/camera/stream.
         self.streams: dict[int, asyncio.Task] = {}
         # wallpanel/speaker/subscribe: HA's commands to the panel's speaker go there.
@@ -180,6 +188,13 @@ class PanelConnection:
         if self._allowed is None or self._allowed[0] != read:
             self._allowed = read, layout_entities(self.gateway.store.get_layout(self.panel_id)) | self.door_cameras()
         return self._allowed[1]
+
+    def device_types(self) -> dict:
+        """The types the project's device list gives (read again only after something was saved)."""
+        store = self.gateway.store
+        if self._types is None or self._types[0] != store.generation:
+            self._types = store.generation, device_types(store.effective_config(self.panel_id))
+        return self._types[1]
 
     def door_cameras(self) -> set[str]:
         """The cameras of the doors that ring this panel and of the project's devices (intercom)."""
@@ -477,19 +492,35 @@ class PanelConnection:
     def layout_for_panel(self) -> dict | None:
         store = self.gateway.store
         layout = store.get_layout(self.panel_id)
-        if layout is None or self.schema >= SCHEMA:
-            return layout
-        if self.schema in (2, 3):
-            return downgrade(layout, self.schema)
-        # An app older still reads its display settings from the layout.
-        eff = store.effective_config(self.panel_id)
-        panel = {"name": eff["name"] or "Panel", **{k: eff[k] for k in ("lang", "theme", "screensaver")}}
-        return {**downgrade(layout, 1), "panel": panel}
+        return None if layout is None else for_app(layout, self.schema)
+
+    async def card_options(self, mid, msg: dict) -> None:
+        """What a card's settings offer. A device not on this panel yet needs the permission that
+        lists HA's devices: its features are that list's."""
+        store = self.gateway.store
+        card = msg.get("card") if isinstance(msg.get("card"), dict) else {}
+        foreign = set(card.get("entities") or []) - self.allowed
+        if foreign and not {"rooms", "devices"} & role_caps(store.effective_config(self.panel_id), store.role_for(self.panel_id, msg.get("pin"))):
+            await self.send(_error(mid, "forbidden", "a device not on this panel needs the rooms or devices permission"))
+            return
+        if self.gateway.catalog is None:
+            await self.send(_error(mid, "unavailable", "no Home Assistant connection"))
+            return
+        try:
+            cat = with_types(await self.gateway.catalog.get(), self.device_types())
+        except Exception as e:  # HA restarting...
+            await self.send(_error(mid, "unavailable", str(e)))
+            return
+        await self.send({"id": mid, "type": "result", "success": True, "result": offered_options(card, features_of(cat))})
 
     async def push_config(self) -> None:
         config = self.gateway.store.effective_config(self.panel_id)
         for sub in list(self.config_subs):
             await self.send({"id": sub, "type": "event", "event": {"config": config}})
+        # A device's type in the project's list changes what it can do.
+        event = self.features.changed()
+        for sub in list(self.entity_subs) if event else []:
+            await self.send({"id": sub, "type": "event", "event": event})
 
     async def push_layout(self) -> None:
         layout = self.layout_for_panel()
@@ -510,7 +541,7 @@ class PanelConnection:
     async def _handle_local(self, msg: dict) -> None:
         mid, kind = msg.get("id"), msg.get("type")
         store = self.gateway.store
-        # The layout format the panel's app reads: 1 when it does not say.
+        # The layout format the panel's app reads.
         if kind in ("wallpanel/layout/get", "wallpanel/layout/subscribe") and isinstance(msg.get("schema"), int):
             self.schema = min(msg["schema"], SCHEMA)
         if kind == "wallpanel/layout/get":
@@ -619,7 +650,7 @@ class PanelConnection:
             except Exception as e:  # HA restarting...
                 await self.send(_error(mid, "unavailable", str(e)))
                 return
-            await self.send({"id": mid, "type": "result", "success": True, "result": public(cat)})
+            await self.send({"id": mid, "type": "result", "success": True, "result": public(with_types(cat, self.device_types()))})
         elif kind == "wallpanel/area/picture":
             # HA's picture of one of this panel's rooms: the panel has no HA token.
             area = str(msg.get("area_id") or "")
@@ -651,9 +682,9 @@ class PanelConnection:
                       "wallpanel/intercom/state"):
             await self.intercom(mid, kind, msg)
         elif kind == "wallpanel/registry/get":
-            # An older app edits its cards with the card types it knows.
-            registry = REGISTRY if self.schema >= SCHEMA else REGISTRY_V3 if self.schema == 3 else REGISTRY_V2
-            await self.send({"id": mid, "type": "result", "success": True, "result": registry})
+            await self.send({"id": mid, "type": "result", "success": True, "result": REGISTRY})
+        elif kind == "wallpanel/card/options":
+            await self.card_options(mid, msg)
         else:
             await self.send(_error(mid, "unknown_command", f"{kind} is not known"))
 
@@ -943,7 +974,7 @@ class Gateway:
         # get_states asked by the panel: HA answers with every entity; the panel gets its own.
         state_requests: set = set()
         # The panel's subscribe_entities: their events carry only what its layout has now.
-        entity_subs: set = set()
+        entity_subs = conn.entity_subs
 
         async def from_ha():
             async for m in upstream:
@@ -954,7 +985,7 @@ class Gateway:
                     if msg.get("type") == "event" and msg.get("id") in entity_subs:
                         event = only_allowed(msg.get("event") or {}, conn.allowed)
                         if event is not None:
-                            await ws.send_json({**msg, "event": event})
+                            await ws.send_json({**msg, "event": conn.features.add_to_event(event)})
                         continue
                 if state_requests and '"result"' in m.data:
                     msg = json.loads(m.data)
@@ -962,7 +993,7 @@ class Gateway:
                         state_requests.discard(msg["id"])
                         if isinstance(msg.get("result"), list):
                             allowed = conn.allowed
-                            msg["result"] = [s for s in msg["result"] if s.get("entity_id") in allowed]
+                            msg["result"] = conn.features.add_to_states([s for s in msg["result"] if s.get("entity_id") in allowed])
                         await ws.send_json(msg)
                         continue
                 await ws.send_str(m.data)

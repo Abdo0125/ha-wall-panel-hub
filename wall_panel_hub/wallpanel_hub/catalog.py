@@ -1,10 +1,8 @@
-"""The HA building as the layout editor sees it: floors, areas and supported entities.
-
-Same rules as the panel's own editor (HaCatalog.kt), so both show the same entities:
+"""The HA building as the panels and the designer see it: floors, areas, supported entities, and
+what each device can do. Its rules are the only ones:
 - an entity's area is its own, or else its device's;
 - hidden, disabled, config and diagnostic entities are left out;
 - only domains the panel has a card for (schema/cards.json).
-Keep the two in step.
 """
 
 import asyncio
@@ -29,11 +27,26 @@ UPCOMING = ("media_player", "alarm_control_panel", "vacuum", "water_heater", "hu
 
 
 TONE_MODES = ("color_temp", "hs", "xy", "rgb", "rgbw", "rgbww")
+# HA's CoverEntityFeature.
+COVER_OPEN, COVER_CLOSE, COVER_SET_POSITION = 1, 2, 4
+COVER_OPEN_TILT, COVER_CLOSE_TILT, COVER_SET_TILT = 16, 32, 128
+# What a device's features are read from.
+FEATURE_ATTRS = ("supported_color_modes", "supported_features", "device_class", "entity_id", "current_position")
+# What a card draws, for a device not on the panel yet (a preview): the catalog's copy of a state.
+# Named one by one: what else HA holds (a camera's access token, its picture) never leaves the hub.
+CARD_ATTRS = FEATURE_ATTRS + (
+    "friendly_name", "icon", "unit_of_measurement", "color_mode", "brightness", "color_temp_kelvin", "hs_color",
+    "min_color_temp_kelvin", "max_color_temp_kelvin", "effect", "effect_list", "percentage", "percentage_step",
+    "current_tilt_position", "temperature", "temperature_unit", "target_temp_low", "target_temp_high",
+    "target_temp_step", "min_temp", "max_temp", "current_temperature", "humidity", "current_humidity",
+    "hvac_modes", "hvac_action", "fan_mode", "fan_modes", "swing_mode", "swing_modes", "preset_mode", "preset_modes",
+    "last_triggered",
+)
 
 
 def features(entity_id: str, attrs: dict) -> list[str]:
-    """What the device can do that a card's option needs ("requires" in cards.json); the app
-    reads them from the same attributes (EntityState.can)."""
+    """What the device can do, the only place that says: the panels draw it (they get it with each
+    state, DeviceFeatures) and a card's options need it ("requires" in cards.json)."""
     domain = entity_id.split(".", 1)[0]
     found = []
     modes = attrs.get("supported_color_modes") or []
@@ -56,9 +69,103 @@ def features(entity_id: str, attrs: dict) -> list[str]:
         found.append("speeds")
     # How a cover is drawn, so which colours it takes (the app's coverStyle).
     if domain == "cover":
-        tilts = int(attrs.get("supported_features") or 0) & (16 | 128)  # CoverEntityFeature OPEN_TILT, SET_TILT_POSITION
+        known = attrs.get("supported_features")
+        bits = int(known or 0)
+        tilts = bits & (COVER_OPEN_TILT | COVER_SET_TILT)
         found.append("curtain" if attrs.get("device_class") == "curtain" else "blind" if tilts else "shutter")
+        # A device that does not say still shows where it is.
+        if bits & COVER_SET_POSITION or (known is None and "current_position" in attrs):
+            found.append("position")
+        if bits & COVER_SET_TILT:
+            found.append("tilt")
+        # Slats, a pergola's roof: no open, close or position of their own.
+        if known is not None and not bits & (COVER_OPEN | COVER_CLOSE | COVER_SET_POSITION) and \
+                bits & (COVER_SET_TILT | COVER_OPEN_TILT | COVER_CLOSE_TILT):
+            found.append("tilt_only")
     return found
+
+
+def device_types(config: dict) -> dict:
+    """The types the project's device list gives, by entity."""
+    return {e: d["type"] for e, d in (config.get("devices") or {}).items() if d.get("type")}
+
+
+def typed(entity_id: str, attrs: dict, types: dict) -> dict:
+    """[attrs] with the project's device list laid over them: a device's type there is its class."""
+    return {**attrs, "device_class": types[entity_id]} if entity_id in types else attrs
+
+
+class DeviceFeatures:
+    """Adds what each device can do to the states going to one panel, so the two arrive together:
+    "f" in subscribe_entities' format, for a whole state and in a change that alters it. [types]
+    gives the project's types by entity (config "devices")."""
+
+    def __init__(self, types=dict):
+        self.types = types
+        self.attrs: dict[str, dict] = {}
+        self.sent: dict[str, list[str]] = {}
+
+    def _now(self, entity_id: str) -> list[str]:
+        return features(entity_id, typed(entity_id, self.attrs[entity_id], self.types()))
+
+    def add_to_event(self, event: dict) -> dict:
+        for eid, state in (event.get("a") or {}).items():
+            attrs = state.get("a") or {}
+            self.attrs[eid] = {k: attrs[k] for k in FEATURE_ATTRS if k in attrs}
+            state["f"] = self.sent[eid] = self._now(eid)
+        for eid, change in (event.get("c") or {}).items():
+            attrs = self.attrs.get(eid)
+            if attrs is None:
+                continue
+            plus = change.get("+") or {}
+            attrs.update({k: v for k, v in (plus.get("a") or {}).items() if k in FEATURE_ATTRS})
+            for key in (change.get("-") or {}).get("a") or []:
+                attrs.pop(key, None)
+            now = self._now(eid)
+            if now != self.sent.get(eid):
+                self.sent[eid] = change.setdefault("+", plus)["f"] = now
+        for eid in event.get("r") or []:
+            self.attrs.pop(eid, None)
+            self.sent.pop(eid, None)
+        return event
+
+    def add_to_states(self, states: list) -> list:
+        """The result of get_states: a missed update caught up."""
+        types = self.types()
+        for state in states:
+            eid = state.get("entity_id", "")
+            state["f"] = features(eid, typed(eid, state.get("attributes") or {}, types))
+        return states
+
+    def changed(self) -> dict | None:
+        """The project's list changed: an event for the devices that now do otherwise, or None."""
+        change = {}
+        for eid in self.attrs:
+            now = self._now(eid)
+            if now != self.sent.get(eid):
+                self.sent[eid] = now
+                change[eid] = {"+": {"f": now}}
+        return {"c": change} if change else None
+
+
+def with_types(catalog: dict, types: dict) -> dict:
+    """The catalog with the project's device list laid over it, as this panel or project sees it."""
+    if not types:
+        return catalog
+
+    def entity(e: dict) -> dict:
+        if e["entity_id"] not in types:
+            return e
+        attrs = typed(e["entity_id"], e["attributes"], types)
+        return {**e, "attributes": attrs, "features": features(e["entity_id"], attrs)}
+
+    return {**catalog, "entities": [entity(e) for e in catalog["entities"]]}
+
+
+def features_of(catalog: dict):
+    """An entity's features by the catalog: none for one HA does not have now."""
+    known = {e["entity_id"]: e["features"] for e in catalog["entities"]}
+    return lambda entity_id: known.get(entity_id, [])
 
 
 def build(floors: list, areas: list, devices: list, registry: list, states: list) -> dict:
@@ -98,6 +205,7 @@ def build(floors: list, areas: list, devices: list, registry: list, states: list
             "unit": attrs.get("unit_of_measurement"),
             "icon": attrs.get("icon") or (r or {}).get("icon"),
             "features": features(eid, attrs),
+            "attributes": {k: attrs[k] for k in CARD_ATTRS if k in attrs},
         })
     entities.sort(key=lambda e: (e["name"].lower(), e["entity_id"]))
 

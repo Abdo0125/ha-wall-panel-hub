@@ -15,7 +15,7 @@ from jsonschema import Draft202012Validator
 from . import config as panel_config
 from .access import EditRefused, check_panel_edit, role_caps
 from .cards import card_entities, check_card, kind_of_card
-from .migrate import is_current, upgrade
+from .migrate import LayoutTooNew, LayoutTooOld, is_current, upgrade
 from .pins import verify_pin
 
 log = logging.getLogger(__name__)
@@ -58,6 +58,15 @@ class LayoutConflict(Exception):
     def __init__(self, current: dict | None):
         super().__init__("layout changed since the draft was started")
         self.current = current
+
+
+def readable(layout: dict) -> dict:
+    """[layout] in the current format, or refused with nothing stored: a format this add-on does
+    not read is never saved as what could be made of it."""
+    try:
+        return upgrade(layout)
+    except (LayoutTooNew, LayoutTooOld) as e:
+        raise LayoutInvalid(str(e)) from e
 
 
 def validate_layout(layout: dict) -> None:
@@ -342,7 +351,12 @@ class Store:
         draft = json.loads(f.read_text(encoding="utf-8"))
         layout = draft.get("layout") or {}
         if not is_current(layout):
-            layout = upgrade(layout, self.get_layout(panel_id))
+            try:
+                layout = upgrade(layout)
+            except (LayoutTooNew, LayoutTooOld) as e:
+                log.warning("panel %s: draft set aside: %s", panel_id, e)
+                f.replace(f.with_suffix(".unread"))
+                return None
         layout.pop("panel", None)
         draft["layout"] = layout
         return draft
@@ -374,9 +388,15 @@ class Store:
             return None
         layout = json.loads(f.read_text(encoding="utf-8"))
         if not is_current(layout) or "panel" in layout:
-            # Stored before 0.5.0 / 0.6.0: upgraded once, same version (what the panel
-            # shows did not change); display settings move to the panel configuration.
-            layout = self._move_display_settings(panel_id, upgrade(layout))
+            # Upgraded once, same version: the panel takes it for the change it is not.
+            # Display settings move to the panel configuration.
+            try:
+                layout = self._move_display_settings(panel_id, upgrade(layout))
+            except (LayoutTooNew, LayoutTooOld) as e:
+                # Kept beside, unread: the panel's own copy can come back in its place.
+                log.warning("panel %s: layout set aside: %s", panel_id, e)
+                f.replace(f.with_suffix(".unread"))
+                return None
             self._write(f, layout)
         return layout
 
@@ -390,10 +410,9 @@ class Store:
         return layout
 
     def save_layout(self, panel_id: str, layout: dict) -> dict:
-        """Stores a new revision. Its version is above both the stored and the submitted one.
-        A v1 layout (from an older app) is upgraded first, keeping the stored cards' settings."""
+        """Stores a new revision. Its version is above both the stored and the submitted one."""
         current = self.get_layout(panel_id)
-        layout = without_lost_rooms(self._move_display_settings(panel_id, upgrade(layout, current)))
+        layout = without_lost_rooms(self._move_display_settings(panel_id, readable(layout)))
         validate_layout(layout)
         version = max(layout.get("version", 1), current["version"] if current else 0) + 1
         saved = {**layout, "version": version}
@@ -489,7 +508,7 @@ class Store:
         if current is not None and isinstance(sent, int) and sent < current.get("version", 0):
             raise LayoutConflict(current)
         if current is None:
-            layout = upgrade(layout)
+            layout = readable(layout)
             if known is not None:
                 before = layout_entities(layout)
                 layout = only_known(layout, known)
@@ -498,7 +517,7 @@ class Store:
                     log.info("panel %s: first layout without devices this HA does not have: %s",
                              panel_id, ", ".join(sorted(dropped)[:5]))
         base = current if current is not None else {"pages": [], "dashboard": None, "floors": []}
-        edited = {k: v for k, v in upgrade(layout, current).items() if k != "panel"}
+        edited = {k: v for k, v in readable(layout).items() if k != "panel"}
         eff = self.effective_config(panel_id)
         allowed = {a["package"] for a in eff.get("apps", [])}
         sources = set(eff.get("sources", {}).values())

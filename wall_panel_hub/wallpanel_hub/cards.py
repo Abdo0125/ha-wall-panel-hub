@@ -9,10 +9,6 @@ import re
 from pathlib import Path
 
 REGISTRY: dict = json.loads((Path(__file__).parent / "schema" / "cards.json").read_text(encoding="utf-8"))
-# The registry as apps reading layout format 2 know it (a card type per shape): their editor's.
-REGISTRY_V2: dict = json.loads((Path(__file__).parent / "schema" / "cards.v2.json").read_text(encoding="utf-8"))
-# Apps reading layout format 3 (the 6x4 grid): sizes in its cells.
-REGISTRY_V3: dict = json.loads((Path(__file__).parent / "schema" / "cards.v3.json").read_text(encoding="utf-8"))
 KINDS: dict = REGISTRY["kinds"]
 CARDS: dict = REGISTRY["cards"]
 
@@ -38,7 +34,7 @@ def default_size(card_type: str) -> str:
 
 
 def new_card(card_id: str, entity_id: str) -> dict:
-    """The default card for an entity (e.g. light.toggle for a light)."""
+    """The default card for an entity."""
     card_type = KINDS[kind_of(entity_id)]["default"]
     return {"id": card_id, "card": card_type, "entities": [entity_id], "size": default_size(card_type)}
 
@@ -116,6 +112,57 @@ def check_card(card: dict) -> str | None:
         if problem:
             return f"{card_type} option {key}: {problem}"
     return None
+
+
+def offered_options(card: dict, features_of) -> dict:
+    """What a card's settings offer, for every card type: the panel and the designer draw this and
+    decide nothing. {key: {"values": [...], "enabled": [...]}}, the values only for an option that
+    has some, "enabled" only for an enum drawn from a set ("of": the values chosen there).
+    [features_of] gives an entity's features (catalog.features).
+
+    An option is left out when it means nothing for this card: "requires" a feature of its device,
+    or of any of its devices with "any_device"; "not_empty": the set it depends on has values chosen.
+    "or_empty" offers it anyway when that set was emptied: a dimmer made a plain switch takes a
+    plain switch's options. What is stored for an option left out stays stored: a device may only
+    be away, and a setting is never lost for that.
+    """
+    spec = CARDS.get(card.get("card"), {}).get("options", {})
+    entities = card.get("entities", [])
+    stored = card.get("options") or {}
+    alone = len(entities) == 1
+
+    def can(feature: str, any_device: bool) -> bool:
+        if any_device:
+            return any(feature in features_of(e) for e in entities)
+        return alone and feature in features_of(entities[0])
+
+    def fit(opt: dict) -> list:
+        needs = opt.get("value_requires", {})
+        return [v for v in opt["values"] if v not in needs or not alone or needs[v] in features_of(entities[0])]
+
+    out: dict = {}
+    for key, opt in spec.items():
+        if opt.get("required"):
+            continue
+        emptied = "or_empty" in opt and alone and stored.get(opt["or_empty"]) == []
+        if "requires" in opt and not emptied and not can(opt["requires"], opt.get("any_device", False)):
+            continue
+        if "not_empty" in opt and stored.get(opt["not_empty"]) == []:
+            continue
+        if opt["type"] == "set":
+            values = fit(opt)
+            if values:
+                out[key] = {"values": values}
+        elif "of" in opt:
+            values = fit(spec[opt["of"]])
+            enabled = [v for v in stored.get(opt["of"], values) if v in values]
+            if len(enabled) > 1:
+                out[key] = {"values": values, "enabled": enabled}
+        elif "values" in opt:
+            out[key] = {"values": opt["values"]}
+        else:
+            out[key] = {}
+    return out
 
 
 def _check_option(opt: dict, value) -> str | None:

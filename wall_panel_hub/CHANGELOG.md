@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.54.0
+
+Update this add-on before the app (0.71.0).
+
+- The hub alone decides for every card type; the panels and the designer carry it out:
+  - what a device can do goes to the panels with each of its states, and the project's device
+    types count;
+  - what a card's settings offer comes from one function, for the panel and the designer alike
+    (`wallpanel/card/options`, `/api/editor/card_options`);
+  - the catalog holds a named list of each device's attributes, so a device not on the panel yet
+    shows as itself in a card's preview and in a draft.
+- Layout format 5 holds only what the installer chose. Dimmable lights that an old default had
+  turned into plain switches, with no setting to undo it, dim again. Stored layouts are upgraded
+  once.
+- A dimmable light can be made a plain switch and back, from the panel as from the designer.
+- A layout in a format newer than the add-on is refused. It used to lose all its cards.
+- Formats older than 4 are no longer read or served: such a stored file is set aside as `.unread`.
+
 ## 0.53.0
 
 - Covers: a card takes the colour of the real thing: **Curtain colour** (`curtain_color`:
