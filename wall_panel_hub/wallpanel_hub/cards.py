@@ -121,7 +121,8 @@ def offered_options(card: dict, features_of) -> dict:
     [features_of] gives an entity's features (catalog.features).
 
     An option is left out when it means nothing for this card: "requires" a feature of its device,
-    or of any of its devices with "any_device"; "not_empty": the set it depends on has values chosen.
+    of any of its devices with "any_device", of all of them with "all_devices"; "not_empty": the set
+    it depends on has values chosen.
     "or_empty" offers it anyway when that set was emptied: a dimmer made a plain switch takes a
     plain switch's options. "from_size" and "to_size": the card's size is between them, each way.
     "not_when": a bool option offered and on does what this one would. "only_when": this one is
@@ -135,9 +136,12 @@ def offered_options(card: dict, features_of) -> dict:
     alone = len(entities) == 1
     size = _cells(card.get("size") or card_spec.get("default_size", "1x1"))
 
-    def can(feature: str, any_device: bool) -> bool:
-        if any_device:
+    def can(opt: dict) -> bool:
+        feature = opt["requires"]
+        if opt.get("any_device"):
             return any(feature in features_of(e) for e in entities)
+        if opt.get("all_devices"):
+            return bool(entities) and all(feature in features_of(e) for e in entities)
         return alone and feature in features_of(entities[0])
 
     def fit(opt: dict) -> list:
@@ -148,8 +152,8 @@ def offered_options(card: dict, features_of) -> dict:
     for key, opt in spec.items():
         if opt.get("required"):
             continue
-        emptied = "or_empty" in opt and alone and stored.get(opt["or_empty"]) == []
-        if "requires" in opt and not emptied and not can(opt["requires"], opt.get("any_device", False)):
+        emptied = "or_empty" in opt and stored.get(opt["or_empty"]) == []
+        if "requires" in opt and not emptied and not can(opt):
             continue
         if "not_empty" in opt and stored.get(opt["not_empty"]) == []:
             continue

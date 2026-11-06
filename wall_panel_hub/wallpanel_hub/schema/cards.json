@@ -157,7 +157,8 @@
             "violet"
           ],
           "default": "amber",
-          "requires": "plain"
+          "requires": "plain",
+          "all_devices": true
         },
         "on_look": {
           "or_empty": "modes",
@@ -167,7 +168,8 @@
             "cone"
           ],
           "default": "glow",
-          "requires": "onoff"
+          "requires": "onoff",
+          "all_devices": true
         },
         "modes": {
           "type": "set",
@@ -202,6 +204,7 @@
         },
         "lamp_bars": {
           "requires": "dimming",
+          "any_device": true,
           "not_empty": "modes",
           "from_size": "3x2",
           "to_size": "12x3",

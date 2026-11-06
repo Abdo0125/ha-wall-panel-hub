@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.58.0
+
+- A light group takes the lamp and upright bars, on by default from 3x2 to 12x3 when one of its
+  lights dims. Group cards of those sizes that already exist take this look; the setting turns it
+  off.
+- A group chooses its colour when on, when none of its lights has a tone of its own, and its look
+  when on, when its lights only switch. The panel now draws both on a group, Home Assistant's too.
+
 ## 0.57.0
 
 - A light's lamp and upright bars are offered from 3x2 as well, on by default. Cards of 3x2 and 3x3
