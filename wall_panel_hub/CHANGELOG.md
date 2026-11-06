@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.57.0
+
+- A light's lamp and upright bars are offered from 3x2 as well, on by default. Cards of 3x2 and 3x3
+  that already exist take this look; the setting turns it off.
+
 ## 0.56.0
 
 - The lamp of a light's wide card can glow or show its cone: the "When on" setting, the cone by

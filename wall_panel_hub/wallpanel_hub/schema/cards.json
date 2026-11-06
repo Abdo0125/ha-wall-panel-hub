@@ -203,7 +203,7 @@
         "lamp_bars": {
           "requires": "dimming",
           "not_empty": "modes",
-          "from_size": "4x2",
+          "from_size": "3x2",
           "to_size": "12x3",
           "type": "bool",
           "default": true
