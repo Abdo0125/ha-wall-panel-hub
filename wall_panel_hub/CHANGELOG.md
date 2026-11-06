@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.56.0
+
+- The lamp of a light's wide card can glow or show its cone: the "When on" setting, the cone by
+  default, offered while the lamp shows.
+
 ## 0.55.0
 
 - A light's 4x2 card can show its lamp and upright bars, on by default, with a setting to turn it

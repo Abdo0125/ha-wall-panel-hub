@@ -124,8 +124,9 @@ def offered_options(card: dict, features_of) -> dict:
     or of any of its devices with "any_device"; "not_empty": the set it depends on has values chosen.
     "or_empty" offers it anyway when that set was emptied: a dimmer made a plain switch takes a
     plain switch's options. "from_size" and "to_size": the card's size is between them, each way.
-    "not_when": a bool option offered and on does what this one would. What is stored for an option
-    left out stays stored: a device may only be away, and a setting is never lost for that.
+    "not_when": a bool option offered and on does what this one would. "only_when": this one is
+    about what a bool option offered and on shows. What is stored for an option left out stays
+    stored: a device may only be away, and a setting is never lost for that.
     """
     card_spec = CARDS.get(card.get("card"), {})
     spec = card_spec.get("options", {})
@@ -167,9 +168,11 @@ def offered_options(card: dict, features_of) -> dict:
             out[key] = {"values": opt["values"]}
         else:
             out[key] = {}
+    def showing(other: str) -> bool:
+        return other in out and stored.get(other, spec[other].get("default"))
+
     for key, opt in spec.items():
-        other = opt.get("not_when")
-        if other in out and stored.get(other, spec[other].get("default")):
+        if ("not_when" in opt and showing(opt["not_when"])) or ("only_when" in opt and not showing(opt["only_when"])):
             out.pop(key, None)
     return out
 

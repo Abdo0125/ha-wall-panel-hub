@@ -208,6 +208,15 @@
           "type": "bool",
           "default": true
         },
+        "lamp_look": {
+          "only_when": "lamp_bars",
+          "type": "enum",
+          "values": [
+            "glow",
+            "cone"
+          ],
+          "default": "cone"
+        },
         "long_press": {
           "type": "bool",
           "default": true
