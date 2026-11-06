@@ -86,6 +86,7 @@ const OPTION_NAMES = {
   enlarge: t("Tap to enlarge"), speeds: t("Speed buttons"), live: t("Live video"),
   power_entity: t("Power sensor"), package: t("App (package name)"), return_seconds: t("Return after (seconds)"),
   modes: t("Modes on the card"), start_mode: t("Starts on"), show_values: t("Show % and K"),
+  lamp_bars: t("Lamp and upright bars"),
   long_press: t("Long press opens the popup"), group_members: t("Group lights in the popup"),
   fixture: t("Light fitting"), on_color: t("Colour when on"), on_look: t("When on"), quick_positions: t("Quick positions"),
   curtain_color: t("Curtain colour"), shutter_color: t("Shutter colour"), blind_color: t("Blind colour"),

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.55.0
+
+- A light's 4x2 card can show its lamp and upright bars, on by default, with a setting to turn it
+  off. The setting is offered only where it means something: a card of one light that dims, from
+  4x2 to 12x3.
+- "Starts on" is not offered while the card shows every bar at once.
+
 ## 0.54.0
 
 Update this add-on before the app (0.71.0).

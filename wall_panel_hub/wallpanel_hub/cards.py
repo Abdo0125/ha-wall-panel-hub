@@ -123,13 +123,16 @@ def offered_options(card: dict, features_of) -> dict:
     An option is left out when it means nothing for this card: "requires" a feature of its device,
     or of any of its devices with "any_device"; "not_empty": the set it depends on has values chosen.
     "or_empty" offers it anyway when that set was emptied: a dimmer made a plain switch takes a
-    plain switch's options. What is stored for an option left out stays stored: a device may only
-    be away, and a setting is never lost for that.
+    plain switch's options. "from_size" and "to_size": the card's size is between them, each way.
+    "not_when": a bool option offered and on does what this one would. What is stored for an option
+    left out stays stored: a device may only be away, and a setting is never lost for that.
     """
-    spec = CARDS.get(card.get("card"), {}).get("options", {})
+    card_spec = CARDS.get(card.get("card"), {})
+    spec = card_spec.get("options", {})
     entities = card.get("entities", [])
     stored = card.get("options") or {}
     alone = len(entities) == 1
+    size = _cells(card.get("size") or card_spec.get("default_size", "1x1"))
 
     def can(feature: str, any_device: bool) -> bool:
         if any_device:
@@ -149,6 +152,8 @@ def offered_options(card: dict, features_of) -> dict:
             continue
         if "not_empty" in opt and stored.get(opt["not_empty"]) == []:
             continue
+        if "from_size" in opt and not all(a <= b <= c for a, b, c in zip(_cells(opt["from_size"]), size, _cells(opt["to_size"]))):
+            continue
         if opt["type"] == "set":
             values = fit(opt)
             if values:
@@ -162,7 +167,16 @@ def offered_options(card: dict, features_of) -> dict:
             out[key] = {"values": opt["values"]}
         else:
             out[key] = {}
+    for key, opt in spec.items():
+        other = opt.get("not_when")
+        if other in out and stored.get(other, spec[other].get("default")):
+            out.pop(key, None)
     return out
+
+
+def _cells(size: str) -> tuple[int, int]:
+    width, height = size.split("x")
+    return int(width), int(height)
 
 
 def _check_option(opt: dict, value) -> str | None:

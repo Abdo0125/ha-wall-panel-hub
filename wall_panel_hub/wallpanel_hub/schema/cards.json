@@ -190,12 +190,21 @@
             "color"
           ],
           "default": "brightness",
-          "of": "modes"
+          "of": "modes",
+          "not_when": "lamp_bars"
         },
         "show_values": {
           "requires": "dimming",
           "any_device": true,
           "not_empty": "modes",
+          "type": "bool",
+          "default": true
+        },
+        "lamp_bars": {
+          "requires": "dimming",
+          "not_empty": "modes",
+          "from_size": "4x2",
+          "to_size": "12x3",
           "type": "bool",
           "default": true
         },
