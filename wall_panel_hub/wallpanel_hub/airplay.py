@@ -13,7 +13,6 @@ ends the AirPlay session (the sender is cut off); an announcement only lowers it
 
 import asyncio
 import hashlib
-import json
 import logging
 import os
 import re
@@ -24,6 +23,8 @@ import time
 from pathlib import Path
 
 from aiohttp import web
+
+from .files import read_json, write_json
 
 log = logging.getLogger(__name__)
 
@@ -216,11 +217,7 @@ class AirPlay:
         self.art_changed = art_changed
         self.binary = shutil.which("shairport-sync")
         self.settings: dict = {"panels": {}}
-        if self.file.exists():
-            try:
-                self.settings = {**self.settings, **json.loads(self.file.read_text(encoding="utf-8"))}
-            except ValueError:
-                log.warning("AirPlay settings not readable: starting with none")
+        self.settings = {**self.settings, **(read_json(self.file, private=True) or {})}
         self.speakers: dict[str, Speaker] = {}
         self.daemons: list[asyncio.subprocess.Process] = []
         self.lock = asyncio.Lock()
@@ -229,10 +226,7 @@ class AirPlay:
     # ---- settings ----
 
     def _save(self) -> None:
-        tmp = self.file.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self.settings, ensure_ascii=False), encoding="utf-8")
-        os.chmod(tmp, 0o600)
-        tmp.replace(self.file)
+        write_json(self.file, self.settings, private=True)
 
     def view(self, panel_id: str) -> dict:
         own = self.settings["panels"].get(panel_id) or {}

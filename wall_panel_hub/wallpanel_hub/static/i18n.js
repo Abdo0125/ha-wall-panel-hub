@@ -10,6 +10,8 @@ const LANG = (() => {
 })();
 const I18N = {
  "ar": {
+  "⚠ Saved files set aside as unreadable: {0}. Their last good copy is in use where there was one.": "⚠ ملفات محفوظة تعذرت قراءتها فنُقلت جانباً: {0}. وتُستعمل آخر نسخة سليمة منها حيث وُجدت.",
+  "Delete them": "احذفها",
   "○ Off": "○ متوقف",
   "○ Not installed in this add-on": "○ غير مثبت في هذه الإضافة",
   "… Starting": "… يبدأ",
@@ -530,6 +532,8 @@ const I18N = {
   "Properties": "الخصائص"
  },
  "fr": {
+  "⚠ Saved files set aside as unreadable: {0}. Their last good copy is in use where there was one.": "⚠ Fichiers enregistrés illisibles mis de côté : {0}. Leur dernière copie saine est utilisée lorsqu'elle existe.",
+  "Delete them": "Les supprimer",
   "○ Off": "○ Désactivé",
   "○ Not installed in this add-on": "○ Non installé dans ce module",
   "… Starting": "… Démarrage",
@@ -1050,6 +1054,8 @@ const I18N = {
   "Properties": "Propriétés"
  },
  "es": {
+  "⚠ Saved files set aside as unreadable: {0}. Their last good copy is in use where there was one.": "⚠ Archivos guardados ilegibles apartados: {0}. Se usa su última copia buena cuando existe.",
+  "Delete them": "Eliminarlos",
   "○ Off": "○ Apagado",
   "○ Not installed in this add-on": "○ No instalado en este complemento",
   "… Starting": "… Iniciando",

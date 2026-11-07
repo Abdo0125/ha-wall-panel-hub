@@ -11,6 +11,7 @@ import json
 import aiohttp
 
 from .cards import KINDS, kind_of
+from .settings import HA_MAX_MESSAGE
 
 COMMANDS = {
     "floors": "config/floor_registry/list",
@@ -231,7 +232,7 @@ def build(floors: list, areas: list, devices: list, registry: list, states: list
 
 async def fetch(session: aiohttp.ClientSession, ws_url: str, token: str) -> dict:
     """One short WebSocket session to HA, all five lists in parallel."""
-    async with session.ws_connect(ws_url, heartbeat=30) as ws:
+    async with session.ws_connect(ws_url, heartbeat=30, max_msg_size=HA_MAX_MESSAGE) as ws:
         await ws.receive_json(timeout=10)
         await ws.send_json({"type": "auth", "access_token": token})
         if (await ws.receive_json(timeout=10)).get("type") != "auth_ok":

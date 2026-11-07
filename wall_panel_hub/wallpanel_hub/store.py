@@ -4,10 +4,9 @@ import hashlib
 import hmac
 import json
 import logging
-import os
 import secrets
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
@@ -15,6 +14,7 @@ from jsonschema import Draft202012Validator
 from . import config as panel_config
 from .access import EditRefused, check_panel_edit, role_caps
 from .cards import card_entities, check_card, kind_of_card
+from .files import DAMAGED, read_json, remove, write_json
 from .migrate import LayoutTooNew, LayoutTooOld, is_current, upgrade
 from .pins import verify_pin
 
@@ -180,9 +180,10 @@ class Store:
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self.panels_file = data_dir / "panels.json"
         self.panels: dict[str, Panel] = {}
-        if self.panels_file.exists():
-            raw = json.loads(self.panels_file.read_text(encoding="utf-8"))
-            self.panels = {p["id"]: Panel(**p) for p in raw}
+        # Fields of a newer add-on (a backup restored, a step back) stay out: they stop nothing.
+        known = {f.name for f in fields(Panel)}
+        for p in read_json(self.panels_file) or []:
+            self.panels[p["id"]] = Panel(**{k: v for k, v in p.items() if k in known})
         # Pairing requests live in memory only: a restart simply asks the panel to retry.
         self.pending: dict[str, PairRequest] = {}
         # One more at each write: what was read from the files may have changed (gateway.py keeps
@@ -192,9 +193,7 @@ class Store:
     # ---- persistence ----
 
     def _write(self, path: Path, data) -> None:
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        os.replace(tmp, path)  # atomic: a power cut never leaves half a file
+        write_json(path, data)
         self.generation += 1
 
     def _save_panels(self) -> None:
@@ -233,6 +232,10 @@ class Store:
         req = self.pending[request_id]
         key = secrets.token_urlsafe(32)
         panel = Panel(req.panel_id, req.name, req.model, _hash(key), time.time(), platform=req.platform, type=req.type)
+        # Paired again: it is still in its room.
+        before = self.panels.get(panel.id)
+        if before is not None:
+            panel.area_id = before.area_id
         self.panels[panel.id] = panel
         self._save_panels()
         req.key = key
@@ -279,9 +282,11 @@ class Store:
 
     def revoke(self, panel_id: str) -> None:
         self.panels.pop(panel_id, None)
+        # Twice: the copy kept of the file must not bring a revoked panel back.
+        self._save_panels()
         self._save_panels()
         self.delete_draft(panel_id)
-        self._config_file(panel_id).unlink(missing_ok=True)
+        remove(self._config_file(panel_id))
         self.generation += 1
 
     # ---- layouts ----
@@ -299,12 +304,21 @@ class Store:
     def _config_file(self, panel_id: str) -> Path:
         return self.config_dir / f"{self._safe(panel_id)}.json"
 
+    def set_aside(self) -> list[str]:
+        """The files that could not be read and were moved aside, damaged (files.py) or of another
+        format (get_layout, get_draft), under the data folder: the add-on's page says so."""
+        folders = (self.dir, self.layouts_dir, self.drafts_dir, self.config_dir)
+        found = [p for d in folders for p in d.iterdir() if p.suffix in (DAMAGED, ".unread")]
+        return sorted(p.relative_to(self.dir).as_posix() for p in found)
+
+    def clear_set_aside(self) -> None:
+        for name in self.set_aside():
+            (self.dir / name).unlink(missing_ok=True)
+
     # ---- configuration ----
 
     def get_site(self) -> dict:
-        if self.site_file.exists():
-            return json.loads(self.site_file.read_text(encoding="utf-8"))
-        return panel_config.new_site()
+        return read_json(self.site_file) or panel_config.new_site()
 
     def save_site(self, site: dict) -> dict:
         """Stores a new revision of the site document; every panel's effective config changes."""
@@ -328,8 +342,7 @@ class Store:
         return True
 
     def get_panel_config(self, panel_id: str) -> dict:
-        f = self._config_file(panel_id)
-        return json.loads(f.read_text(encoding="utf-8")) if f.exists() else panel_config.new_panel()
+        return read_json(self._config_file(panel_id)) or panel_config.new_panel()
 
     def save_panel_config(self, panel_id: str, doc: dict) -> dict:
         saved = {**doc, "version": self.get_panel_config(panel_id)["version"] + 1}
@@ -346,9 +359,9 @@ class Store:
     def get_draft(self, panel_id: str) -> dict | None:
         """{"layout": ..., "base_version": version of the sent layout it started from}."""
         f = self._draft_file(panel_id)
-        if not f.exists():
+        draft = read_json(f)
+        if draft is None:
             return None
-        draft = json.loads(f.read_text(encoding="utf-8"))
         layout = draft.get("layout") or {}
         if not is_current(layout):
             try:
@@ -366,7 +379,7 @@ class Store:
         self._write(self._draft_file(panel_id), {"layout": layout, "base_version": base_version})
 
     def delete_draft(self, panel_id: str) -> None:
-        self._draft_file(panel_id).unlink(missing_ok=True)
+        remove(self._draft_file(panel_id))
 
     def send_draft(self, panel_id: str, force: bool = False) -> dict:
         """Validates and stores the draft as the panel's layout. Raises LayoutConflict if the
@@ -384,9 +397,9 @@ class Store:
 
     def get_layout(self, panel_id: str) -> dict | None:
         f = self._layout_file(panel_id)
-        if not f.exists():
+        layout = read_json(f)
+        if layout is None:
             return None
-        layout = json.loads(f.read_text(encoding="utf-8"))
         if not is_current(layout) or "panel" in layout:
             # Upgraded once, same version: the panel takes it for the change it is not.
             # Display settings move to the panel configuration.

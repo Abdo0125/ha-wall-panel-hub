@@ -5,7 +5,11 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-VERSION = "0.58.0"
+VERSION = "0.59.0"
+
+# The largest message taken from Home Assistant. Its get_states and registries carry every device
+# of the home, far above aiohttp's default of 4 MiB in a large one.
+HA_MAX_MESSAGE = 64 * 1024 * 1024
 
 # Home Assistant's internal network (hassio). Ingress requests come from the Supervisor
 # inside it; with host networking the exact source address in it varies by install.

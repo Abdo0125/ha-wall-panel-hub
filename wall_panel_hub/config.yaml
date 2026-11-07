@@ -1,5 +1,5 @@
 name: Wall Panel Hub
-version: "0.58.0"
+version: "0.59.0"
 slug: wall_panel_hub
 description: Unified management for wall panels (Android and ESP32) - pairing, layouts, secure gateway to Home Assistant
 url: https://github.com/Abdo0125/ha-wall-panel-hub
@@ -23,6 +23,8 @@ map:
 host_network: true
 ingress: true
 ingress_port: 8099
+# The Watchdog switch on the add-on's page checks this port and starts a stopped hub again.
+watchdog: tcp://[HOST]:[PORT:8099]
 panel_icon: mdi:tablet-dashboard
 panel_title: Wall Panels
 options:

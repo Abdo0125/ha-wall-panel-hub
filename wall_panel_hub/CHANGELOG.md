@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.59.0
+
+- A large home no longer cuts panels off: Home Assistant's answers may reach 64 MB. They were
+  limited to 4 MiB, and a panel asks for every device's state each time a page stays on screen.
+- A slow request no longer holds a panel up: a camera's or a room's picture, Home Assistant's lists
+  and opening a door each run on their own, so taps, calls and their sound go on meanwhile. A room's
+  picture now gives up after 20 seconds.
+- A damaged file no longer stops the hub or a panel: each file is written to disk before it takes
+  its name, the one before it is kept, and a damaged one is set aside with its last good copy back.
+  The add-on's page says so. Fields stored by a newer add-on no longer stop the start.
+- The intercom's settings can be read by the hub's own user only.
+- The intercom, AirPlay and the companion integration failing no longer stop the hub, and the
+  doorbell and the servers' links start again after an unexpected failure.
+- Supports the add-on's Watchdog switch, and stops cleanly with the add-on.
+- A panel paired again stays in its room. A malformed first message is refused without an error in
+  the log, and a panel that disconnects badly no longer shows as online.
+
 ## 0.58.0
 
 - A light group takes the lamp and upright bars, on by default from 3x2 to 12x3 when one of its

@@ -259,6 +259,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         return web.json_response({
             "version": VERSION,
             "installer_pin_set": bool(store.get_site().get("installer_pin")),
+            "set_aside": store.set_aside(),
             "discovered": sorted(discovered, key=lambda p: p["name"]),
             "panels": [
                 {
@@ -280,6 +281,10 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
                 for r in store.pending.values() if not r.key and not r.rejected
             ],
         })
+
+    async def clear_set_aside(_):
+        store.clear_set_aside()
+        return web.json_response({"ok": True})
 
     async def integration_secret(_):
         # For setting the integration up by hand: the Supervisor hands it over otherwise.
@@ -548,6 +553,7 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     app.router.add_delete("/api/editor/panels/{pid}/draft", delete_draft)
     app.router.add_post("/api/editor/panels/{pid}/send", send_draft)
     app.router.add_get("/api/overview", overview)
+    app.router.add_post("/api/set_aside/clear", clear_set_aside)
     app.router.add_get("/api/integration/secret", integration_secret)
     # AirPlay: each panel's switch and password (airplay.py).
     def airplay_view() -> dict:

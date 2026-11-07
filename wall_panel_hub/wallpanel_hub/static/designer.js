@@ -377,6 +377,27 @@ async function loadOverview() {
   S.overview = r.body;
   $("version").textContent = "v" + r.body.version;
   $("pinWarning").hidden = r.body.installer_pin_set;
+  renderSetAside(r.body.set_aside);
+}
+
+// Files the hub could not read and moved aside: told until the installer has seen them.
+function renderSetAside(files) {
+  const box = $("setAside");
+  const key = files.join();
+  box.hidden = !files.length;
+  if (box.dataset.key === key) return;
+  box.dataset.key = key;
+  box.replaceChildren();
+  if (!files.length) return;
+  const text = document.createElement("span");
+  text.textContent = t("⚠ Saved files set aside as unreadable: {0}. Their last good copy is in use where there was one.", files.length);
+  text.title = files.join("\n");
+  const clear = document.createElement("button");
+  clear.textContent = t("Delete them");
+  clear.onclick = async () => {
+    if ((await api("api/set_aside/clear", { method: "POST" })).ok) await loadOverview();
+  };
+  box.append(text, " ", clear);
 }
 
 async function loadEditor() {

@@ -25,6 +25,8 @@ from pathlib import Path
 
 from aiohttp import WSMsgType, web
 
+from .files import read_json, write_json
+
 log = logging.getLogger(__name__)
 
 # What a panel reports; anything else is dropped.
@@ -41,17 +43,11 @@ MAX_MEDIA = 200
 def load_secret(data_dir: Path) -> str:
     """The integration's secret, made once and kept with the add-on's data."""
     f = data_dir / "integration.json"
-    if f.exists():
-        try:
-            secret = json.loads(f.read_text(encoding="utf-8")).get("secret")
-            if isinstance(secret, str) and len(secret) >= 32:
-                return secret
-        except ValueError:
-            pass
+    secret = (read_json(f, private=True) or {}).get("secret")
+    if isinstance(secret, str) and len(secret) >= 32:
+        return secret
     secret = secrets.token_urlsafe(32)
-    tmp = f.with_suffix(".tmp")
-    tmp.write_text(json.dumps({"secret": secret}), encoding="utf-8")
-    tmp.replace(f)
+    write_json(f, {"secret": secret}, private=True)
     return secret
 
 

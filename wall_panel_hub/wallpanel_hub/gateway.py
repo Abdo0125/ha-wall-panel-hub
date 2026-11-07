@@ -37,6 +37,7 @@ from .catalog import DeviceFeatures, device_types, features_of, with_types
 from . import panel_settings, project_settings
 from .config import ConfigInvalid
 from .pins import PinInvalid
+from .settings import HA_MAX_MESSAGE
 from .migrate import SCHEMA, for_app
 from .store import LayoutConflict, LayoutInvalid, Store, layout_entities, layout_summary
 
@@ -78,6 +79,19 @@ SERVICES = {
     "button": {"press"},
     "input_button": {"press"},
 }
+
+# Commands that wait on HA, a camera or a door. Each runs on its own, up to MAX_SLOW at once, so the
+# panel's taps, its SIP and its call's sound go on meanwhile; everything else is answered in order.
+SLOW = {
+    "wallpanel/camera/snapshot",
+    "wallpanel/area/picture",
+    "wallpanel/catalog/get",
+    "wallpanel/card/options",
+    "wallpanel/panel/get",
+    "wallpanel/project/get",
+    "wallpanel/intercom/open",
+}
+MAX_SLOW = 8
 
 # Targets that would reach entities beyond the ones listed.
 WIDE_TARGETS = ("area_id", "device_id", "floor_id", "label_id")
@@ -167,6 +181,8 @@ class PanelConnection:
         self._types: tuple[int, dict] | None = None
         # Live cameras the panel watches, by the id of its wallpanel/camera/stream.
         self.streams: dict[int, asyncio.Task] = {}
+        # Its SLOW commands running now.
+        self.slow: set[asyncio.Task] = set()
         # wallpanel/speaker/subscribe: HA's commands to the panel's speaker go there.
         self.speaker_subs: set[int] = set()
         # wallpanel/intercom/subscribe: the panel's SIP WebSocket to Asterisk, by subscription.
@@ -345,6 +361,8 @@ class PanelConnection:
         for task in self.streams.values():
             task.cancel()
         self.streams.clear()
+        for task in self.slow:
+            task.cancel()
         for ws in self.tunnels.values():
             asyncio.ensure_future(ws.close())
         self.tunnels.clear()
@@ -526,6 +544,23 @@ class PanelConnection:
         layout = self.layout_for_panel()
         for sub in list(self.layout_subs):
             await self.send({"id": sub, "type": "event", "event": {"layout": layout}})
+
+    async def dispatch(self, msg: dict) -> None:
+        """A wallpanel/* command: a SLOW one goes on by itself, any other is answered now."""
+        if msg.get("type") not in SLOW:
+            await self.handle_local(msg)
+        elif len(self.slow) >= MAX_SLOW:
+            await self.send(_error(msg.get("id"), "busy", f"at most {MAX_SLOW} such requests at once"))
+        else:
+            task = asyncio.create_task(self._slow(msg))
+            self.slow.add(task)
+            task.add_done_callback(self.slow.discard)
+
+    async def _slow(self, msg: dict) -> None:
+        try:
+            await self.handle_local(msg)
+        except ConnectionResetError:  # the panel gone: its connection ends by itself
+            pass
 
     async def handle_local(self, msg: dict) -> None:
         """wallpanel/* commands, answered by the hub. One that fails unexpectedly is answered
@@ -757,6 +792,8 @@ class MjpegFrames:
 
 # Live cameras one panel may watch at once (each is a stream from HA).
 MAX_STREAMS = 4
+# A camera's or a room's picture from HA.
+PICTURE_TIMEOUT = aiohttp.ClientTimeout(total=20)
 
 
 def _error(mid, code: str, message: str) -> dict:
@@ -827,7 +864,7 @@ class Gateway:
         cached = self.pictures.get(area_id)
         if cached and cached["picture"] == path:
             return cached
-        async with self.session.get(self.ha_http + path, headers=self.ha_auth) as resp:
+        async with self.session.get(self.ha_http + path, headers=self.ha_auth, timeout=PICTURE_TIMEOUT) as resp:
             if resp.status != 200:
                 return None
             data = await resp.read()
@@ -849,7 +886,7 @@ class Gateway:
         """(type, bytes) of a camera's picture now (about [width] wide when the camera can), or None."""
         query = f"?width={width}" if width else ""
         async with self.session.get(f"{self.ha_http}/api/camera_proxy/{entity_id}{query}", headers=self.ha_auth,
-                                    timeout=aiohttp.ClientTimeout(total=20)) as resp:
+                                    timeout=PICTURE_TIMEOUT) as resp:
             if resp.status != 200:
                 return None
             return resp.headers.get("Content-Type", "image/jpeg").split(";")[0], await resp.read()
@@ -944,7 +981,8 @@ class Gateway:
         except Exception:
             await ws.close()
             return ws
-        panel = self.store.authenticate(str(first.get("access_token", ""))) if first.get("type") == "auth" else None
+        valid = isinstance(first, dict) and first.get("type") == "auth"
+        panel = self.store.authenticate(str(first.get("access_token", ""))) if valid else None
         if panel is None:
             await ws.send_json({"type": "auth_invalid", "message": "Unknown or revoked panel"})
             await ws.close()
@@ -952,7 +990,7 @@ class Gateway:
 
         # ---- upstream to Home Assistant ----
         try:
-            upstream = await self.session.ws_connect(self.settings.ha_ws_url, heartbeat=30)
+            upstream = await self.session.ws_connect(self.settings.ha_ws_url, heartbeat=30, max_msg_size=HA_MAX_MESSAGE)
             await upstream.receive_json(timeout=10)  # auth_required
             await upstream.send_json({"type": "auth", "access_token": self.settings.ha_token})
             ok = await upstream.receive_json(timeout=10)
@@ -1011,7 +1049,7 @@ class Gateway:
                     log.warning("panel %s sent an unreadable message", panel.id)
                     continue
                 if str(msg.get("type", "")).startswith("wallpanel/"):
-                    await conn.handle_local(msg)
+                    await conn.dispatch(msg)
                     continue
                 forward, reason = check_command(msg, conn.allowed)
                 if forward is not None:
@@ -1034,12 +1072,13 @@ class Gateway:
         try:
             await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         finally:
+            # First: whatever fails below, the panel no longer counts as connected.
+            self.connections.get(panel.id, set()).discard(conn)
             for t in tasks:
                 t.cancel()
             conn.stop_streams()
             await upstream.close()
             await ws.close()
-            self.connections.get(panel.id, set()).discard(conn)
             self.store.seen(panel.id)
             log.info("panel %s disconnected", panel.id)
             if self.speakers is not None:

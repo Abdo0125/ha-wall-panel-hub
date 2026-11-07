@@ -19,12 +19,13 @@ The hub writes Asterisk's whole configuration under /data/asterisk from its own 
 
 import asyncio
 import hashlib
-import json
 import logging
 import re
 import secrets
 import shutil
 from pathlib import Path
+
+from .files import read_json, write_json
 
 log = logging.getLogger(__name__)
 
@@ -344,11 +345,7 @@ class Intercom:
         self.root = data_dir / "asterisk"
         self.sip_port = sip_port
         self.settings = {"enabled": False, "servers": [], "doors": [], "panels": {}, "contacts": [], "numbers_via": None}
-        if self.file.exists():
-            try:
-                self.settings = {**self.settings, **json.loads(self.file.read_text(encoding="utf-8"))}
-            except ValueError:
-                log.warning("intercom settings not readable: starting empty")
+        self.settings = {**self.settings, **(read_json(self.file, private=True) or {})}
         # Before external servers had their own list, a door was one ("mode": "server"):
         # not carried over (set up again), nor the devices that went through it.
         self.settings["doors"] = [d for d in self.doors if d.get("mode", "here") == "here"]
@@ -369,9 +366,7 @@ class Intercom:
     # ---- settings ----
 
     def _save(self) -> None:
-        tmp = self.file.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self.settings, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(self.file)
+        write_json(self.file, self.settings, private=True)
         self.generation += 1
 
     @property
