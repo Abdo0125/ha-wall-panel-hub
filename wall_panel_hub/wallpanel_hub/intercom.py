@@ -331,7 +331,9 @@ def asterisk_conf(root: Path) -> str:
 
 # Modules Asterisk would load and the hub never uses: the old SIP channels (pjsip has the port), and
 # those that only fill the log at each start, declining without their own configuration
-# (voicemail loaded twice, queues, conferences, ARI, Lua...).
+# (voicemail loaded twice, queues, conferences, ARI and all that hangs on it, Lua, ADSI...).
+ARI = ("applications", "asterisk", "bridges", "channels", "device_states", "endpoints", "events", "playbacks",
+       "recordings", "sounds")
 UNUSED_MODULES = (
     "chan_sip", "chan_iax2", "chan_skinny", "chan_mgcp", "chan_unistim", "chan_console",
     "app_voicemail", "app_voicemail_imap", "app_voicemail_odbc", "app_minivm", "app_queue", "app_agent_pool",
@@ -339,10 +341,18 @@ UNUSED_MODULES = (
     "res_ari", "res_parking", "res_calendar", "res_phoneprov", "res_pjsip_phoneprov_provider", "res_hep",
     "res_hep_rtcp", "res_hep_pjsip", "res_pjsip_notify", "res_http_media_cache", "res_prometheus",
     "res_stun_monitor", "pbx_lua", "pbx_dundi", "pbx_ael", "cdr_csv", "cdr_manager", "cdr_sqlite3_custom",
-    "cel_manager", "cel_sqlite3_custom",
+    "cel_manager", "cel_sqlite3_custom", "cdr_custom", "cel_custom", "app_stasis", "res_config_sqlite3",
+    "res_statsd", "res_clialiases", "res_pjsip_config_wizard", "res_websocket_client", "res_adsi",
+    "app_adsiprog", "app_getcpeid", *(f"res_ari_{name}" for name in ARI),
 )
 
+# Asterisk's own settings it reads at each start, given here so it does not report them missing: no
+# call records, the rest as it would be without them.
+QUIET_CONF = {name: "[general]\n" for name in ("features.conf", "acl.conf", "pjproject.conf", "stasis.conf", "udptl.conf")}
+QUIET_CONF |= {"cdr.conf": "[general]\nenable=no\n", "cel.conf": "[general]\nenable=no\n"}
+
 STATIC_CONF = {
+    **QUIET_CONF,
     "modules.conf": "[modules]\nautoload=yes\n" + "".join(f"noload => {m}.so\n" for m in UNUSED_MODULES),
     "logger.conf": "[general]\n[logfiles]\nconsole => notice,warning,error,verbose\nmessages.log => notice,warning,error\n",
     # Panels' calls offer this machine's addresses but HA's and Docker's own (and IPv6 link-local).

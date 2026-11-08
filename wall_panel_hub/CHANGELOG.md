@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.60.1
+
+- Asterisk 20.15 no longer reports errors at each start: the modules of its REST interface (ARI),
+  which the hub does not use, are no longer loaded, and the settings it looked for are given (no
+  call records). From 99 lines of errors and warnings at 0.59.0 to 35 at 0.60.0, and fewer now.
+
 ## 0.60.0
 
 - aiohttp 3.14.5 and zeroconf 0.154.0 (were 3.10.10 and 0.135.0, with 43 and 5 known
