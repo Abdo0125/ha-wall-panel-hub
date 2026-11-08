@@ -16,6 +16,7 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 
+from . import backup
 from .airplay import AirPlayInvalid
 from .cards import REGISTRY, offered_options
 from .intercom import ECHO, IntercomInvalid
@@ -170,7 +171,8 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
             raise web.HTTPForbidden(text=f"Open Wall Panels from the Home Assistant sidebar. ({request.remote})")
         return await handler(request)
 
-    app = web.Application(middlewares=[ingress_only, _keep_assets])
+    # A backup is the largest thing the page sends.
+    app = web.Application(middlewares=[ingress_only, _keep_assets], client_max_size=backup.MAX_SIZE)
 
     async def index(_):
         return _page("index.html")
@@ -285,6 +287,33 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     async def clear_set_aside(_):
         store.clear_set_aside()
         return web.json_response({"ok": True})
+
+    # ---- the project in one file (backup.py) ----
+
+    async def export_backup(_):
+        name = f"wall-panel-hub-{time.strftime('%Y-%m-%d')}.zip"
+        return web.Response(body=backup.export(store.dir), content_type="application/zip",
+                            headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+    async def import_backup(request: web.Request):
+        try:
+            done = backup.restore(store.dir, await request.read())
+        except backup.BackupInvalid as e:
+            log.warning("backup not restored: %s", e)
+            return web.json_response({"error": str(e)}, status=400)
+        log.info("backup restored: %s panels, %s layouts (the project before is in %s)",
+                 done["panels"], done["layouts"], backup.BEFORE)
+        store.reload()
+        if intercom is not None:
+            intercom.load()
+            await intercom.apply()
+        if getattr(gateway, "airplay", None) is not None:
+            gateway.airplay.load()
+            await gateway.airplay.apply()
+        # Each panel connects again, as what the backup says it is (or is told it is not paired).
+        for pid in list(gateway.connections):
+            await gateway.disconnect(pid)
+        return web.json_response(done)
 
     async def integration_secret(_):
         # For setting the integration up by hand: the Supervisor hands it over otherwise.
@@ -554,6 +583,8 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     app.router.add_post("/api/editor/panels/{pid}/send", send_draft)
     app.router.add_get("/api/overview", overview)
     app.router.add_post("/api/set_aside/clear", clear_set_aside)
+    app.router.add_get("/api/backup", export_backup)
+    app.router.add_post("/api/backup", import_backup)
     app.router.add_get("/api/integration/secret", integration_secret)
     # AirPlay: each panel's switch and password (airplay.py).
     def airplay_view() -> dict:

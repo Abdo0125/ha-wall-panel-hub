@@ -180,15 +180,20 @@ class Store:
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self.panels_file = data_dir / "panels.json"
         self.panels: dict[str, Panel] = {}
-        # Fields of a newer add-on (a backup restored, a step back) stay out: they stop nothing.
-        known = {f.name for f in fields(Panel)}
-        for p in read_json(self.panels_file) or []:
-            self.panels[p["id"]] = Panel(**{k: v for k, v in p.items() if k in known})
-        # Pairing requests live in memory only: a restart simply asks the panel to retry.
-        self.pending: dict[str, PairRequest] = {}
         # One more at each write: what was read from the files may have changed (gateway.py keeps
         # each panel's devices until then).
         self.generation = 0
+        self.reload()
+        # Pairing requests live in memory only: a restart simply asks the panel to retry.
+        self.pending: dict[str, PairRequest] = {}
+
+    def reload(self) -> None:
+        """The paired panels as the files say (at the start, and after a backup is restored)."""
+        # Fields of a newer add-on (a backup restored, a step back) stay out: they stop nothing.
+        known = {f.name for f in fields(Panel)}
+        self.panels = {p["id"]: Panel(**{k: v for k, v in p.items() if k in known})
+                       for p in read_json(self.panels_file) or []}
+        self.generation += 1
 
     # ---- persistence ----
 

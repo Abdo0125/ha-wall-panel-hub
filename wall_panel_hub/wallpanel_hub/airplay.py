@@ -216,14 +216,17 @@ class AirPlay:
         self.changed = changed
         self.art_changed = art_changed
         self.binary = shutil.which("shairport-sync")
-        self.settings: dict = {"panels": {}}
-        self.settings = {**self.settings, **(read_json(self.file, private=True) or {})}
+        self.load()
         self.speakers: dict[str, Speaker] = {}
         self.daemons: list[asyncio.subprocess.Process] = []
         self.lock = asyncio.Lock()
         self._notify: asyncio.TimerHandle | None = None
 
     # ---- settings ----
+
+    def load(self) -> None:
+        """The settings as the file says (at the start, and after a backup is restored)."""
+        self.settings = {"panels": {}, **(read_json(self.file, private=True) or {})}
 
     def _save(self) -> None:
         write_json(self.file, self.settings, private=True)

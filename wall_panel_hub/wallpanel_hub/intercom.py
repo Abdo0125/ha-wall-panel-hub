@@ -348,7 +348,9 @@ UNUSED_MODULES = (
 
 # Asterisk's own settings it reads at each start, given here so it does not report them missing: no
 # call records, the rest as it would be without them.
-QUIET_CONF = {name: "[general]\n" for name in ("features.conf", "acl.conf", "pjproject.conf", "stasis.conf", "udptl.conf")}
+QUIET_CONF = {name: "[general]\n" for name in ("features.conf", "pjproject.conf", "stasis.conf", "udptl.conf")}
+# acl.conf has no [general]: empty.
+QUIET_CONF["acl.conf"] = ""
 QUIET_CONF |= {"cdr.conf": "[general]\nenable=no\n", "cel.conf": "[general]\nenable=no\n"}
 
 STATIC_CONF = {
@@ -367,13 +369,9 @@ class Intercom:
         self.file = data_dir / "intercom.json"
         self.root = data_dir / "asterisk"
         self.sip_port = sip_port
-        self.settings = {"enabled": False, "servers": [], "doors": [], "panels": {}, "contacts": [], "numbers_via": None}
-        self.settings = {**self.settings, **(read_json(self.file, private=True) or {})}
-        # Before external servers had their own list, a door was one ("mode": "server"):
-        # not carried over (set up again), nor the devices that went through it.
-        self.settings["doors"] = [d for d in self.doors if d.get("mode", "here") == "here"]
-        ids = {s["id"] for s in self.servers}
-        self.settings["contacts"] = [c for c in self.extra if c.get("via") in ids]
+        # One more at each change saved: the doors' cameras may have changed (gateway.py).
+        self.generation = 0
+        self.load()
         self.process: asyncio.subprocess.Process | None = None
         self.task: asyncio.Task | None = None
         self.binary = shutil.which("asterisk")
@@ -383,8 +381,17 @@ class Intercom:
         self.panel_names = lambda: {}
         # Each external server's registration, as last read (watch): server id -> Registered...
         self.links: dict[str, str] = {}
-        # One more at each change saved: the doors' cameras may have changed (gateway.py).
-        self.generation = 0
+
+    def load(self) -> None:
+        """The settings as the file says (at the start, and after a backup is restored)."""
+        self.settings = {"enabled": False, "servers": [], "doors": [], "panels": {}, "contacts": [], "numbers_via": None}
+        self.settings = {**self.settings, **(read_json(self.file, private=True) or {})}
+        # Before external servers had their own list, a door was one ("mode": "server"):
+        # not carried over (set up again), nor the devices that went through it.
+        self.settings["doors"] = [d for d in self.doors if d.get("mode", "here") == "here"]
+        ids = {s["id"] for s in self.servers}
+        self.settings["contacts"] = [c for c in self.extra if c.get("via") in ids]
+        self.generation += 1
 
     # ---- settings ----
 

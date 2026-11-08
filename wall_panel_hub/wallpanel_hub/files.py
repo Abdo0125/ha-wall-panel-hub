@@ -47,6 +47,11 @@ def _put(path: Path, data: bytes, private: bool) -> None:
             os.close(folder)
 
 
+def write_bytes(path: Path, data: bytes, private: bool = False) -> None:
+    """[data] as [path], on disk before it takes the name."""
+    _put(path, data, private)
+
+
 def write_json(path: Path, data: Any, private: bool = False) -> None:
     """[data] as [path], the file before it kept beside it. [private]: for the hub's user alone,
     for what holds passwords (AirPlay's players run as another user)."""

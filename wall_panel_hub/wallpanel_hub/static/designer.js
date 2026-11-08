@@ -1846,7 +1846,30 @@ function renderProject(view) {
         async (pin) => { await post("api/site/pin", { role: "user", pin }); reload(); },
         async () => { await post("api/site/pin", { role: "user", pin: null }); reload(); }, t("Remove"))),
     integrationBox(),
+    backupBox(),
   );
+}
+
+// The project in one file (backup.py): exported, or restored in place of this one.
+function backupBox() {
+  const file = el("input", { type: "file", accept: ".zip,application/zip", style: { display: "none" } });
+  file.onchange = async () => {
+    const chosen = file.files[0];
+    file.value = "";
+    if (!chosen || !confirm(t("Restore {0}? It replaces every panel, layout and setting of this hub. The project here now is kept as before-import.zip.", chosen.name))) return;
+    const r = await api("api/backup", { method: "POST", headers: { "Content-Type": "application/zip" }, body: chosen });
+    if (!r.ok) { alert(t("Not restored: ") + (r.body?.error || r.status)); return; }
+    toast(t("Restored: {0} panels, {1} layouts.", r.body.panels, r.body.layouts));
+    S.site = null;
+    S.editor = {};
+    await loadOverview();
+    render();
+  };
+  return el("div", { class: "box" }, el("h3", {}, t("Backup")),
+    el("p", { class: "muted" }, t("The whole project in one file. Restored here or on a new hub, its panels stay paired. It holds the doors' passwords: keep it safe.")),
+    el("div", { class: "row" },
+      el("button", { onclick: () => { window.location.href = "api/backup"; } }, t("Export the project")),
+      el("button", { onclick: () => file.click() }, t("Import a project…")), file));
 }
 
 // AirPlay: each panel an AirPlay speaker on the home network, named after it (off until turned

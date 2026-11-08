@@ -1,0 +1,7 @@
+configuration:
+  panel_port:
+    name: "Port des écrans"
+    description: "Le port qu'utilisent les écrans du réseau local pour s'associer et se connecter."
+  sip_port:
+    name: "Port SIP de l'interphone"
+    description: "Le port SIP de l'interphone, pour les portiers et autres appareils SIP. Le son des appels utilise l'UDP 10000-10199."

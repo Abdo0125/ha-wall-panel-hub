@@ -1,0 +1,7 @@
+configuration:
+  panel_port:
+    name: "Puerto de las pantallas"
+    description: "El puerto que usan las pantallas de la red local para vincularse y conectarse."
+  sip_port:
+    name: "Puerto SIP del intercomunicador"
+    description: "El puerto SIP del intercomunicador, para porteros y otros dispositivos SIP. El sonido de las llamadas usa UDP 10000-10199."

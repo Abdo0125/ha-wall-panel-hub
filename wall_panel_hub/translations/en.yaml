@@ -1,0 +1,7 @@
+configuration:
+  panel_port:
+    name: "Panel port"
+    description: "The port the panels on the home network use to pair and connect."
+  sip_port:
+    name: "Intercom SIP port"
+    description: "The intercom's SIP port, for doors and other SIP devices. Calls' sound uses UDP 10000-10199."

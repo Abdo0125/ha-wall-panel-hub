@@ -10,6 +10,13 @@ const LANG = (() => {
 })();
 const I18N = {
  "ar": {
+  "Restore {0}? It replaces every panel, layout and setting of this hub. The project here now is kept as before-import.zip.": "استعادة {0}؟ ستحل محل كل الشاشات والتخطيطات والإعدادات في هذا الـ Hub. ويُحفظ المشروع الحالي باسم before-import.zip.",
+  "Not restored: ": "لم تتم الاستعادة: ",
+  "Restored: {0} panels, {1} layouts.": "تمت الاستعادة: {0} شاشات، و{1} تخطيطات.",
+  "Backup": "النسخ الاحتياطي",
+  "The whole project in one file. Restored here or on a new hub, its panels stay paired. It holds the doors' passwords: keep it safe.": "المشروع كله في ملف واحد. حين يُستعاد هنا أو على Hub جديد، تبقى شاشاته مربوطة. وفيه كلمات سر الأبواب، فاحفظه في مكان آمن.",
+  "Export the project": "تصدير المشروع",
+  "Import a project…": "استيراد مشروع…",
   "⚠ Saved files set aside as unreadable: {0}. Their last good copy is in use where there was one.": "⚠ ملفات محفوظة تعذرت قراءتها فنُقلت جانباً: {0}. وتُستعمل آخر نسخة سليمة منها حيث وُجدت.",
   "Delete them": "احذفها",
   "○ Off": "○ متوقف",
@@ -532,6 +539,13 @@ const I18N = {
   "Properties": "الخصائص"
  },
  "fr": {
+  "Restore {0}? It replaces every panel, layout and setting of this hub. The project here now is kept as before-import.zip.": "Restaurer {0} ? Cela remplace tous les écrans, mises en page et réglages de ce hub. Le projet actuel est gardé dans before-import.zip.",
+  "Not restored: ": "Non restauré : ",
+  "Restored: {0} panels, {1} layouts.": "Restauré : {0} écrans, {1} mises en page.",
+  "Backup": "Sauvegarde",
+  "The whole project in one file. Restored here or on a new hub, its panels stay paired. It holds the doors' passwords: keep it safe.": "Tout le projet dans un seul fichier. Restauré ici ou sur un nouveau hub, ses écrans restent associés. Il contient les mots de passe des portiers : gardez-le en lieu sûr.",
+  "Export the project": "Exporter le projet",
+  "Import a project…": "Importer un projet…",
   "⚠ Saved files set aside as unreadable: {0}. Their last good copy is in use where there was one.": "⚠ Fichiers enregistrés illisibles mis de côté : {0}. Leur dernière copie saine est utilisée lorsqu'elle existe.",
   "Delete them": "Les supprimer",
   "○ Off": "○ Désactivé",
@@ -1054,6 +1068,13 @@ const I18N = {
   "Properties": "Propriétés"
  },
  "es": {
+  "Restore {0}? It replaces every panel, layout and setting of this hub. The project here now is kept as before-import.zip.": "¿Restaurar {0}? Sustituye todas las pantallas, diseños y ajustes de este hub. El proyecto actual se guarda como before-import.zip.",
+  "Not restored: ": "No restaurado: ",
+  "Restored: {0} panels, {1} layouts.": "Restaurado: {0} pantallas, {1} diseños.",
+  "Backup": "Copia de seguridad",
+  "The whole project in one file. Restored here or on a new hub, its panels stay paired. It holds the doors' passwords: keep it safe.": "Todo el proyecto en un solo archivo. Restaurado aquí o en un hub nuevo, sus pantallas siguen vinculadas. Contiene las contraseñas de los porteros: guárdelo en un lugar seguro.",
+  "Export the project": "Exportar el proyecto",
+  "Import a project…": "Importar un proyecto…",
   "⚠ Saved files set aside as unreadable: {0}. Their last good copy is in use where there was one.": "⚠ Archivos guardados ilegibles apartados: {0}. Se usa su última copia buena cuando existe.",
   "Delete them": "Eliminarlos",
   "○ Off": "○ Apagado",

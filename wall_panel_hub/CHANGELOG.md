@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.61.0
+
+- Asterisk's acl.conf is written empty: a [general] section in it is an error.
+- The add-on's options are named and described in English, Arabic, French and Spanish.
+- Backup: the project page exports the whole project in one file and imports one in place of the
+  project here, which is kept as before-import.zip. Restored here or on a new hub, its panels stay
+  paired. The file holds the doors' passwords.
+
 ## 0.60.1
 
 - Asterisk 20.15 no longer reports errors at each start: the modules of its REST interface (ARI),
