@@ -329,8 +329,21 @@ def asterisk_conf(root: Path) -> str:
     ])
 
 
+# Modules Asterisk would load and the hub never uses: the old SIP channels (pjsip has the port), and
+# those that only fill the log at each start, declining without their own configuration
+# (voicemail loaded twice, queues, conferences, ARI, Lua...).
+UNUSED_MODULES = (
+    "chan_sip", "chan_iax2", "chan_skinny", "chan_mgcp", "chan_unistim", "chan_console",
+    "app_voicemail", "app_voicemail_imap", "app_voicemail_odbc", "app_minivm", "app_queue", "app_agent_pool",
+    "app_confbridge", "app_page", "app_followme", "app_alarmreceiver", "app_festival", "app_amd",
+    "res_ari", "res_parking", "res_calendar", "res_phoneprov", "res_pjsip_phoneprov_provider", "res_hep",
+    "res_hep_rtcp", "res_hep_pjsip", "res_pjsip_notify", "res_http_media_cache", "res_prometheus",
+    "res_stun_monitor", "pbx_lua", "pbx_dundi", "pbx_ael", "cdr_csv", "cdr_manager", "cdr_sqlite3_custom",
+    "cel_manager", "cel_sqlite3_custom",
+)
+
 STATIC_CONF = {
-    "modules.conf": "[modules]\nautoload=yes\n; Old SIP channel: pjsip has the port.\nnoload => chan_sip.so\nnoload => chan_iax2.so\nnoload => chan_skinny.so\nnoload => chan_mgcp.so\nnoload => chan_unistim.so\n",
+    "modules.conf": "[modules]\nautoload=yes\n" + "".join(f"noload => {m}.so\n" for m in UNUSED_MODULES),
     "logger.conf": "[general]\n[logfiles]\nconsole => notice,warning,error,verbose\nmessages.log => notice,warning,error\n",
     # Panels' calls offer this machine's addresses but HA's and Docker's own (and IPv6 link-local).
     "rtp.conf": f"[general]\nrtpstart={RTP_START}\nrtpend={RTP_END}\nicesupport=yes\n"

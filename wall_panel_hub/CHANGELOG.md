@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.60.0
+
+- aiohttp 3.14.5 and zeroconf 0.154.0 (were 3.10.10 and 0.135.0, with 43 and 5 known
+  vulnerabilities), jsonschema 4.26.0.
+- Built on Alpine 3.23 (3.20 is no longer supported): Asterisk 20.15 and shairport-sync 4.3.7, the
+  same major versions as before.
+- 64-bit only: armv7 is gone, as Home Assistant ended 32-bit systems in 2025.
+- Asterisk no longer loads the modules the hub never uses, so its start fills the log with no errors.
+
 ## 0.59.0
 
 - A large home no longer cuts panels off: Home Assistant's answers may reach 64 MB. They were
