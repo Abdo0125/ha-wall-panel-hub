@@ -256,7 +256,7 @@ class PanelConnection:
             role = panel_settings.allowed(store, self.panel_id, msg.get("pin"))
             if kind == "wallpanel/panel/get":
                 result = panel_settings.get(store, self.panel_id, await _areas(self.gateway),
-                                            self.gateway.installed_apps.get(self.panel_id, []))
+                                            self.gateway.installed_apps.get(self.panel_id, []), role)
                 if getattr(self.gateway, "airplay", None) is not None:
                     result["airplay"] = self.gateway.airplay.view(self.panel_id)
             elif kind == "wallpanel/panel/update":
@@ -643,7 +643,7 @@ class PanelConnection:
             await self.gateway.notify_config()
         elif kind == "wallpanel/config/display":
             try:
-                store.save_display_from_panel(self.panel_id, msg.get("display") or {})
+                store.save_display_from_panel(self.panel_id, msg.get("display") or {}, msg.get("before"))
             except ConfigInvalid as e:
                 await self.send(_error(mid, "invalid_config", str(e)))
                 return

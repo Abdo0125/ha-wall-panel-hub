@@ -26,8 +26,9 @@ def allowed(store: Store, panel_id: str, pin: str | None) -> str:
     return role
 
 
-def get(store: Store, panel_id: str, areas: list[dict], installed: list[dict]) -> dict:
-    """What the page shows: the panel's own values, and what they fall back to."""
+def get(store: Store, panel_id: str, areas: list[dict], installed: list[dict], role: str = "installer") -> dict:
+    """What the page shows: the panel's own values, and what they fall back to. [role]: who opened
+    it, for the roles whose permissions it shows to change."""
     panel = store.panels[panel_id]
     doc = store.get_panel_config(panel_id)
     eff = store.effective_config(panel_id)
@@ -42,6 +43,8 @@ def get(store: Store, panel_id: str, areas: list[dict], installed: list[dict]) -
         "installed_apps": installed,
         "access": eff["access"],
         "caps": ALL_CAPS,
+        # The roles [role] changes, lowest first: the panel shows those only.
+        "roles": [r for r in ROLES if r in below(role)],
         "installer_pin_own": bool(doc.get("installer_pin")),
         "user_pin_own": bool(doc.get("user_pin")),
         "project_installer_pin": bool(site.get("installer_pin")),

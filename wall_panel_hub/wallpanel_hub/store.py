@@ -535,10 +535,19 @@ class Store:
             doc = self.get_panel_config(panel_id)
             self.save_panel_config(panel_id, {**doc, "overrides": put(doc.get("overrides"))})
 
-    def save_display_from_panel(self, panel_id: str, display: dict) -> dict:
+    def save_display_from_panel(self, panel_id: str, display: dict, before: dict | None = None) -> dict:
         """Theme, language and screensaver changed on the panel: stored as this panel's own
         settings, so the add-on shows them too. The panel checked the PIN and the display
-        permission when the change was made, maybe offline, so there is nothing to approve."""
+        permission when the change was made, maybe offline, so there is nothing to approve.
+        [before]: what the panel had of each when the change was made. One that changed since (in
+        the add-on, while the panel was away) stays as it is now: the newer wins
+        (docs/audit-6-settings.md, item 5)."""
+        if isinstance(before, dict):
+            now = self.effective_config(panel_id)
+            kept = [k for k in display if k in before and now.get(k) != before[k]]
+            if kept:
+                log.info("panel %s: %s changed meanwhile, kept as it is", panel_id, ", ".join(kept))
+            display = {k: v for k, v in display.items() if k not in kept}
         doc = self.get_panel_config(panel_id)
         overrides = dict(doc.get("overrides") or {})
         for key in ("lang", "theme", "home_title"):

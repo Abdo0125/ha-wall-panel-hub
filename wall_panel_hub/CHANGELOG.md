@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.63.0
+
+- A panel's settings page is told which roles' permissions the one who opened it changes (app
+  0.76.0 shows those only).
+- A theme, language or screensaver change made on a panel while it was away keeps what the add-on
+  changed since: the newer wins (with app 0.76.0, which says what it had).
+
 ## 0.62.0
 
 - A role changes the permissions of the roles below it only: a user given the panel permission no
