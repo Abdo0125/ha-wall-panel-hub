@@ -10,6 +10,7 @@ const LANG = (() => {
 })();
 const I18N = {
  "ar": {
+  "These settings changed elsewhere meanwhile, on a panel or in another window. The page shows them now: make your change again.": "تغيّرت هذه الإعدادات من مكان آخر في الأثناء، من شاشة أو من نافذة أخرى. الصفحة تعرضها الآن كما هي، فأعد تعديلك.",
   "Restore {0}? It replaces every panel, layout and setting of this hub. The project here now is kept as before-import.zip.": "استعادة {0}؟ ستحل محل كل الشاشات والتخطيطات والإعدادات في هذا الـ Hub. ويُحفظ المشروع الحالي باسم before-import.zip.",
   "Not restored: ": "لم تتم الاستعادة: ",
   "Restored: {0} panels, {1} layouts.": "تمت الاستعادة: {0} شاشات، و{1} تخطيطات.",
@@ -539,6 +540,7 @@ const I18N = {
   "Properties": "الخصائص"
  },
  "fr": {
+  "These settings changed elsewhere meanwhile, on a panel or in another window. The page shows them now: make your change again.": "Ces réglages ont changé ailleurs entre-temps, sur un écran ou dans une autre fenêtre. La page les montre maintenant : refaites votre modification.",
   "Restore {0}? It replaces every panel, layout and setting of this hub. The project here now is kept as before-import.zip.": "Restaurer {0} ? Cela remplace tous les écrans, mises en page et réglages de ce hub. Le projet actuel est gardé dans before-import.zip.",
   "Not restored: ": "Non restauré : ",
   "Restored: {0} panels, {1} layouts.": "Restauré : {0} écrans, {1} mises en page.",
@@ -1068,6 +1070,7 @@ const I18N = {
   "Properties": "Propriétés"
  },
  "es": {
+  "These settings changed elsewhere meanwhile, on a panel or in another window. The page shows them now: make your change again.": "Estos ajustes cambiaron en otro lugar mientras tanto, en una pantalla o en otra ventana. La página los muestra ahora: vuelva a hacer su cambio.",
   "Restore {0}? It replaces every panel, layout and setting of this hub. The project here now is kept as before-import.zip.": "¿Restaurar {0}? Sustituye todas las pantallas, diseños y ajustes de este hub. El proyecto actual se guarda como before-import.zip.",
   "Not restored: ": "No restaurado: ",
   "Restored: {0} panels, {1} layouts.": "Restaurado: {0} pantallas, {1} diseños.",

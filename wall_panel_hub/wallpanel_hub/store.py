@@ -43,6 +43,10 @@ def _type(platform: str, kind: str | None) -> str:
 
 PAIRING_TTL_S = 600
 MAX_PENDING = 10
+# Wrong PINs a panel may send in PIN_LOCK_S before its PINs count for nothing that long, as the panel's
+# own keypad does (docs/audit-6-settings.md, item 2).
+PIN_TRIES = 5
+PIN_LOCK_S = 60
 
 _SCHEMA = json.loads((Path(__file__).parent / "schema" / "layout.schema.json").read_text(encoding="utf-8"))
 _VALIDATOR = Draft202012Validator(_SCHEMA)
@@ -186,6 +190,13 @@ class Store:
         self.reload()
         # Pairing requests live in memory only: a restart simply asks the panel to retry.
         self.pending: dict[str, PairRequest] = {}
+        # Each PIN's role, checked once (a check takes the hub some 80 ms), by a key made from the
+        # PIN with a secret of this run: the digits are not kept. Wrong PINs by panel, and the
+        # panels whose PINs count for nothing until a time.
+        self._pin_key = secrets.token_bytes(32)
+        self._roles: dict[bytes, str] = {}
+        self._wrong: dict[str, dict[bytes, float]] = {}
+        self._locked: dict[str, float] = {}
 
     def reload(self) -> None:
         """The paired panels as the files say (at the start, and after a backup is restored)."""
@@ -443,11 +454,34 @@ class Store:
         """Who is editing on the panel, from the PIN it sent. Until an installer PIN is set
         the panel is in setup and counts as the installer."""
         eff = self.effective_config(panel_id)
-        if eff["installer_pin"] is None or verify_pin(pin, eff["installer_pin"]):
+        if eff["installer_pin"] is None:
             return "installer"
-        if verify_pin(pin, eff["user_pin"]):
-            return "user"
-        return "guest"
+        if not pin:
+            return "guest"
+        now = time.monotonic()
+        if self._locked.get(panel_id, 0) > now:
+            return "guest"
+        # The PINs set are in the key: a PIN changed is checked again.
+        key = hmac.new(self._pin_key, json.dumps([panel_id, pin, eff["installer_pin"], eff["user_pin"]]).encode(),
+                       hashlib.sha256).digest()
+        role = self._roles.get(key)
+        if role is None:
+            role = ("installer" if verify_pin(pin, eff["installer_pin"])
+                    else "user" if verify_pin(pin, eff["user_pin"]) else "guest")
+            if len(self._roles) >= 256:
+                self._roles.clear()
+            self._roles[key] = role
+        if role == "guest":
+            # Different wrong PINs in the last PIN_LOCK_S: the same one sent again counts once.
+            wrong = {k: t for k, t in self._wrong.get(panel_id, {}).items() if now - t < PIN_LOCK_S}
+            wrong[key] = now
+            self._wrong[panel_id] = wrong
+            if len(wrong) >= PIN_TRIES:
+                self._locked[panel_id] = now + PIN_LOCK_S
+                del self._wrong[panel_id]
+                log.warning("panel %s: %d wrong PINs in %d s, its PINs count for nothing for %d s",
+                            panel_id, PIN_TRIES, PIN_LOCK_S, PIN_LOCK_S)
+        return role
 
     def save_display_for_all(self, display: dict) -> int:
         """Display settings for every panel: the project's, and no panel keeps its own value

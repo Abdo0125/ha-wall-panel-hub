@@ -66,5 +66,7 @@ def set_pin(store: Store, which: str, new_pin: str | None, role: str = "installe
         raise Refused("role must be installer or user")
     if which == "installer" and role != "installer":
         raise Refused("only the installer changes the installer PIN")
+    if which == "user" and role == "guest":
+        raise Refused("only the user or the installer changes the user PIN")
     site = store.get_site()
     store.save_site({**site, f"{which}_pin": hash_pin(str(new_pin)) if new_pin else None})

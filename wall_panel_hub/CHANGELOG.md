@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.62.0
+
+- A role changes the permissions of the roles below it only: a user given the panel permission no
+  longer takes the installer's permissions away on that panel, and the guest never changes the user
+  PIN.
+- A PIN is checked once a session (each check held the hub some 80 ms), and five different wrong
+  PINs from a panel in a minute make its PINs count for nothing for a minute, as on the panel.
+- Saving the project's or a panel's settings in the add-on no longer drops the floors' icons.
+- Saving settings in the add-on no longer overwrites what changed meanwhile on a panel or in another
+  window: the page says so and shows what is there now.
+
 ## 0.61.0
 
 - Asterisk's acl.conf is written empty: a [general] section in it is an error.

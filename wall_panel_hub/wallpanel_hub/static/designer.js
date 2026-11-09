@@ -33,6 +33,20 @@ async function api(path, options = {}) {
   return { status: r.status, ok: r.ok, body };
 }
 const put = (path, body) => api(path, { method: "PUT", body: JSON.stringify(body) });
+
+// Settings saved with what the page had for them: the hub refuses (409) a field changed meanwhile, on
+// a panel or in another window. The page then shows what is there now, to change again.
+async function putSettings(path, changes, had, reload) {
+  const before = Object.fromEntries(Object.keys(changes).map((k) => [k, had?.[k] ?? null]));
+  const r = await put(path, { ...changes, before });
+  if (r.status === 409) {
+    alert(t("These settings changed elsewhere meanwhile, on a panel or in another window. The page shows them now: make your change again."));
+    await reload();
+    render();
+  }
+  return r;
+}
+const refused = (r) => r.status !== 409;
 const post = (path, body) => api(path, { method: "POST", body: JSON.stringify(body || {}) });
 
 let toastTimer;
@@ -1690,9 +1704,9 @@ function renderSettings(view, p) {
           await post(`api/panels/${enc(pid)}/area`, { area_id: place.value || null });
           if (S.editor[pid]) S.editor[pid].area_id = place.value || null;
         }
-        const keep = cfg.config.overrides?.floor_names ? { floor_names: cfg.config.overrides.floor_names } : {};
-        const r = await put(`api/panels/${enc(pid)}/config`, { overrides: { ...keep, ...readDisplay() } });
-        if (!r.ok) { msg.className = "msg error"; msg.textContent = t("Not saved: ") + (r.body?.error || r.status); return; }
+        // The floors' names and icons stay as they are: the hub keeps them.
+        const r = await putSettings(`api/panels/${enc(pid)}/config`, { overrides: readDisplay() }, cfg.config, () => loadConfig(pid));
+        if (!r.ok) { if (refused(r)) { msg.className = "msg error"; msg.textContent = t("Not saved: ") + (r.body?.error || r.status); } return; }
         await refresh(); await loadConfig(pid);
         toast(p.online ? t("Saved and on the panel.") : t("Saved. The panel gets it when it connects."));
         render();
@@ -1766,8 +1780,8 @@ function appsBox(pid, p, cfg) {
     el("div", { class: "row", style: { marginTop: "10px" } }, pick, typed, el("button", { onclick: add }, t("Add"))),
     el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
       const clean = apps.map((a) => Object.fromEntries(Object.entries(a).filter(([, v]) => v !== undefined && v !== "")));
-      const r = await put(`api/panels/${enc(pid)}/config`, { apps: clean });
-      if (!r.ok) { alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
+      const r = await putSettings(`api/panels/${enc(pid)}/config`, { apps: clean }, S.configs[pid]?.config, () => loadConfig(pid));
+      if (!r.ok) { if (refused(r)) alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
       await loadConfig(pid);
       toast(p.online ? t("Saved and on the panel.") : t("Saved. The panel gets it when it connects."));
       render();
@@ -1800,8 +1814,8 @@ function renderAccess(view, p) {
     el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
       const access = {};
       for (const [role] of ROLES) access[role] = CAPS.map(([c]) => c).filter((c) => boxes[role + ":" + c].checked);
-      const r = await put(`api/panels/${enc(pid)}/config`, { access, access_known: CAPS.map(([c]) => c) });
-      if (!r.ok) { alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
+      const r = await putSettings(`api/panels/${enc(pid)}/config`, { access, access_known: CAPS.map(([c]) => c) }, S.configs[pid]?.config, () => loadConfig(pid));
+      if (!r.ok) { if (refused(r)) alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
       await loadConfig(pid);
       toast(p.online ? t("Saved and on the panel.") : t("Saved. The panel gets it when it connects."));
     } }, t("Save")))));
@@ -1831,10 +1845,9 @@ function renderProject(view) {
       el("div", { class: "form" }, el("label", {}, t("Project name")), name),
       el("h3", { style: { marginTop: "18px" } }, t("Default settings for all panels")), display,
       el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
-        // Floor names are not on this form: kept as they are.
-        const keep = site.defaults?.floor_names ? { floor_names: site.defaults.floor_names } : {};
-        const r = await put("api/site", { name: name.value.trim(), defaults: { ...keep, ...read() } });
-        if (!r.ok) { alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
+        // The floors' names and icons are not on this form: the hub keeps them.
+        const r = await putSettings("api/site", { name: name.value.trim(), defaults: read() }, site, loadSite);
+        if (!r.ok) { if (refused(r)) alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
         S.site = r.body; toast(t("Saved, and on every online panel.")); render();
       } }, t("Save")))),
     el("div", { class: "box" }, el("h3", {}, t("PINs")),
@@ -2159,8 +2172,8 @@ function renderSources(view) {
     el("p", { class: "muted" }, t("Set once for the project. A widget added on a panel or in the designer reads from here, so it adds no device to the panel. A widget with no source is not offered in +.")),
     el("div", { class: "form" }, rows.flat()),
     el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
-      const r = await put("api/site", { sources: chosen });
-      if (!r.ok) { alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
+      const r = await putSettings("api/site", { sources: chosen }, S.site, loadSite);
+      if (!r.ok) { if (refused(r)) alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
       S.site = r.body; toast(t("Saved, and on every online panel.")); render();
     } }, t("Save")))));
 }
@@ -2174,8 +2187,8 @@ function renderDevices(view) {
   const rows = S.catalog.entities.filter((e) => domainOf(e.entity_id) === devFilter);
   const dirty = { value: false };
   const save = el("button", { class: "solid", onclick: async () => {
-    const r = await put("api/site", { devices: list });
-    if (!r.ok) { alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
+    const r = await putSettings("api/site", { devices: list }, S.site, loadSite);
+    if (!r.ok) { if (refused(r)) alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
     S.site = r.body; dirty.value = false; toast(t("Saved, and on every panel.")); render();
   } }, t("Save"));
   const setField = (id, key, value) => {

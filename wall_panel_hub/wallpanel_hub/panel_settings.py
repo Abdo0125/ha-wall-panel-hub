@@ -8,6 +8,8 @@ from .pins import hash_pin
 from .store import Store
 
 ROLES = ("guest", "user", "installer")
+# Each role above the one before it.
+RANK = {role: i for i, role in enumerate(ROLES)}
 # Every permission there is, in the add-on's order.
 ALL_CAPS = list(dict.fromkeys(c for caps in DEFAULT_ACCESS.values() for c in caps))
 
@@ -46,6 +48,12 @@ def get(store: Store, panel_id: str, areas: list[dict], installed: list[dict]) -
     }
 
 
+def below(role: str) -> set[str]:
+    """The roles whose permissions and PIN [role] changes: those under it; every role for the
+    installer (docs/audit-6-settings.md, item 1)."""
+    return set(ROLES) if role == "installer" else {r for r in ROLES if RANK[r] < RANK[role]}
+
+
 def update(store: Store, panel_id: str, role: str, changes: dict, area_ids: set[str]) -> None:
     """Applies what was changed. No role takes the panel permission away from itself here:
     the way back would be lost on this panel (the add-on can still)."""
@@ -73,10 +81,12 @@ def update(store: Store, panel_id: str, role: str, changes: dict, area_ids: set[
         before = store.effective_config(panel_id)["access"]
         # A role not sent keeps its permissions (apps up to 0.46.3 left out one at its defaults).
         asked = {r: [c for c in dict.fromkeys(access.get(r, before.get(r, []))) if c in ALL_CAPS] for r in ROLES}
-        # A role changes only the permissions it holds itself: the others stay as they were in
-        # every role (no one gives themselves or another the project, or takes it away).
+        # A role changes the roles below it, and in them only the permissions it holds itself:
+        # the rest stays as it was (no one gives themselves or another the project, or takes the
+        # installer's permissions away).
         mine = role_caps(store.effective_config(panel_id), role)
-        clean = {r: [c for c in ALL_CAPS if (c in asked[r] if c in mine else c in before.get(r, []))] for r in ROLES}
+        mine_below = {r: mine if r in below(role) else set() for r in ROLES}
+        clean = {r: [c for c in ALL_CAPS if (c in asked[r] if c in mine_below[r] else c in before.get(r, []))] for r in ROLES}
         if "panel" not in clean[role]:
             raise Refused("you would lose the panel permission on this panel; change it from the add-on")
         doc["access"] = clean
@@ -95,6 +105,8 @@ def set_pin(store: Store, panel_id: str, which: str, new_pin: str | None, role: 
         raise Refused("role must be installer or user")
     if which == "installer" and role != "installer":
         raise Refused("only the installer changes the installer PIN")
+    if which == "user" and role == "guest":
+        raise Refused("only the user or the installer changes the user PIN")
     doc = store.get_panel_config(panel_id)
     if new_pin:
         doc[f"{which}_pin"] = hash_pin(str(new_pin))

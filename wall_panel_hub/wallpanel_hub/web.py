@@ -152,6 +152,28 @@ async def _keep_assets(request: web.Request, handler):
     return response
 
 
+# Set by naming a floor (store.name_floor), never by the page's forms: a form's save keeps them.
+FLOOR_KEYS = ("floor_names", "floor_icons")
+
+
+def _with_floors(sent: dict | None, before: dict | None) -> dict:
+    """[sent] (a page's defaults or overrides) with the floors' names and icons [before] had."""
+    kept = {k: v for k, v in (before or {}).items() if k in FLOOR_KEYS}
+    return {**{k: v for k, v in (sent or {}).items() if k not in FLOOR_KEYS}, **kept}
+
+
+def _changed_meanwhile(doc: dict, body: dict) -> bool:
+    """A page's save carries what it had for the fields it sends ("before"): one changed since,
+    on a panel or in another window, is not overwritten (docs/audit-6-settings.md, item 4). The
+    floors aside: a form never changes them."""
+    before = body.get("before")
+    if not isinstance(before, dict):
+        return False
+    def plain(value):
+        return {k: v for k, v in value.items() if k not in FLOOR_KEYS} if isinstance(value, dict) else value
+    return any(plain(doc.get(k)) != plain(before.get(k)) for k in body if k != "before" and k in before)
+
+
 def _without_pins(doc: dict) -> dict:
     """PIN hashes stay in the hub (and on the panels); the page only learns whether one is set."""
     out = {k: v for k, v in doc.items() if k not in ("installer_pin", "user_pin")}
@@ -447,9 +469,11 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     async def put_site(request: web.Request):
         body = await _body(request)
         site = store.get_site()
+        if _changed_meanwhile(site, body):
+            return web.json_response({"error": "changed meanwhile", "current": _without_pins(site)}, status=409)
         for key in ("name", "defaults", "devices", "sources"):
             if key in body:
-                site[key] = body[key]
+                site[key] = _with_floors(body[key], site.get(key)) if key == "defaults" else body[key]
         try:
             saved = store.save_site(site)
         except ConfigInvalid as e:
@@ -496,8 +520,12 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         pid = _panel(request)
         body = await _body(request)
         doc = store.get_panel_config(pid)
+        if _changed_meanwhile(doc, body):
+            return web.json_response({"error": "changed meanwhile", "current": _without_pins(doc)}, status=409)
         for key in ("overrides", "access", "access_known", "apps"):
-            if key in body:
+            if key == "overrides" and key in body:
+                doc["overrides"] = _with_floors(body["overrides"], doc.get("overrides"))
+            elif key in body:
                 if body[key] is None:
                     doc.pop(key, None)
                 else:
