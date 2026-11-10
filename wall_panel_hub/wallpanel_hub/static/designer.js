@@ -601,9 +601,13 @@ function renderNav() {
       el("span", { class: "dot " + (p.online ? "on" : "off") }, p.online ? "●" : "○"),
       el("span", { class: "grow" }, p.name),
       S.work[p.id]?.unsent ? el("span", { title: t("Unsent changes"), style: { color: "var(--accent)" } }, "✱") : null,
+      p.app?.needs_update ? el("span", { class: "badge", title: t("Update available") }, t("update")) : null,
     ));
   }
-  nav.append(el("div", { style: { margin: "8px 6px 0" } },
+  const outdated = o.panels.filter((p) => p.app?.needs_update && !p.app?.update).length;
+  nav.append(el("div", { style: { margin: "8px 6px 0", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "6px" } },
+    outdated ? el("button", { class: "primary", onclick: async () => { await post("api/app/update_all"); await refresh(); } },
+      icon("mdi:update"), " ", t("Update all ({0})", outdated)) : null,
     el("button", { class: "primary", onclick: installSheet }, icon("mdi:download"), " ", t("Install on a new panel"))));
   if (o.discovered.length) {
     nav.append(el("h2", {}, t("Other panels on the network")));
@@ -862,6 +866,36 @@ function emptyCell(screen, col, row, block) {
     },
   }, block ? "+" : "");
   return node;
+}
+
+// ---------- the panel's app and its update (docs/distribution-plan.md, D4) ----------
+
+function appBox(p) {
+  const app = p.app || {};
+  const carried = S.overview.app || {};
+  const line = (color, text) => el("div", { class: "row", style: { gap: "8px", marginTop: "8px" } }, el("span", { style: { color } }, "●"), el("span", {}, text));
+  let state;
+  const u = app.update;
+  if (u?.state === "failed") {
+    const why = u.detail === "not_allowed" ? t("updates from the hub are not allowed on this panel. Turn them on in its settings, apps page.")
+      : u.detail === "remote" ? t("the panel is connected from outside the local network.")
+      : u.detail === "busy" ? t("the panel was busy (a call or an edit). Try again.")
+      : (u.detail || "");
+    state = line("var(--danger)", t("Not updated: {0}", why));
+  } else if (u?.state === "downloading") state = line("var(--accent)", t("Downloading on the panel…"));
+  else if (u?.state === "confirm") state = line("var(--accent)", t("Waiting for a tap on the panel to install"));
+  else if (u?.state === "waiting") state = line("var(--accent)", t("Waiting for the panel to be free (a call or an edit)"));
+  else if (u) state = line("var(--accent)", p.online ? t("Sent to the panel") : t("Sent when the panel connects"));
+  else if (app.version_name && !app.needs_update) state = line("var(--ok)", t("Up to date ({0})", app.version_name));
+  const version = app.version_name ? t("Version {0} on this panel", app.version_name) : t("Version not known yet: the panel says it when it connects.");
+  return el("div", { class: "box", id: "appbox" }, el("h3", {}, t("Panel app")),
+    el("div", { class: "row", style: { justifyContent: "space-between" } },
+      el("div", {}, version, carried.version_name ? el("div", { class: "muted" }, t("This add-on carries {0}", carried.version_name)) : null),
+      app.needs_update && (!u || u.state === "failed") ? el("button", { class: "primary", onclick: async () => {
+        await post(`api/panels/${enc(p.id)}/update`);
+        await refresh();
+      } }, icon("mdi:update"), " ", t("Update")) : null),
+    state);
 }
 
 // ---------- install on a new panel (docs/distribution-plan.md, D3) ----------
@@ -1743,6 +1777,7 @@ function renderSettings(view, p) {
   const readDisplay = displayFields(display, cfg.config.overrides || {}, inheritedDisplay(), t("From the project"));
 
   view.append(
+    appBox(p),
     el("div", { class: "box" }, el("h3", {}, t("Panel")), general,
       el("h3", { style: { marginTop: "18px" } }, t("Display")), el("p", { class: "muted" }, t("Empty fields take the project's value.")), display,
       el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
@@ -2356,7 +2391,13 @@ async function refresh() {
   if (S.overview.panels.some((p) => !S.editor[p.id])) await loadEditor();
   // Redraw only on a change: a redraw under the pointer can swallow a click.
   const key = JSON.stringify([S.overview, Object.values(S.work).map((w) => w.unsent)]);
-  if (key !== lastNav) { lastNav = key; renderNav(); }
+  if (key !== lastNav) {
+    lastNav = key;
+    renderNav();
+    const box = $("appbox");
+    const p = S.overview.panels.find((x) => x.id === S.view.pid);
+    if (box && p) box.replaceWith(appBox(p));
+  }
   if (S.view.kind === "panel" && !S.overview.panels.some((p) => p.id === S.view.pid)) { S.view = { kind: "home" }; renderView(); }
 }
 

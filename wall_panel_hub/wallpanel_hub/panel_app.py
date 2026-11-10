@@ -3,7 +3,8 @@
 One release is the add-on and the app built with it, so a panel never gets an app newer than
 its hub. The app file (about 21 MB) is not kept in the add-on's repository: it is a GitHub
 release asset, fetched once when the add-on's image is built (fetch_app.py), then served on the
-local network with no internet needed. panel_app.json, next to this file, says which app that is.
+local network with no internet needed. panel_app.json, next to this file, says which app that is,
+and the dex metadata (.dm) that goes with it: installed with the app, Android compiles at install.
 """
 
 import json
@@ -11,14 +12,16 @@ import os
 from pathlib import Path
 
 MANIFEST = Path(__file__).parent / "panel_app.json"
-# Where the image keeps the app (Dockerfile). On a PC (tools/run-hub-dev.ps1): $WALLPANEL_APP.
+# Where the image keeps the app (Dockerfile). On a PC (tools/run-hub-dev.ps1): $WALLPANEL_APP,
+# with its .dm beside it as $WALLPANEL_APP_DM.
 BUNDLED = Path("/app/panel_app/WallPanel.apk")
+BUNDLED_DM = Path("/app/panel_app/WallPanel.dm")
 RELEASES = "https://github.com/Abdo0125/ha-wall-panel-hub/releases/download"
 MIME = "application/vnd.android.package-archive"
 
 
 def expected() -> dict | None:
-    """The app this add-on carries: version_name, version_code, sha256, size."""
+    """The app this add-on carries: version_name, version_code, sha256, size, and dm {sha256, size}."""
     try:
         return json.loads(MANIFEST.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -29,16 +32,33 @@ def asset_name(version_name: str) -> str:
     return f"WallPanel-{version_name}.apk"
 
 
+def dm_asset_name(version_name: str) -> str:
+    return f"WallPanel-{version_name}.dm"
+
+
 def release_url(addon_version: str, version_name: str) -> str:
     """The app's file in the add-on's own release (made by tools/publish_addon.py)."""
     return f"{RELEASES}/v{addon_version}/{asset_name(version_name)}"
 
 
+def dm_release_url(addon_version: str, version_name: str) -> str:
+    return f"{RELEASES}/v{addon_version}/{dm_asset_name(version_name)}"
+
+
+def _here(env: str, bundled: Path) -> Path | None:
+    override = os.environ.get(env)
+    found = Path(override) if override else bundled
+    return found if found.is_file() else None
+
+
 def path() -> Path | None:
     """The app's file here, if the image has it."""
-    override = os.environ.get("WALLPANEL_APP")
-    found = Path(override) if override else BUNDLED
-    return found if found.is_file() else None
+    return _here("WALLPANEL_APP", BUNDLED)
+
+
+def dm_path() -> Path | None:
+    """Its .dm here, if the image has it: the app installs without it, only compiled later."""
+    return _here("WALLPANEL_APP_DM", BUNDLED_DM)
 
 
 def info() -> dict:

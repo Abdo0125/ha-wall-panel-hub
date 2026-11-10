@@ -28,6 +28,7 @@ import aiohttp
 from aiohttp import WSMsgType, web
 
 from .airplay import AirPlayInvalid
+from .app_updates import AppUpdates
 from .intercom import DOMAIN, networks
 from . import relay as sound
 from . import door_open
@@ -172,6 +173,8 @@ class PanelConnection:
         self.ws = ws
         self.layout_subs: set[int] = set()
         self.config_subs: set[int] = set()
+        # wallpanel/app/subscribe: the hub's offer of an app update (app_updates.py).
+        self.app_subs: set[int] = set()
         # Layout format the panel's app reads, until it says.
         self.schema = SCHEMA
         # What each of its devices can do, added to the states going to it.
@@ -540,6 +543,11 @@ class PanelConnection:
         for sub in list(self.entity_subs) if event else []:
             await self.send({"id": sub, "type": "event", "event": event})
 
+    async def push_app(self) -> None:
+        offer = self.gateway.updates.offer(self.panel_id)
+        for sub in list(self.app_subs):
+            await self.send({"id": sub, "type": "event", "event": {"offer": offer}})
+
     async def push_layout(self) -> None:
         layout = self.layout_for_panel()
         for sub in list(self.layout_subs):
@@ -666,6 +674,23 @@ class PanelConnection:
                 if isinstance(w, dict) and isinstance(w.get("provider"), str) and PROVIDER.fullmatch(w["provider"])
             ]
             self.gateway.installed_widgets[self.panel_id] = sorted(widgets, key=lambda w: w["label"].lower())
+            await self.send({"id": mid, "type": "result", "success": True, "result": None})
+        elif kind == "wallpanel/device/report":
+            # What the panel is: its app's version above all (app_updates.py).
+            app = msg.get("app") if isinstance(msg.get("app"), dict) else {}
+            name = app.get("version_name") if isinstance(app.get("version_name"), str) else None
+            code = app.get("version_code") if isinstance(app.get("version_code"), int) else None
+            sdk = msg.get("android_sdk") if isinstance(msg.get("android_sdk"), int) else None
+            self.gateway.updates.reported(self.panel_id, name[:40] if name else None, code, sdk, msg.get("can_install") is True)
+            await self.send({"id": mid, "type": "result", "success": True, "result": None})
+            await self.push_app()
+        elif kind == "wallpanel/app/subscribe":
+            self.app_subs.add(mid)
+            await self.send({"id": mid, "type": "result", "success": True, "result": None})
+            await self.push_app()
+        elif kind == "wallpanel/app/status":
+            detail = msg.get("detail")
+            self.gateway.updates.status(self.panel_id, str(msg.get("state")), str(detail)[:200] if detail else None)
             await self.send({"id": mid, "type": "result", "success": True, "result": None})
         elif kind == "wallpanel/config/subscribe":
             self.config_subs.add(mid)
@@ -809,6 +834,8 @@ class Gateway:
         # Reported by each panel when it connects; kept in memory only.
         self.installed_apps: dict[str, list[dict]] = {}
         self.installed_widgets: dict[str, list[dict]] = {}
+        # The app updates asked for in the add-on (app_updates.py).
+        self.updates = AppUpdates(store)
         # HA's building (catalog.CatalogCache), for panels that add rooms and devices.
         self.catalog = None
         # Rooms' pictures from HA, by area, until HA's picture changes.
@@ -954,6 +981,11 @@ class Gateway:
     async def notify_layout(self, panel_id: str) -> None:
         for conn in list(self.connections.get(panel_id, ())):
             await conn.push_layout()
+
+    async def notify_app(self, panel_id: str) -> None:
+        """An update asked for: offered to the panel at once if it is connected."""
+        for conn in list(self.connections.get(panel_id, ())):
+            await conn.push_app()
 
     async def notify_config(self, panel_id: str | None = None) -> None:
         """New effective configuration for one panel, or for all (site change)."""

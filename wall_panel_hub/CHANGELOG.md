@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.65.0
+
+- Panel app updates from the add-on: each panel says its app's version when it connects (app 0.77.0
+  and later), and the panel list marks those this add-on carries a newer app for. Update one panel
+  from its Settings tab, or all with Update all. The panel downloads the app with its own key,
+  checks it, and Android asks for one tap on the panel; the page follows it (downloading, waiting
+  for the tap, not updated and why, up to date). Never the same or an older version.
+- The app's profile (.dm) goes with it, so Android compiles the app at install and the panel is not
+  slow after an update.
+- Carries the panel app 0.77.1.
+
 ## 0.64.0
 
 - The add-on carries the panel app made with it (0.76.6): its file is fetched once, when the

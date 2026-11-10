@@ -142,6 +142,30 @@ def panel_api(store: Store, gateway: Gateway, install: install_link.InstallLink 
             "Cache-Control": "no-store",
         })
 
+    # An app update the hub offered this panel (app_updates.py): with the panel's key only.
+    async def update_file(request: web.Request, dm: bool):
+        key = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        panel = store.authenticate(key) if key else None
+        if panel is None:
+            raise web.HTTPUnauthorized()
+        offer = gateway.updates.offer(panel.id)
+        path = panel_app.dm_path() if dm else panel_app.path()
+        if offer is None or path is None or (dm and "dm" not in offer):
+            raise web.HTTPNotFound()
+        return web.FileResponse(path, headers={
+            "Content-Type": "application/octet-stream" if dm else panel_app.MIME,
+            "Cache-Control": "no-store",
+        })
+
+    async def update_apk(request: web.Request):
+        return await update_file(request, dm=False)
+
+    async def update_dm(request: web.Request):
+        return await update_file(request, dm=True)
+
+    app.router.add_get("/api/app/file", update_apk)
+    app.router.add_get("/api/app/dm", update_dm)
+
     app.router.add_get(r"/get/{code:[0-9]{1,8}}", install_page)
     app.router.add_get(r"/get/{code:[0-9]{1,8}}/{name}", install_file)
     return app
@@ -319,9 +343,11 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
                     "last_seen": p.last_seen,
                     "online": gateway.online(p.id),
                     "layout_version": (store.get_layout(p.id) or {}).get("version"),
+                    "app": gateway.updates.for_panel(p.id),
                 }
                 for p in sorted(store.panels.values(), key=lambda p: p.name)
             ],
+            "app": panel_app.info(),
             "pending": [
                 {"request_id": r.request_id, "panel_id": r.panel_id, "name": r.name, "model": r.model, "platform": r.platform, "type": r.type,
                  "code": r.code, "age": int(now - r.created)}
@@ -650,6 +676,23 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
             install.close()
         return await app_status(None)
 
+    # App updates (D4): the installer asks, for a panel or for all that need it.
+    async def update_panel(request: web.Request):
+        pid = request.match_info["pid"]
+        if pid not in store.panels:
+            raise web.HTTPNotFound()
+        if gateway.updates.request(pid):
+            await gateway.notify_app(pid)
+        return web.json_response(gateway.updates.for_panel(pid))
+
+    async def update_all(_):
+        asked = [pid for pid in list(store.panels) if gateway.updates.request(pid)]
+        for pid in asked:
+            await gateway.notify_app(pid)
+        return web.json_response({"asked": len(asked)})
+
+    app.router.add_post("/api/panels/{pid}/update", update_panel)
+    app.router.add_post("/api/app/update_all", update_all)
     app.router.add_get("/api/app", app_status)
     app.router.add_post("/api/app/link", open_link)
     app.router.add_delete("/api/app/link", close_link)

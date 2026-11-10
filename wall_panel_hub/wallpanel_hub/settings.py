@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-VERSION = "0.64.0"
+VERSION = "0.65.0"
 
 # The largest message taken from Home Assistant. Its get_states and registries carry every device
 # of the home, far above aiohttp's default of 4 MiB in a large one.

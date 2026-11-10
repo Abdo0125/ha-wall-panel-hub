@@ -53,6 +53,9 @@ def main() -> int:
     url = panel_app.release_url(VERSION, app["version_name"])
     if fetch(url, app, panel_app.BUNDLED):
         print(f"panel app {app['version_name']} fetched")
+        # Its profile, compiled at install on the panel (D4): the app updates without it too.
+        if app.get("dm") and fetch(panel_app.dm_release_url(VERSION, app["version_name"]), app["dm"], panel_app.BUNDLED_DM):
+            print("its .dm fetched")
     # Never a failed build: the add-on works without the file.
     return 0
 

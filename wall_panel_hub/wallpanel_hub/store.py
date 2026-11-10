@@ -153,6 +153,12 @@ class Panel:
     platform: str = "android"
     # Which kind of panel (TYPES): Android 11" and 4" run the same platform.
     type: str = "android_11"
+    # What the panel said last when it connected (wallpanel/device/report): its app, its Android,
+    # and whether it may install the hub's updates (app_updates.py).
+    app_version_name: str | None = None
+    app_version_code: int | None = None
+    android_sdk: int | None = None
+    can_install: bool = False
 
 
 @dataclass
@@ -286,6 +292,17 @@ class Store:
     def seen(self, panel_id: str) -> None:
         if panel_id in self.panels:
             self.panels[panel_id].last_seen = time.time()
+            self._save_panels()
+
+    def save_device(self, panel_id: str, version_name: str | None, version_code: int | None,
+                    sdk: int | None, can_install: bool) -> None:
+        """What a panel said of itself when it connected: written only when it changed."""
+        panel = self.panels.get(panel_id)
+        if panel is None:
+            return
+        now = (version_name, version_code, sdk, can_install)
+        if (panel.app_version_name, panel.app_version_code, panel.android_sdk, panel.can_install) != now:
+            panel.app_version_name, panel.app_version_code, panel.android_sdk, panel.can_install = now
             self._save_panels()
 
     def rename(self, panel_id: str, name: str) -> None:
