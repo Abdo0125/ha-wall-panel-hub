@@ -11,6 +11,7 @@ from .catalog import CatalogCache
 from .catalog import fetch as fetch_catalog
 from .doorbell import Doorbell
 from .gateway import Gateway
+from .install_link import InstallLink
 from .intercom import Intercom
 from .speakers import Speakers, load_secret
 from .store import Store
@@ -90,8 +91,10 @@ async def main() -> None:
         floors_task = asyncio.create_task(watch_floors())
 
         runners = []
-        for app, port in ((panel_api(store, gateway), cfg.panel_port),
-                          (management_ui(store, gateway, cfg.ui_allowed, catalog, browser, intercom), cfg.ui_port)):
+        # The link that installs the app on a new panel: opened in the management page, used on the panel port.
+        install = InstallLink(cfg.panel_port)
+        for app, port in ((panel_api(store, gateway, install), cfg.panel_port),
+                          (management_ui(store, gateway, cfg.ui_allowed, catalog, browser, intercom, install), cfg.ui_port)):
             # No line per request: the add-on page asks every few seconds and a camera's video
             # in many small parts, burying what the hub itself logs.
             runner = web.AppRunner(app, access_log=None)

@@ -28,6 +28,14 @@ def _lan_ip() -> str:
         return s.getsockname()[0]
 
 
+def lan_address() -> str:
+    """This hub's address on the panels' network (the install link, install_link.py)."""
+    try:
+        return _lan_ip()
+    except OSError:
+        return "127.0.0.1"
+
+
 async def announce(port: int) -> AsyncZeroconf | None:
     try:
         ip = _lan_ip()

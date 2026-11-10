@@ -10,6 +10,16 @@ const LANG = (() => {
 })();
 const I18N = {
  "ar": {
+  "Install on a new panel": "تثبيت على شاشة جديدة",
+  "The panel app is not in this add-on: it was not downloaded when the add-on was installed. Update or reinstall the add-on.": "تطبيق الشاشة ليس في هذه الإضافة: لم يُنزَّل حين ثُبّتت. حدّث الإضافة أو أعد تثبيتها.",
+  "The link is closed.": "أُغلق الرابط.",
+  "Open for {0} more · this network only": "مفتوح {0} أخرى · في هذه الشبكة فقط",
+  "Wall Panel app {0} · {1} MB": "تطبيق Wall Panel {0} · {1} ميغابايت",
+  "On the new panel, open the browser and type:": "على الشاشة الجديدة، افتح المتصفح واكتب:",
+  "Tap Download, then Install. Android asks once to allow the browser to install apps.": "اضغط تنزيل، ثم تثبيت. يطلب أندرويد مرة واحدة السماح للمتصفح بتثبيت التطبيقات.",
+  "Open Wall Panel. It finds this hub by itself.": "افتح Wall Panel. يجد هذا الـ Hub وحده.",
+  "Its code shows here under \"Panels asking to pair\": Set up.": "يظهر رمزه هنا تحت \"شاشات تطلب الربط\": اضغط إعداد.",
+  "Close the link": "إغلاق الرابط",
   "These settings changed elsewhere meanwhile, on a panel or in another window. The page shows them now: make your change again.": "تغيّرت هذه الإعدادات من مكان آخر في الأثناء، من شاشة أو من نافذة أخرى. الصفحة تعرضها الآن كما هي، فأعد تعديلك.",
   "Restore {0}? It replaces every panel, layout and setting of this hub. The project here now is kept as before-import.zip.": "استعادة {0}؟ ستحل محل كل الشاشات والتخطيطات والإعدادات في هذا الـ Hub. ويُحفظ المشروع الحالي باسم before-import.zip.",
   "Not restored: ": "لم تتم الاستعادة: ",
@@ -540,6 +550,16 @@ const I18N = {
   "Properties": "الخصائص"
  },
  "fr": {
+  "Install on a new panel": "Installer sur un nouvel écran",
+  "The panel app is not in this add-on: it was not downloaded when the add-on was installed. Update or reinstall the add-on.": "L'application de l'écran n'est pas dans cet add-on : elle n'a pas été téléchargée à son installation. Mettez à jour ou réinstallez l'add-on.",
+  "The link is closed.": "Le lien est fermé.",
+  "Open for {0} more · this network only": "Ouvert encore {0} · sur ce réseau seulement",
+  "Wall Panel app {0} · {1} MB": "Application Wall Panel {0} · {1} Mo",
+  "On the new panel, open the browser and type:": "Sur le nouvel écran, ouvrez le navigateur et tapez :",
+  "Tap Download, then Install. Android asks once to allow the browser to install apps.": "Touchez Télécharger, puis Installer. Android demande une fois d'autoriser le navigateur à installer des applications.",
+  "Open Wall Panel. It finds this hub by itself.": "Ouvrez Wall Panel. Il trouve ce hub tout seul.",
+  "Its code shows here under \"Panels asking to pair\": Set up.": "Son code s'affiche ici sous « Écrans demandant l'association » : Configurer.",
+  "Close the link": "Fermer le lien",
   "These settings changed elsewhere meanwhile, on a panel or in another window. The page shows them now: make your change again.": "Ces réglages ont changé ailleurs entre-temps, sur un écran ou dans une autre fenêtre. La page les montre maintenant : refaites votre modification.",
   "Restore {0}? It replaces every panel, layout and setting of this hub. The project here now is kept as before-import.zip.": "Restaurer {0} ? Cela remplace tous les écrans, mises en page et réglages de ce hub. Le projet actuel est gardé dans before-import.zip.",
   "Not restored: ": "Non restauré : ",
@@ -1070,6 +1090,16 @@ const I18N = {
   "Properties": "Propriétés"
  },
  "es": {
+  "Install on a new panel": "Instalar en una pantalla nueva",
+  "The panel app is not in this add-on: it was not downloaded when the add-on was installed. Update or reinstall the add-on.": "La aplicación de la pantalla no está en este add-on: no se descargó al instalarlo. Actualiza o reinstala el add-on.",
+  "The link is closed.": "El enlace está cerrado.",
+  "Open for {0} more · this network only": "Abierto {0} más · solo en esta red",
+  "Wall Panel app {0} · {1} MB": "Aplicación Wall Panel {0} · {1} MB",
+  "On the new panel, open the browser and type:": "En la pantalla nueva, abre el navegador y escribe:",
+  "Tap Download, then Install. Android asks once to allow the browser to install apps.": "Toca Descargar y luego Instalar. Android pide una vez permitir que el navegador instale aplicaciones.",
+  "Open Wall Panel. It finds this hub by itself.": "Abre Wall Panel. Encuentra este hub por sí solo.",
+  "Its code shows here under \"Panels asking to pair\": Set up.": "Su código aparece aquí en \"Pantallas que piden vincularse\": Configurar.",
+  "Close the link": "Cerrar el enlace",
   "These settings changed elsewhere meanwhile, on a panel or in another window. The page shows them now: make your change again.": "Estos ajustes cambiaron en otro lugar mientras tanto, en una pantalla o en otra ventana. La página los muestra ahora: vuelva a hacer su cambio.",
   "Restore {0}? It replaces every panel, layout and setting of this hub. The project here now is kept as before-import.zip.": "¿Restaurar {0}? Sustituye todas las pantallas, diseños y ajustes de este hub. El proyecto actual se guarda como before-import.zip.",
   "Not restored: ": "No restaurado: ",

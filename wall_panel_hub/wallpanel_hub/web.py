@@ -16,7 +16,7 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 
-from . import backup
+from . import backup, install_link, panel_app
 from .airplay import AirPlayInvalid
 from .cards import REGISTRY, offered_options
 from .intercom import ECHO, IntercomInvalid
@@ -36,7 +36,7 @@ ASSETS = f"ui/{VERSION}/"
 log = logging.getLogger(__name__)
 
 
-def panel_api(store: Store, gateway: Gateway) -> web.Application:
+def panel_api(store: Store, gateway: Gateway, install: install_link.InstallLink | None = None) -> web.Application:
     app = web.Application(client_max_size=256 * 1024)
 
     async def info(_):
@@ -122,6 +122,28 @@ def panel_api(store: Store, gateway: Gateway) -> web.Application:
 
     app.router.add_get(r"/api/airplay/{token:[a-f0-9]{32}}", airplay)
     app.router.add_get("/api/integration", integration)
+
+    # The install link (install_link.py): the page a new panel's browser opens, and the app's file.
+    async def install_page(request: web.Request):
+        code = request.match_info["code"]
+        if install is None or panel_app.path() is None or not install.check(code):
+            raise web.HTTPNotFound()
+        return web.Response(text=install_link.page(code, request.headers.get("Accept-Language")),
+                            content_type="text/html", headers={"Cache-Control": "no-store"})
+
+    async def install_file(request: web.Request):
+        path = panel_app.path()
+        name = install_link.file_name()
+        if install is None or path is None or not install.check(request.match_info["code"]) or request.match_info["name"] != name:
+            raise web.HTTPNotFound()
+        return web.FileResponse(path, headers={
+            "Content-Type": panel_app.MIME,
+            "Content-Disposition": f'attachment; filename="{name}"',
+            "Cache-Control": "no-store",
+        })
+
+    app.router.add_get(r"/get/{code:[0-9]{1,8}}", install_page)
+    app.router.add_get(r"/get/{code:[0-9]{1,8}}/{name}", install_file)
     return app
 
 
@@ -183,7 +205,8 @@ def _without_pins(doc: dict) -> dict:
 
 
 def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
-                  catalog: CatalogCache | None = None, browser=None, intercom=None) -> web.Application:
+                  catalog: CatalogCache | None = None, browser=None, intercom=None,
+                  install: install_link.InstallLink | None = None) -> web.Application:
     networks = [ipaddress.ip_network(n) for n in allowed]
 
     @web.middleware
@@ -610,6 +633,26 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     app.router.add_delete("/api/editor/panels/{pid}/draft", delete_draft)
     app.router.add_post("/api/editor/panels/{pid}/send", send_draft)
     app.router.add_get("/api/overview", overview)
+
+    # The panel app this add-on carries, and the link that installs it on a new panel (D3).
+    async def app_status(_):
+        if install is None:
+            return web.json_response({"app": panel_app.info(), "link": None})
+        return web.json_response(install.status())
+
+    async def open_link(_):
+        if install is None or panel_app.path() is None:
+            raise web.HTTPConflict(text="the panel app is not in this add-on")
+        return web.json_response(install.open())
+
+    async def close_link(_):
+        if install is not None:
+            install.close()
+        return await app_status(None)
+
+    app.router.add_get("/api/app", app_status)
+    app.router.add_post("/api/app/link", open_link)
+    app.router.add_delete("/api/app/link", close_link)
     app.router.add_post("/api/set_aside/clear", clear_set_aside)
     app.router.add_get("/api/backup", export_backup)
     app.router.add_post("/api/backup", import_backup)

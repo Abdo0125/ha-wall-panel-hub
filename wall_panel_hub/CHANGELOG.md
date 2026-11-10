@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.64.0
+
+- The add-on carries the panel app made with it (0.76.6): its file is fetched once, when the
+  add-on is installed or updated, from the add-on's own GitHub release, and checked against the
+  SHA-256 this release records. The add-on then works offline. If the download fails, the add-on
+  still installs, and its page says the app is missing.
+- Install on a new panel: a button under the panel list opens a local link for the new panel's
+  browser (http://<hub>:8765/get/<4 digits>). It shows a page in the browser's language with the
+  app to download. The link lasts 30 minutes, closes with its button, on a restart of the add-on,
+  or after ten wrong codes, and gives nothing but the app's file.
+
 ## 0.63.0
 
 - A panel's settings page is told which roles' permissions the one who opened it changes (app

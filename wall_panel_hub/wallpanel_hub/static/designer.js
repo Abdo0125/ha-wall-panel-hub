@@ -603,6 +603,8 @@ function renderNav() {
       S.work[p.id]?.unsent ? el("span", { title: t("Unsent changes"), style: { color: "var(--accent)" } }, "✱") : null,
     ));
   }
+  nav.append(el("div", { style: { margin: "8px 6px 0" } },
+    el("button", { class: "primary", onclick: installSheet }, icon("mdi:download"), " ", t("Install on a new panel"))));
   if (o.discovered.length) {
     nav.append(el("h2", {}, t("Other panels on the network")));
     for (const d of o.discovered) nav.append(el("div", { class: "navitem", title: d.address }, el("span", { class: "dot off" }, "○"), el("span", { class: "grow muted" }, d.name)));
@@ -860,6 +862,52 @@ function emptyCell(screen, col, row, block) {
     },
   }, block ? "+" : "");
   return node;
+}
+
+// ---------- install on a new panel (docs/distribution-plan.md, D3) ----------
+
+// The temporary local link the new panel's browser opens, for the app this add-on carries.
+async function installSheet() {
+  const r = await api("api/app");
+  const st = r.body || {};
+  if (!st.app?.available) return showInstall(st);
+  if (st.link) return showInstall(st);
+  const opened = await post("api/app/link");
+  showInstall(opened.ok ? opened.body : st);
+}
+
+function showInstall(st) {
+  const app = st.app || {};
+  const end = (...buttons) => el("div", { class: "row", style: { justifyContent: "flex-end", marginTop: "14px" } }, ...buttons);
+  if (!app.available) {
+    return sheet(el("h3", {}, t("Install on a new panel")),
+      el("p", { class: "muted" }, t("The panel app is not in this add-on: it was not downloaded when the add-on was installed. Update or reinstall the add-on.")),
+      end(el("button", { onclick: closeSheet }, t("Close"))));
+  }
+  const link = st.link;
+  const left = el("div", { class: "muted" });
+  let s = link?.seconds_left || 0;
+  const tick = () => {
+    // The sheet closed, or the link's time is up: the clock stops.
+    if (!left.isConnected && s !== link?.seconds_left) return clearInterval(timer);
+    if (s <= 0) { clearInterval(timer); left.textContent = t("The link is closed."); return; }
+    left.textContent = t("Open for {0} more · this network only", `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`);
+    s--;
+  };
+  const timer = setInterval(tick, 1000);
+  tick();
+  sheet(el("h3", {}, t("Install on a new panel")),
+    el("div", { class: "muted" }, t("Wall Panel app {0} · {1} MB", app.version_name, Math.round((app.size || 0) / 1e6))),
+    el("div", { class: "muted", style: { marginTop: "14px" } }, t("On the new panel, open the browser and type:")),
+    el("div", { class: "install-link", dir: "ltr" }, link?.url || ""),
+    left,
+    el("ol", { class: "install-steps" },
+      el("li", {}, t("Tap Download, then Install. Android asks once to allow the browser to install apps.")),
+      el("li", {}, t("Open Wall Panel. It finds this hub by itself.")),
+      el("li", {}, t("Its code shows here under \"Panels asking to pair\": Set up."))),
+    end(
+      el("button", { onclick: async () => { clearInterval(timer); await api("api/app/link", { method: "DELETE" }); closeSheet(); toast(t("The link is closed.")); } }, t("Close the link")),
+      el("button", { onclick: () => { clearInterval(timer); closeSheet(); } }, t("Done"))));
 }
 
 // ---------- sheets ----------

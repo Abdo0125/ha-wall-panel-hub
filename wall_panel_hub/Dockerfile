@@ -12,5 +12,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY wallpanel_hub ./wallpanel_hub
+# The panel app this add-on carries, from its own GitHub release (panel_app.py); verified.
+RUN python3 -m wallpanel_hub.fetch_app
 
 CMD ["python3", "-m", "wallpanel_hub"]
