@@ -43,6 +43,8 @@ def _type(platform: str, kind: str | None) -> str:
 
 PAIRING_TTL_S = 600
 MAX_PENDING = 10
+# A setup from the add-on (provision.py): its token pairs the panel it was sent to, once, this long.
+PROVISION_TTL_S = 600
 # Wrong PINs a panel may send in PIN_LOCK_S before its PINs count for nothing that long, as the panel's
 # own keypad does (docs/audit-6-settings.md, item 2).
 PIN_TRIES = 5
@@ -178,6 +180,19 @@ class PairRequest:
     rejected: bool = False
 
 
+@dataclass
+class Provision:
+    """A panel set up from the add-on over adb (docs/kiosk-plan.md, K4): its pairing comes with
+    this token, given to the panel over adb only, and is approved at once under the name and room
+    the installer gave."""
+    token: str
+    name: str
+    area_id: str | None
+    created: float = field(default_factory=time.time)
+    # The panel it paired, once it did: the token is then spent.
+    panel_id: str | None = None
+
+
 class Store:
     def __init__(self, data_dir: Path):
         self.dir = data_dir
@@ -198,6 +213,8 @@ class Store:
         self.reload()
         # Pairing requests live in memory only: a restart simply asks the panel to retry.
         self.pending: dict[str, PairRequest] = {}
+        # Setups from the add-on, by token: in memory only too.
+        self.provisions: dict[str, Provision] = {}
         # Each PIN's role, checked once (a check takes the hub some 80 ms), by a key made from the
         # PIN with a secret of this run: the digits are not kept. Wrong PINs by panel, and the
         # panels whose PINs count for nothing until a time.
@@ -230,8 +247,31 @@ class Store:
         for rid in [r for r, p in self.pending.items() if now - p.created > PAIRING_TTL_S]:
             del self.pending[rid]
 
+    def new_provision(self, name: str, area_id: str | None) -> str:
+        """A token for one panel set up from the add-on (provision.py)."""
+        now = time.time()
+        for token in [t for t, p in self.provisions.items() if now - p.created > PROVISION_TTL_S]:
+            del self.provisions[token]
+        token = secrets.token_urlsafe(24)
+        self.provisions[token] = Provision(token, name.strip()[:60], area_id or None)
+        return token
+
+    def provisioned(self, token: str) -> str | None:
+        """The panel that paired with [token], if it did."""
+        p = self.provisions.get(token)
+        return p.panel_id if p else None
+
+    def _provision(self, token: str | None) -> Provision | None:
+        if not token:
+            return None
+        for t, p in self.provisions.items():
+            if hmac.compare_digest(t, token):
+                fresh = time.time() - p.created <= PROVISION_TTL_S and p.panel_id is None
+                return p if fresh else None
+        return None
+
     def request_pairing(self, panel_id: str, name: str, model: str, platform: str = "android",
-                        kind: str | None = None) -> PairRequest:
+                        kind: str | None = None, provision_token: str | None = None) -> PairRequest:
         self._expire()
         # One open request per panel: a retry replaces the previous one.
         for rid in [r for r, p in self.pending.items() if p.panel_id == panel_id]:
@@ -249,9 +289,17 @@ class Store:
             type=_type(platform, kind),
         )
         self.pending[req.request_id] = req
+        # Set up from the add-on: the installer approved it by starting the setup.
+        prov = self._provision(provision_token)
+        if prov is not None:
+            if prov.name:
+                req.name = prov.name
+            self.approve(req.request_id, area_id=prov.area_id)
+            prov.panel_id = panel_id
+            log.info("panel paired by its setup from the add-on")
         return req
 
-    def approve(self, request_id: str) -> Panel:
+    def approve(self, request_id: str, area_id: str | None = None) -> Panel:
         self._expire()
         req = self.pending[request_id]
         key = secrets.token_urlsafe(32)
@@ -260,6 +308,8 @@ class Store:
         before = self.panels.get(panel.id)
         if before is not None:
             panel.area_id = before.area_id
+        if area_id:
+            panel.area_id = area_id
         self.panels[panel.id] = panel
         self._save_panels()
         req.key = key

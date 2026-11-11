@@ -39,6 +39,8 @@ DEFAULTS = {
     # Full lock and its maintenance time, where the app is the device owner (docs/kiosk-plan.md, K3).
     "kiosk_lock": True,
     "maintenance_minutes": 10,
+    # adb closed after a device owner panel's setup, maintenance opens it (K4).
+    "adb_open": False,
     "home_title": "",
 }
 
@@ -128,6 +130,7 @@ def effective(site: dict, panel: dict, name: str) -> dict:
         "app_return_seconds": _setting("app_return_seconds", panel, site),
         "kiosk_lock": _setting("kiosk_lock", panel, site),
         "maintenance_minutes": _setting("maintenance_minutes", panel, site),
+        "adb_open": _setting("adb_open", panel, site),
         "home_title": _setting("home_title", panel, site),
         "installer_pin": panel.get("installer_pin") or site.get("installer_pin"),
         "user_pin": panel.get("user_pin") or site.get("user_pin"),

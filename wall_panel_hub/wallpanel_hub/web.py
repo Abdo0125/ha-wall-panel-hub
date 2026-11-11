@@ -16,7 +16,7 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 
-from . import backup, install_link, panel_app
+from . import backup, install_link, panel_app, provision
 from .airplay import AirPlayInvalid
 from .cards import REGISTRY, offered_options
 from .intercom import ECHO, IntercomInvalid
@@ -48,8 +48,10 @@ def panel_api(store: Store, gateway: Gateway, install: install_link.InstallLink 
             panel_id = str(body["panel_id"])[:64]
         except Exception:
             raise web.HTTPBadRequest(text="panel_id required")
+        token = body.get("provision_token")
         req = store.request_pairing(panel_id, str(body.get("name", "")), str(body.get("model", "")),
-                                    str(body.get("platform", "android")), body.get("type"))
+                                    str(body.get("platform", "android")), body.get("type"),
+                                    token if isinstance(token, str) else None)
         return web.json_response({"request_id": req.request_id, "code": req.code})
 
     async def pair_status(request: web.Request):
@@ -230,7 +232,7 @@ def _without_pins(doc: dict) -> dict:
 
 def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
                   catalog: CatalogCache | None = None, browser=None, intercom=None,
-                  install: install_link.InstallLink | None = None) -> web.Application:
+                  install: install_link.InstallLink | None = None, provisioner=None) -> web.Application:
     networks = [ipaddress.ip_network(n) for n in allowed]
 
     @web.middleware
@@ -676,6 +678,34 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
             install.close()
         return await app_status(None)
 
+    # ---- setting up a panel over adb (provision.py, docs/kiosk-plan.md K4) ----
+
+    async def provision_status(_):
+        if provisioner is None:
+            return web.json_response({"available": False, "jobs": []})
+        return web.json_response({"available": provisioner.adb.available,
+                                  "jobs": [j.view() for j in provisioner.jobs.values()]})
+
+    async def provision_start(request: web.Request):
+        if provisioner is None:
+            raise web.HTTPNotFound()
+        try:
+            job = provisioner.start(await _body(request))
+        except provision.Invalid as e:
+            return _invalid(e)
+        return web.json_response(job.view())
+
+    async def provision_job(request: web.Request):
+        job = provisioner.jobs.get(request.match_info["jid"]) if provisioner else None
+        if job is None:
+            raise web.HTTPNotFound()
+        return web.json_response(job.view())
+
+    async def provision_scan(_):
+        if provisioner is None:
+            raise web.HTTPNotFound()
+        return web.json_response({"found": await provisioner.scan()})
+
     # App updates (D4): the installer asks, for a panel or for all that need it.
     async def update_panel(request: web.Request):
         pid = request.match_info["pid"]
@@ -696,6 +726,10 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
     app.router.add_get("/api/app", app_status)
     app.router.add_post("/api/app/link", open_link)
     app.router.add_delete("/api/app/link", close_link)
+    app.router.add_get("/api/provision", provision_status)
+    app.router.add_post("/api/provision", provision_start)
+    app.router.add_post("/api/provision/scan", provision_scan)
+    app.router.add_get("/api/provision/{jid}", provision_job)
     app.router.add_post("/api/set_aside/clear", clear_set_aside)
     app.router.add_get("/api/backup", export_backup)
     app.router.add_post("/api/backup", import_backup)

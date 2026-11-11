@@ -1,10 +1,10 @@
 {
-  "version_name": "0.78.0",
-  "version_code": 217,
-  "sha256": "88248a17fb2ee529e4afd48e6f99d9a4ec06cb0c454a3aee7af2528c07de7b43",
-  "size": 21411462,
+  "version_name": "0.79.0",
+  "version_code": 218,
+  "sha256": "776c138f894e5984feb52398fa84002463fabbc6bf4ba822ebc9777bcd51ec10",
+  "size": 21411506,
   "dm": {
-    "sha256": "d00fe7ed4954623268e59bf6f7d65e8e9799f0cfc04d18656609d28462df63fc",
-    "size": 7134
+    "sha256": "f714456d2d1d0c87cebea1d57c752ee4116891fb8ef31393acac1a38ba7097f5",
+    "size": 7138
   }
 }

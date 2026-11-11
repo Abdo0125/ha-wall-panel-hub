@@ -44,6 +44,8 @@ def get(store: Store, panel_id: str, areas: list[dict], installed: list[dict], r
         "project_kiosk_lock": (site.get("defaults") or {}).get("kiosk_lock", DEFAULTS["kiosk_lock"]),
         "maintenance_minutes": (doc.get("overrides") or {}).get("maintenance_minutes"),
         "project_maintenance_minutes": (site.get("defaults") or {}).get("maintenance_minutes", DEFAULTS["maintenance_minutes"]),
+        "adb_open": (doc.get("overrides") or {}).get("adb_open"),
+        "project_adb_open": (site.get("defaults") or {}).get("adb_open", DEFAULTS["adb_open"]),
         "apps": list(doc.get("apps") or []),
         "installed_apps": installed,
         "access": eff["access"],
@@ -73,7 +75,7 @@ def update(store: Store, panel_id: str, role: str, changes: dict, area_ids: set[
         raise Refused("unknown room")
     doc = store.get_panel_config(panel_id)
     # Own values, or None for the project's (the schema checks them on save).
-    for key, kind in (("app_return_seconds", int), ("kiosk_lock", bool), ("maintenance_minutes", int)):
+    for key, kind in (("app_return_seconds", int), ("kiosk_lock", bool), ("maintenance_minutes", int), ("adb_open", bool)):
         if key not in changes:
             continue
         overrides = dict(doc.get("overrides") or {})

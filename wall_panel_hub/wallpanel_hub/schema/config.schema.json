@@ -94,6 +94,7 @@
         "app_return_seconds",
         "kiosk_lock",
         "maintenance_minutes",
+        "adb_open",
         "installer_pin",
         "user_pin",
         "access",
@@ -148,6 +149,10 @@
         },
         "maintenance_minutes": {
           "$ref": "#/$defs/maintenance_minutes"
+        },
+        "adb_open": {
+          "description": "Whether adb stays open on a device owner panel after its setup (docs/kiosk-plan.md, K4); closed, maintenance opens it for its time.",
+          "type": "boolean"
         },
         "installer_pin": {
           "$ref": "#/$defs/pin_or_none"
@@ -220,6 +225,10 @@
         },
         "maintenance_minutes": {
           "$ref": "#/$defs/maintenance_minutes"
+        },
+        "adb_open": {
+          "description": "Whether adb stays open on a device owner panel after its setup (docs/kiosk-plan.md, K4); closed, maintenance opens it for its time.",
+          "type": "boolean"
         },
         "floor_names": {
           "description": "Names given to HA's floors, by floor id; HA's name where none is given.",

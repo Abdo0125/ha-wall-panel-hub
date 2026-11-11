@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.67.0
+
+- Set up a panel over adb from the add-on: type its address (or search the network), and the hub
+  installs the app it carries, grants what the panel needs, makes the app the Android device owner
+  where Android allows it, compiles it, starts it and pairs it, with no touch on the panel. Each
+  step shows as it goes, with the reason when one cannot be done (accounts left on the panel,
+  another device owner, an app signed with another key). Wireless debugging on Android 11 and
+  later pairs with the code the panel shows.
+- A panel that is not the device owner offers the same, in its Panel app box: its pairing is kept.
+- A new display setting, for the project and for each panel: adb after the setup of a device owner
+  panel, closed by default; the installer's maintenance opens it for its time.
+- Carries the panel app 0.79.0.
+
 ## 0.66.0
 
 - Full lock for panels whose app is the Android device owner (app 0.78.0): only the panel and its

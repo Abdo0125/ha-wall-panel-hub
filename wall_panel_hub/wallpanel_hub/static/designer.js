@@ -608,7 +608,8 @@ function renderNav() {
   nav.append(el("div", { style: { margin: "8px 6px 0", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "6px" } },
     outdated ? el("button", { class: "primary", onclick: async () => { await post("api/app/update_all"); await refresh(); } },
       icon("mdi:update"), " ", t("Update all ({0})", outdated)) : null,
-    el("button", { class: "primary", onclick: installSheet }, icon("mdi:download"), " ", t("Install on a new panel"))));
+    el("button", { class: "primary", onclick: installSheet }, icon("mdi:download"), " ", t("Install on a new panel")),
+    el("button", { onclick: () => provisionSheet() }, icon("mdi:usb-port"), " ", t("Set up a panel over adb"))));
   if (o.discovered.length) {
     nav.append(el("h2", {}, t("Other panels on the network")));
     for (const d of o.discovered) nav.append(el("div", { class: "navitem", title: d.address }, el("span", { class: "dot off" }, "○"), el("span", { class: "grow muted" }, d.name)));
@@ -891,7 +892,9 @@ function appBox(p) {
   // Whether the full lock can apply here (docs/kiosk-plan.md, K3): known once the panel reported.
   const owner = !app.version_name ? null : app.device_owner
     ? line("var(--ok)", t("Android device owner: the full lock applies here"))
-    : line("var(--muted)", t("Not the Android device owner: the basic lock only"));
+    : el("div", { class: "row", style: { justifyContent: "space-between" } },
+      line("var(--muted)", t("Not the Android device owner: the basic lock only")),
+      el("button", { onclick: () => provisionSheet({ name: p.name }) }, icon("mdi:usb-port"), " ", t("Make it the device owner over adb")));
   return el("div", { class: "box", id: "appbox" }, el("h3", {}, t("Panel app")),
     el("div", { class: "row", style: { justifyContent: "space-between" } },
       el("div", {}, version, carried.version_name ? el("div", { class: "muted" }, t("This add-on carries {0}", carried.version_name)) : null),
@@ -946,6 +949,130 @@ function showInstall(st) {
     end(
       el("button", { onclick: async () => { clearInterval(timer); await api("api/app/link", { method: "DELETE" }); closeSheet(); toast(t("The link is closed.")); } }, t("Close the link")),
       el("button", { onclick: () => { clearInterval(timer); closeSheet(); } }, t("Done"))));
+}
+
+// ---------- set up a panel over adb (docs/kiosk-plan.md, K4) ----------
+
+const PROVISION_STEPS = [
+  ["connect", () => t("Connect to the panel")],
+  ["read", () => t("Read the panel")],
+  ["install", () => t("Install the app")],
+  ["grant", () => t("Permissions, and the app as Android's home")],
+  ["owner", () => t("Android device owner")],
+  ["compile", () => t("Compile for this device")],
+  ["pair", () => t("Start and pair")],
+];
+
+// What a step's code means, for the installer (provision.py says the codes).
+function provisionWhy(s) {
+  const d = s.detail || "";
+  return ({
+    allow_on_panel: t("Tap Allow on the panel, to allow debugging from this hub."),
+    unreachable: t("Not reached. Is adb on, on port 5555 or with wireless debugging? {0}", d),
+    not_allowed: t("The panel did not allow this hub."),
+    pair_refused: t("The pairing code was refused: {0}", d),
+    no_adb: t("adb is not in this add-on."),
+    timeout: t("The panel did not answer in time."),
+    up_to_date: t("Installed already, this version or newer."),
+    no_app: t("The panel app is not in this add-on: update or reinstall the add-on."),
+    signed_differently: t("Another build of the app is installed, signed with another key. Removing it deletes its settings on the panel."),
+    not_removed: t("The old app was not removed: {0}", d),
+    install_failed: t("Not installed: {0}", d),
+    partly: t("Done in part: {0}", d),
+    not_asked: t("Not asked: the basic lock applies."),
+    already: t("The device owner already."),
+    accounts: t("Accounts on the panel ({0}): remove them in Android's settings, then set up again. The basic lock applies.", d),
+    other_owner: t("Another app is the device owner. The basic lock applies."),
+    users: t("The panel has more than one user. The basic lock applies."),
+    no_feature: t("This panel's Android has no device owner. The basic lock applies."),
+    refused: t("Android refused: {0}. The basic lock applies.", d),
+    kept: t("Paired with a hub already: kept as it is."),
+    no_answer: t("The app did not answer. Is it this add-on's version?"),
+    not_paired: t("The panel did not pair in time."),
+  })[s.code] ?? d;
+}
+
+async function provisionSheet(prefill = {}) {
+  const st = (await api("api/provision")).body || {};
+  const end = (...buttons) => el("div", { class: "row", style: { justifyContent: "flex-end", marginTop: "14px", gap: "8px" } }, ...buttons);
+  if (!st.available) {
+    return sheet(el("h3", {}, t("Set up a panel over adb")), el("p", { class: "muted" }, t("adb is not in this add-on.")),
+      end(el("button", { onclick: closeSheet }, t("Close"))));
+  }
+  const addr = el("input", { dir: "ltr", placeholder: "192.168.1.30" });
+  const pairAddr = el("input", { dir: "ltr", placeholder: "192.168.1.30:37123" });
+  const pairCode = el("input", { dir: "ltr", inputmode: "numeric", maxlength: 6, placeholder: "123456" });
+  const owner = el("input", { type: "checkbox", checked: true });
+  const found = el("div", { class: "row", style: { flexWrap: "wrap", gap: "6px" } });
+  const error = el("div", { style: { color: "var(--danger)", marginTop: "8px" } });
+  const search = el("button", { onclick: async () => {
+    search.disabled = true;
+    found.replaceChildren(el("span", { class: "muted" }, t("Searching…")));
+    const r = await post("api/provision/scan");
+    search.disabled = false;
+    const list = r.body?.found || [];
+    found.replaceChildren(...(list.length ? list.map((a) => el("button", { dir: "ltr", onclick: () => { addr.value = a; } }, a))
+      : [el("span", { class: "muted" }, t("No panel with adb open on port 5555 on this network."))]));
+  } }, icon("mdi:magnify"), " ", t("Search"));
+  const go = async (replace = false) => {
+    const body = { address: addr.value, owner: owner.checked, replace, name: prefill.name || "" };
+    if (pairCode.value.trim()) Object.assign(body, { pair_address: pairAddr.value, pair_code: pairCode.value.trim() });
+    const r = await post("api/provision", body);
+    if (!r.ok) { error.textContent = r.body?.error || String(r.status); return; }
+    provisionProgress(r.body, () => go(true));
+  };
+  sheet(el("h3", {}, t("Set up a panel over adb")),
+    el("p", { class: "muted" }, t("The hub installs the app, makes it the device owner where Android allows it, and pairs it, with no touch on the panel.")),
+    el("ol", { class: "install-steps" },
+      el("li", {}, t("For the full lock: remove every account from the panel (Android's settings, Accounts).")),
+      el("li", {}, t("Turn adb on, on the panel: network adb on port 5555, or Wireless debugging on Android 11 and later."))),
+    field(t("Panel address"), el("div", { class: "row", style: { gap: "6px" } }, addr, search)),
+    found,
+    el("details", { style: { marginTop: "10px" } }, el("summary", {}, t("Wireless debugging (Android 11 and later): pair with a code")),
+      el("p", { class: "muted" }, t("On the panel: Wireless debugging, then Pair device with pairing code. Type the address and port shown with the code here, and the address on the Wireless debugging page above.")),
+      field(t("Pairing address and port"), pairAddr), field(t("Pairing code"), pairCode)),
+    el("label", { class: "row", style: { gap: "8px", marginTop: "10px" } }, owner, t("Make the app the Android device owner (full lock)")),
+    error,
+    end(el("button", { onclick: closeSheet }, t("Cancel")), el("button", { class: "primary", onclick: () => go() }, t("Set up"))));
+}
+
+// The setup's steps as they go; [again]: the same setup, removing an app signed with another key.
+function provisionProgress(job, again) {
+  const list = el("div", {});
+  const foot = el("div", { class: "row", style: { justifyContent: "flex-end", marginTop: "14px", gap: "8px" } });
+  const MARK = { done: ["mdi:check-circle", "var(--ok)"], skipped: ["mdi:minus-circle-outline", "var(--muted)"],
+    failed: ["mdi:alert-circle", "var(--danger)"], running: ["mdi:progress-clock", "var(--accent)"], pending: ["mdi:circle-outline", "var(--muted)"] };
+  const draw = (j) => {
+    list.replaceChildren(...PROVISION_STEPS.map(([key, label]) => {
+      const s = j.steps[key] || { state: "pending" };
+      const why = s.code || s.detail ? provisionWhy(s) : "";
+      return el("div", { class: "row", style: { gap: "8px", alignItems: "flex-start", marginTop: "8px" } },
+        icon(MARK[s.state][0], { style: { color: MARK[s.state][1] } }),
+        el("div", {}, label(), why ? el("div", { class: "muted" }, why) : null));
+    }));
+    foot.replaceChildren();
+    if (j.state === "running") return foot.append(el("button", { onclick: closeSheet }, t("Hide (it goes on)")));
+    if (j.steps.install?.code === "signed_differently") {
+      foot.append(el("button", { class: "danger", onclick: () => {
+        if (confirm(t("Remove the installed app and its settings from the panel, then install this add-on's?"))) again();
+      } }, t("Remove and install")));
+    }
+    if (j.panel_id) {
+      foot.append(el("button", { class: "primary", onclick: async () => {
+        closeSheet(); await refresh(); wizard({ panel_id: j.panel_id, name: j.name }, 2);
+      } }, t("Next: name and rooms")));
+    }
+    foot.append(el("button", { onclick: () => { closeSheet(); refresh(); } }, t("Close")));
+  };
+  draw(job);
+  sheet(el("h3", {}, t("Setting up {0}", job.address)), list, foot);
+  const timer = setInterval(async () => {
+    if (!list.isConnected) return clearInterval(timer);
+    const r = await api(`api/provision/${enc(job.id)}`);
+    if (!r.ok) return clearInterval(timer);
+    draw(r.body);
+    if (r.body.state !== "running") clearInterval(timer);
+  }, 1000);
 }
 
 // ---------- sheets ----------
@@ -1670,8 +1797,9 @@ const CAPS = [["control", t("Control")], ["apps", t("Apps")], ["edit_cards", t("
 // Pages of the panel's settings screen: the guest never opens it.
 const PAGE_CAPS = new Set(["connection", "display", "brightness", "system"]);
 const BUILT_IN = { lang: "en", theme: "light", screensaver: { idle_seconds: 60, dim_brightness: 10 }, app_return_seconds: 300,
-  kiosk_lock: true, maintenance_minutes: 10, home_title: "" };
+  kiosk_lock: true, maintenance_minutes: 10, adb_open: false, home_title: "" };
 const LOCKS = [["on", t("Locked")], ["off", t("Not locked")]];
+const ADBS = [["closed", t("Closed")], ["open", t("Open")]];
 
 // A choice, as on the panel: a few in a joined bar; more folded to the chosen one, opening
 // to a list with a search when long. Read and set as a <select> is: .value and "change".
@@ -1725,6 +1853,9 @@ function displayFields(form, values, inherited, inheritLabel) {
     lock: selectEl([["", `${inheritLabel} (${name(LOCKS, inherited.kiosk_lock ? "on" : "off")})`], ...LOCKS],
       values.kiosk_lock === undefined ? "" : values.kiosk_lock ? "on" : "off"),
     maint: el("input", { type: "number", min: 1, max: 120, value: values.maintenance_minutes ?? "", placeholder: inherited.maintenance_minutes }),
+    // adb after a device owner panel's setup (docs/kiosk-plan.md, K4): maintenance opens it.
+    adb: selectEl([["", `${inheritLabel} (${name(ADBS, inherited.adb_open ? "open" : "closed")})`], ...ADBS],
+      values.adb_open === undefined ? "" : values.adb_open ? "open" : "closed"),
   };
   form.append(
     el("label", {}, t("Home page title")), f.home,
@@ -1735,6 +1866,7 @@ function displayFields(form, values, inherited, inheritLabel) {
     el("label", {}, t("Back from another app after (seconds)")), f.ret,
     el("label", {}, t("Full lock (device owner panels)")), f.lock,
     el("label", {}, t("Maintenance lifts the lock for (minutes)")), f.maint,
+    el("label", {}, t("adb on device owner panels")), f.adb,
   );
   return () => {
     const out = {};
@@ -1747,6 +1879,7 @@ function displayFields(form, values, inherited, inheritLabel) {
     if (f.ret.value !== "") out.app_return_seconds = Number(f.ret.value);
     if (f.lock.value) out.kiosk_lock = f.lock.value === "on";
     if (f.maint.value !== "") out.maintenance_minutes = Number(f.maint.value);
+    if (f.adb.value) out.adb_open = f.adb.value === "open";
     if (f.home.value.trim()) out.home_title = f.home.value.trim();
     return out;
   };
@@ -1774,6 +1907,7 @@ function inheritedDisplay() {
     app_return_seconds: d.app_return_seconds ?? BUILT_IN.app_return_seconds,
     kiosk_lock: d.kiosk_lock ?? BUILT_IN.kiosk_lock,
     maintenance_minutes: d.maintenance_minutes ?? BUILT_IN.maintenance_minutes,
+    adb_open: d.adb_open ?? BUILT_IN.adb_open,
     home_title: d.home_title ?? BUILT_IN.home_title,
   };
 }
@@ -2329,8 +2463,9 @@ function renderDevices(view) {
 
 // ---------- new panel setup: approve, rooms, send ----------
 
-function wizard(req) {
-  const st = { step: 1, pid: req.panel_id, name: req.name || t("Panel"), area: "", rooms: new Set() };
+// [start] 2: a panel paired already (set up over adb), from its name and rooms.
+function wizard(req, start = 1) {
+  const st = { step: start, pid: req.panel_id, name: req.name || t("Panel"), area: "", rooms: new Set() };
   const bar = () => el("div", { class: "steps" }, [1, 2, 3].map((n) => el("span", { class: n <= st.step ? "done" : "" })));
   function show() {
     if (st.step === 1) {
