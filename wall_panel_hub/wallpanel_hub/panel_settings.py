@@ -3,7 +3,7 @@ phase 4a): its name and place, the return time from other apps, the allowed apps
 permissions of each role, its own PINs, and unpairing. The add-on edits the same things."""
 
 from .access import role_caps
-from .config import DEFAULT_ACCESS, ConfigInvalid
+from .config import DEFAULT_ACCESS, DEFAULTS, ConfigInvalid
 from .pins import hash_pin
 from .store import Store
 
@@ -39,6 +39,11 @@ def get(store: Store, panel_id: str, areas: list[dict], installed: list[dict], r
         "areas": [{"id": a["id"], "name": a["name"]} for a in areas],
         "app_return_seconds": (doc.get("overrides") or {}).get("app_return_seconds"),
         "project_app_return_seconds": (site.get("defaults") or {}).get("app_return_seconds", 300),
+        # The full lock, on a panel whose app is the device owner (docs/kiosk-plan.md, K3).
+        "kiosk_lock": (doc.get("overrides") or {}).get("kiosk_lock"),
+        "project_kiosk_lock": (site.get("defaults") or {}).get("kiosk_lock", DEFAULTS["kiosk_lock"]),
+        "maintenance_minutes": (doc.get("overrides") or {}).get("maintenance_minutes"),
+        "project_maintenance_minutes": (site.get("defaults") or {}).get("maintenance_minutes", DEFAULTS["maintenance_minutes"]),
         "apps": list(doc.get("apps") or []),
         "installed_apps": installed,
         "access": eff["access"],
@@ -67,13 +72,20 @@ def update(store: Store, panel_id: str, role: str, changes: dict, area_ids: set[
     if area is not None and area not in area_ids:
         raise Refused("unknown room")
     doc = store.get_panel_config(panel_id)
-    if "app_return_seconds" in changes:
+    # Own values, or None for the project's (the schema checks them on save).
+    for key, kind in (("app_return_seconds", int), ("kiosk_lock", bool), ("maintenance_minutes", int)):
+        if key not in changes:
+            continue
         overrides = dict(doc.get("overrides") or {})
-        value = changes["app_return_seconds"]
+        value = changes[key]
         if value is None:
-            overrides.pop("app_return_seconds", None)
+            overrides.pop(key, None)
+        elif kind is bool:
+            if not isinstance(value, bool):
+                raise Refused(f"{key} is true or false")
+            overrides[key] = value
         else:
-            overrides["app_return_seconds"] = int(value)
+            overrides[key] = int(value)
         doc["overrides"] = overrides
     if "apps" in changes:
         doc["apps"] = list(changes["apps"] or [])

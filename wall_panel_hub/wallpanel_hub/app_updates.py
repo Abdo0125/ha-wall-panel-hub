@@ -49,8 +49,8 @@ class AppUpdates:
         return offer
 
     def reported(self, panel_id: str, version_name: str | None, version_code: int | None,
-                 sdk: int | None, can_install: bool) -> None:
-        self.store.save_device(panel_id, version_name, version_code, sdk, can_install)
+                 sdk: int | None, can_install: bool, device_owner: bool = False) -> None:
+        self.store.save_device(panel_id, version_name, version_code, sdk, can_install, device_owner)
         # Updated (or the add-on carries nothing newer any more): nothing left to do.
         if panel_id in self.state and not self.needs(panel_id):
             self.state.pop(panel_id)
@@ -66,6 +66,7 @@ class AppUpdates:
             "version_name": getattr(panel, "app_version_name", None),
             "version_code": getattr(panel, "app_version_code", None),
             "can_install": bool(getattr(panel, "can_install", False)),
+            "device_owner": bool(getattr(panel, "device_owner", False)),
             "needs_update": self.needs(panel_id),
             "update": self.state.get(panel_id),
         }

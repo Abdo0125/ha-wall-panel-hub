@@ -36,6 +36,9 @@ DEFAULTS = {
     "theme": "light",
     "screensaver": {"idle_seconds": 60, "dim_brightness": 10},
     "app_return_seconds": 300,
+    # Full lock and its maintenance time, where the app is the device owner (docs/kiosk-plan.md, K3).
+    "kiosk_lock": True,
+    "maintenance_minutes": 10,
     "home_title": "",
 }
 
@@ -123,6 +126,8 @@ def effective(site: dict, panel: dict, name: str) -> dict:
         "theme": _setting("theme", panel, site),
         "screensaver": screensaver,
         "app_return_seconds": _setting("app_return_seconds", panel, site),
+        "kiosk_lock": _setting("kiosk_lock", panel, site),
+        "maintenance_minutes": _setting("maintenance_minutes", panel, site),
         "home_title": _setting("home_title", panel, site),
         "installer_pin": panel.get("installer_pin") or site.get("installer_pin"),
         "user_pin": panel.get("user_pin") or site.get("user_pin"),

@@ -888,6 +888,10 @@ function appBox(p) {
   else if (u) state = line("var(--accent)", p.online ? t("Sent to the panel") : t("Sent when the panel connects"));
   else if (app.version_name && !app.needs_update) state = line("var(--ok)", t("Up to date ({0})", app.version_name));
   const version = app.version_name ? t("Version {0} on this panel", app.version_name) : t("Version not known yet: the panel says it when it connects.");
+  // Whether the full lock can apply here (docs/kiosk-plan.md, K3): known once the panel reported.
+  const owner = !app.version_name ? null : app.device_owner
+    ? line("var(--ok)", t("Android device owner: the full lock applies here"))
+    : line("var(--muted)", t("Not the Android device owner: the basic lock only"));
   return el("div", { class: "box", id: "appbox" }, el("h3", {}, t("Panel app")),
     el("div", { class: "row", style: { justifyContent: "space-between" } },
       el("div", {}, version, carried.version_name ? el("div", { class: "muted" }, t("This add-on carries {0}", carried.version_name)) : null),
@@ -895,7 +899,7 @@ function appBox(p) {
         await post(`api/panels/${enc(p.id)}/update`);
         await refresh();
       } }, icon("mdi:update"), " ", t("Update")) : null),
-    state);
+    state, owner);
 }
 
 // ---------- install on a new panel (docs/distribution-plan.md, D3) ----------
@@ -1665,7 +1669,9 @@ const CAPS = [["control", t("Control")], ["apps", t("Apps")], ["edit_cards", t("
   ["rooms", t("Rooms")], ["devices", t("Devices")], ["panel", t("Panel settings")], ["project", t("Project")]];
 // Pages of the panel's settings screen: the guest never opens it.
 const PAGE_CAPS = new Set(["connection", "display", "brightness", "system"]);
-const BUILT_IN = { lang: "en", theme: "light", screensaver: { idle_seconds: 60, dim_brightness: 10 }, app_return_seconds: 300, home_title: "" };
+const BUILT_IN = { lang: "en", theme: "light", screensaver: { idle_seconds: 60, dim_brightness: 10 }, app_return_seconds: 300,
+  kiosk_lock: true, maintenance_minutes: 10, home_title: "" };
+const LOCKS = [["on", t("Locked")], ["off", t("Not locked")]];
 
 // A choice, as on the panel: a few in a joined bar; more folded to the chosen one, opening
 // to a list with a search when long. Read and set as a <select> is: .value and "change".
@@ -1715,6 +1721,10 @@ function displayFields(form, values, inherited, inheritLabel) {
     dim: el("input", { type: "number", min: 0, max: 100, value: ss.dim_brightness ?? "", placeholder: inherited.screensaver.dim_brightness }),
     ret: el("input", { type: "number", min: 30, max: 3600, value: values.app_return_seconds ?? "", placeholder: inherited.app_return_seconds }),
     home: el("input", { maxlength: 40, value: values.home_title ?? "", placeholder: inherited.home_title || t("My dashboard") }),
+    // The full lock, where the panel's app is the Android device owner (docs/kiosk-plan.md, K3).
+    lock: selectEl([["", `${inheritLabel} (${name(LOCKS, inherited.kiosk_lock ? "on" : "off")})`], ...LOCKS],
+      values.kiosk_lock === undefined ? "" : values.kiosk_lock ? "on" : "off"),
+    maint: el("input", { type: "number", min: 1, max: 120, value: values.maintenance_minutes ?? "", placeholder: inherited.maintenance_minutes }),
   };
   form.append(
     el("label", {}, t("Home page title")), f.home,
@@ -1723,6 +1733,8 @@ function displayFields(form, values, inherited, inheritLabel) {
     el("label", {}, t("Screensaver after (seconds)")), f.idle,
     el("label", {}, t("Dimmed brightness (%)")), f.dim,
     el("label", {}, t("Back from another app after (seconds)")), f.ret,
+    el("label", {}, t("Full lock (device owner panels)")), f.lock,
+    el("label", {}, t("Maintenance lifts the lock for (minutes)")), f.maint,
   );
   return () => {
     const out = {};
@@ -1733,6 +1745,8 @@ function displayFields(form, values, inherited, inheritLabel) {
     if (f.dim.value !== "") screensaver.dim_brightness = Number(f.dim.value);
     if (Object.keys(screensaver).length) out.screensaver = screensaver;
     if (f.ret.value !== "") out.app_return_seconds = Number(f.ret.value);
+    if (f.lock.value) out.kiosk_lock = f.lock.value === "on";
+    if (f.maint.value !== "") out.maintenance_minutes = Number(f.maint.value);
     if (f.home.value.trim()) out.home_title = f.home.value.trim();
     return out;
   };
@@ -1758,6 +1772,8 @@ function inheritedDisplay() {
     lang: d.lang || BUILT_IN.lang, theme: d.theme || BUILT_IN.theme,
     screensaver: { ...BUILT_IN.screensaver, ...(d.screensaver || {}) },
     app_return_seconds: d.app_return_seconds ?? BUILT_IN.app_return_seconds,
+    kiosk_lock: d.kiosk_lock ?? BUILT_IN.kiosk_lock,
+    maintenance_minutes: d.maintenance_minutes ?? BUILT_IN.maintenance_minutes,
     home_title: d.home_title ?? BUILT_IN.home_title,
   };
 }

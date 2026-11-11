@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.66.0
+
+- Full lock for panels whose app is the Android device owner (app 0.78.0): only the panel and its
+  allowed apps run, with no Home, recent apps, notifications or power menu, the status bar and the
+  lock screen are off, and the intercom's microphone is granted. Two new display settings, for the
+  project and for each panel: Full lock (on by default) and how long the installer's maintenance
+  lifts it (10 minutes). They do nothing on a panel that is not the device owner.
+- The panel's Panel app box says whether the panel is the device owner.
+- On such a panel, app updates from the add-on install with no tap.
+- Carries the panel app 0.78.0.
+
 ## 0.65.0
 
 - Panel app updates from the add-on: each panel says its app's version when it connects (app 0.77.0

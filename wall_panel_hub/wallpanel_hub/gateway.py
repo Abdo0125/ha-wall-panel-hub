@@ -681,7 +681,8 @@ class PanelConnection:
             name = app.get("version_name") if isinstance(app.get("version_name"), str) else None
             code = app.get("version_code") if isinstance(app.get("version_code"), int) else None
             sdk = msg.get("android_sdk") if isinstance(msg.get("android_sdk"), int) else None
-            self.gateway.updates.reported(self.panel_id, name[:40] if name else None, code, sdk, msg.get("can_install") is True)
+            self.gateway.updates.reported(self.panel_id, name[:40] if name else None, code, sdk, msg.get("can_install") is True,
+                                          msg.get("device_owner") is True)
             await self.send({"id": mid, "type": "result", "success": True, "result": None})
             await self.push_app()
         elif kind == "wallpanel/app/subscribe":

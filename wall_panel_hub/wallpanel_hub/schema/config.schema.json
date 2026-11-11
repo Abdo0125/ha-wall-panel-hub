@@ -92,6 +92,8 @@
         "theme",
         "screensaver",
         "app_return_seconds",
+        "kiosk_lock",
+        "maintenance_minutes",
         "installer_pin",
         "user_pin",
         "access",
@@ -139,6 +141,13 @@
         },
         "app_return_seconds": {
           "$ref": "#/$defs/return_seconds"
+        },
+        "kiosk_lock": {
+          "description": "Full lock where the app is the device owner (docs/kiosk-plan.md, K3); no effect elsewhere.",
+          "type": "boolean"
+        },
+        "maintenance_minutes": {
+          "$ref": "#/$defs/maintenance_minutes"
         },
         "installer_pin": {
           "$ref": "#/$defs/pin_or_none"
@@ -205,6 +214,13 @@
         "app_return_seconds": {
           "$ref": "#/$defs/return_seconds"
         },
+        "kiosk_lock": {
+          "description": "Full lock where the app is the device owner (docs/kiosk-plan.md, K3); no effect elsewhere.",
+          "type": "boolean"
+        },
+        "maintenance_minutes": {
+          "$ref": "#/$defs/maintenance_minutes"
+        },
         "floor_names": {
           "description": "Names given to HA's floors, by floor id; HA's name where none is given.",
           "type": "object",
@@ -269,6 +285,12 @@
       "type": "integer",
       "minimum": 30,
       "maximum": 3600
+    },
+    "maintenance_minutes": {
+      "description": "How long the installer's maintenance lifts the full lock.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 120
     },
     "pin_hash": {
       "description": "PBKDF2-SHA256 of the PIN. The PIN itself is never stored or sent.",
