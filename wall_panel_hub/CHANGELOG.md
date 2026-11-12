@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.70.0
+
+Security review, first batch (docs/audit-9-security.md).
+
+- Through Home Assistant's address, the companion integration (0.7.0) forwards a pairing status
+  only for a pairing request's id: an id holding an encoded "/" could reach any page of the panels'
+  port from the internet.
+- The integration takes a few pairing requests a minute and a bounded number of panel connections
+  from each address. A pairing request through Home Assistant's address shows as such in the
+  add-on, and never pushes a request from the local network out of the list.
+- A pairing request that would take the place of a paired panel says so before it is approved.
+- The page warns while any paired panel has no installer PIN, its own or the project's: anyone at it
+  has every permission and can release the full lock. A panel's own settings say the same (app
+  0.82.0). Under the PIN fields, a hint: 6 digits or more, not another project's PIN.
+- A panel's own display settings (theme, language, screensaver, title) are now checked by the hub
+  with the PIN entered, as every other change. Panels send that PIN from app 0.82.0 on; until a
+  panel updates, a display change made on it is kept only where a guest may make it.
+- Carries the panel app 0.82.0.
+
 ## 0.69.0
 
 - The panel app is signed with its own release key from app 0.81.0 on, for good. Panels with an

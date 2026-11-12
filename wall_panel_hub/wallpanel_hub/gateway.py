@@ -672,6 +672,11 @@ class PanelConnection:
             await self.send({"id": mid, "type": "result", "success": True, "result": {"replaced": replaced}})
             await self.gateway.notify_config()
         elif kind == "wallpanel/config/display":
+            # This panel's display: the display permission, checked here with the PIN the panel sent, as
+            # every change (docs/audit-9-security.md, item 6).
+            if "display" not in role_caps(store.effective_config(self.panel_id), store.role_for(self.panel_id, msg.get("pin"))):
+                await self.send(_error(mid, "forbidden", "changing the display is not allowed on this panel"))
+                return
             try:
                 store.save_display_from_panel(self.panel_id, msg.get("display") or {}, msg.get("before"))
             except ConfigInvalid as e:

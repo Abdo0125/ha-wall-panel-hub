@@ -27,13 +27,15 @@ from .config import ConfigInvalid
 from .pins import PinInvalid, hash_pin
 from .gateway import Gateway, public
 from .settings import VERSION
-from .store import SETTINGS, LayoutConflict, LayoutInvalid, Store, layout_summary
+from .store import SETTINGS, LayoutConflict, LayoutInvalid, PairingBusy, Store, layout_summary
 
 STATIC = Path(__file__).parent / "static"
 # The page's files, under a path that changes with each version and has no "/static/" in it:
 # Home Assistant's service worker (before 2026.10) kept any ".../static/..." file forever,
 # whatever its "?v=", so an updated add-on showed its old page until the browser was cleared.
 ASSETS = f"ui/{VERSION}/"
+# The header the HA integration adds to a pairing request it forwards (docs/audit-9-security.md, item 3).
+VIA_HEADER = "X-Wallpanel-Via"
 log = logging.getLogger(__name__)
 
 
@@ -50,9 +52,14 @@ def panel_api(store: Store, gateway: Gateway, install: install_link.InstallLink 
         except Exception:
             raise web.HTTPBadRequest(text="panel_id required")
         token = body.get("provision_token")
-        req = store.request_pairing(panel_id, str(body.get("name", "")), str(body.get("model", "")),
-                                    str(body.get("platform", "android")), body.get("type"),
-                                    token if isinstance(token, str) else None)
+        # Set by the HA integration on what it forwards; a LAN client that sets it only lowers its own place.
+        via_ha = request.headers.get(VIA_HEADER) == "ha"
+        try:
+            req = store.request_pairing(panel_id, str(body.get("name", "")), str(body.get("model", "")),
+                                        str(body.get("platform", "android")), body.get("type"),
+                                        token if isinstance(token, str) else None, via_ha)
+        except PairingBusy:
+            raise web.HTTPTooManyRequests(text="too many pairing requests, try again later")
         return web.json_response({"request_id": req.request_id, "code": req.code})
 
     async def pair_status(request: web.Request):
@@ -114,7 +121,7 @@ def panel_api(store: Store, gateway: Gateway, install: install_link.InstallLink 
     app.router.add_get("/api/info", info)
     app.router.add_get(r"/api/hls/{token:[a-f0-9]+}/{tail:[A-Za-z0-9_./-]+}", hls)
     app.router.add_post("/api/pair", pair)
-    app.router.add_get("/api/pair/{rid}", pair_status)
+    app.router.add_get(r"/api/pair/{rid:[A-Za-z0-9_-]{1,64}}", pair_status)
     app.router.add_get("/api/websocket", gateway.handle)
     app.router.add_get(r"/api/media/{token:[a-f0-9]{32}}", media)
 
@@ -346,6 +353,10 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         return web.json_response({
             "version": VERSION,
             "installer_pin_set": bool(store.get_site().get("installer_pin")),
+            # Paired panels with no installer PIN, the project's or their own: anyone at them has every
+            # permission, the full lock's release too (docs/audit-9-security.md, item 4).
+            "open_panels": sorted(p.name for p in store.panels.values()
+                                  if store.effective_config(p.id)["installer_pin"] is None),
             "set_aside": store.set_aside(),
             "discovered": sorted(discovered, key=lambda p: p["name"]),
             "panels": [
@@ -366,7 +377,9 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
             "app": panel_app.info(),
             "pending": [
                 {"request_id": r.request_id, "panel_id": r.panel_id, "name": r.name, "model": r.model, "platform": r.platform, "type": r.type,
-                 "code": r.code, "age": int(now - r.created)}
+                 "code": r.code, "age": int(now - r.created), "via_ha": r.via_ha,
+                 # Approving it takes the place of a paired panel: that panel's key stops working (item 7).
+                 "replaces": store.panels[r.panel_id].name if r.panel_id in store.panels else None}
                 for r in store.pending.values() if not r.key and not r.rejected
             ],
         })

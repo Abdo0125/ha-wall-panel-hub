@@ -181,6 +181,12 @@ class PairRequest:
     # Set once approved; handed to the panel a single time.
     key: str | None = None
     rejected: bool = False
+    # Came through Home Assistant's address (the integration says so): from anywhere on the internet.
+    via_ha: bool = False
+
+
+class PairingBusy(Exception):
+    """Too many pairing requests through Home Assistant's address: the ones from the LAN stay."""
 
 
 @dataclass
@@ -274,13 +280,20 @@ class Store:
         return None
 
     def request_pairing(self, panel_id: str, name: str, model: str, platform: str = "android",
-                        kind: str | None = None, provision_token: str | None = None) -> PairRequest:
+                        kind: str | None = None, provision_token: str | None = None,
+                        via_ha: bool = False) -> PairRequest:
         self._expire()
         # One open request per panel: a retry replaces the previous one.
         for rid in [r for r, p in self.pending.items() if p.panel_id == panel_id]:
             del self.pending[rid]
+        # Full: the oldest request through HA's address goes first. One from there never pushes out
+        # a request from the LAN, so requests from the internet cannot crowd out the installer's panel
+        # (docs/audit-9-security.md, item 3).
         while len(self.pending) >= MAX_PENDING:
-            del self.pending[min(self.pending.values(), key=lambda p: p.created).request_id]
+            pool = [p for p in self.pending.values() if p.via_ha] or ([] if via_ha else list(self.pending.values()))
+            if not pool:
+                raise PairingBusy()
+            del self.pending[min(pool, key=lambda p: p.created).request_id]
         req = PairRequest(
             request_id=secrets.token_urlsafe(16),
             panel_id=panel_id,
@@ -290,6 +303,7 @@ class Store:
             code=f"{secrets.randbelow(1_000_000):06d}",
             platform=platform if platform in PLATFORMS else "android",
             type=_type(platform, kind),
+            via_ha=via_ha,
         )
         self.pending[req.request_id] = req
         # Set up from the add-on: the installer approved it by starting the setup.
@@ -611,8 +625,8 @@ class Store:
 
     def save_display_from_panel(self, panel_id: str, display: dict, before: dict | None = None) -> dict:
         """Theme, language and screensaver changed on the panel: stored as this panel's own
-        settings, so the add-on shows them too. The panel checked the PIN and the display
-        permission when the change was made, maybe offline, so there is nothing to approve.
+        settings, so the add-on shows them too. The gateway checked the display permission with
+        the PIN the panel sent (docs/audit-9-security.md, item 6).
         [before]: what the panel had of each when the change was made. One that changed since (in
         the add-on, while the panel was away) stays as it is now: the newer wins
         (docs/audit-6-settings.md, item 5)."""

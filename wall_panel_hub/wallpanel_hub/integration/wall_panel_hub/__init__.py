@@ -5,7 +5,10 @@ Wall Panel Hub add-on. Panels away from the add-on's LAN (another site, mobile d
 then pair and connect through whatever address already reaches Home Assistant.
 
 These views need no Home Assistant login: panels authenticate to the hub with their
-own key, and pairing still needs the installer's approval in the add-on.
+own key, and pairing still needs the installer's approval in the add-on. Anyone on the
+internet can call them, so they forward only their own paths, a few pairing requests a
+minute and a bounded number of connections per address (limits.py,
+docs/audit-9-security.md, items 2 and 3).
 
 With the add-on's secret (handed over in its Supervisor discovery) it also links to the
 add-on (hub.HubLink): each panel is a device here, with its speaker (media_player), its
@@ -29,6 +32,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import CONF_HOST, CONF_PORT, CONF_SECRET, DOMAIN, URL_BASE
 from .hub import HubLink
+from .limits import REQUEST_ID, Limits
 
 PLATFORMS = [Platform.MEDIA_PLAYER, Platform.SELECT, Platform.SENSOR, Platform.EVENT, Platform.BUTTON,
              Platform.BINARY_SENSOR]
@@ -41,8 +45,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     data["base"] = f"http://{entry.data[CONF_HOST]}:{entry.data[CONF_PORT]}/api"
     # Views cannot be unregistered; register once and let them follow the current entry.
     if not data.get("views"):
+        limits = Limits()
         for view in (InfoView, PairView, PairStatusView, SocketView):
-            hass.http.register_view(view(hass))
+            hass.http.register_view(view(hass, limits))
         data["views"] = True
     if entry.data.get(CONF_SECRET):
         link = HubLink(hass, entry.data[CONF_HOST], entry.data[CONF_PORT], entry.data[CONF_SECRET])
@@ -84,8 +89,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 class _HubView(HomeAssistantView):
     requires_auth = False
 
-    def __init__(self, hass: HomeAssistant) -> None:
+    def __init__(self, hass: HomeAssistant, limits: Limits) -> None:
         self.hass = hass
+        self.limits = limits
 
     def target(self, path: str) -> str:
         base = self.hass.data.get(DOMAIN, {}).get("base")
@@ -93,12 +99,13 @@ class _HubView(HomeAssistantView):
             raise web.HTTPServiceUnavailable(text="Wall Panel Hub is not set up")
         return base + path
 
-    async def forward(self, method: str, path: str, body: bytes | None = None) -> web.Response:
+    async def forward(self, method: str, path: str, body: bytes | None = None,
+                      headers: dict | None = None) -> web.Response:
         session = async_get_clientsession(self.hass)
         try:
             async with session.request(
                 method, self.target(path), data=body,
-                headers={"Content-Type": "application/json"} if body else None,
+                headers={**({"Content-Type": "application/json"} if body else {}), **(headers or {})},
                 timeout=15,
             ) as resp:
                 return web.Response(status=resp.status, body=await resp.read(), content_type=resp.content_type)
@@ -120,8 +127,11 @@ class PairView(_HubView):
     name = "api:wall_panel_hub:pair"
 
     async def post(self, request: web.Request) -> web.Response:
+        if not self.limits.pair(request.remote or ""):
+            raise web.HTTPTooManyRequests(text="too many pairing requests, try again later")
         body = await request.content.read(64 * 1024)
-        return await self.forward("POST", "/pair", body)
+        # The add-on shows the request as coming through this address, and keeps the LAN's first.
+        return await self.forward("POST", "/pair", body, {"X-Wallpanel-Via": "ha"})
 
 
 class PairStatusView(_HubView):
@@ -129,6 +139,9 @@ class PairStatusView(_HubView):
     name = "api:wall_panel_hub:pair_status"
 
     async def get(self, request: web.Request, request_id: str) -> web.Response:
+        # Decoded, the id could hold "/" and "..": only an id as the add-on makes it goes on.
+        if not REQUEST_ID.fullmatch(request_id):
+            raise web.HTTPNotFound()
         return await self.forward("GET", f"/pair/{request_id}")
 
 
@@ -138,6 +151,15 @@ class SocketView(_HubView):
 
     async def get(self, request: web.Request) -> web.WebSocketResponse:
         target = self.target("/websocket").replace("http://", "ws://", 1)
+        address = request.remote or ""
+        if not self.limits.open_socket(address):
+            raise web.HTTPTooManyRequests(text="too many connections from this address")
+        try:
+            return await self._carry(request, target)
+        finally:
+            self.limits.close_socket(address)
+
+    async def _carry(self, request: web.Request, target: str) -> web.WebSocketResponse:
         panel = web.WebSocketResponse(heartbeat=30)
         await panel.prepare(request)
         session = async_get_clientsession(self.hass)

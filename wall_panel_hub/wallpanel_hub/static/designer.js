@@ -390,7 +390,10 @@ async function loadOverview() {
   if (!r.ok) return;
   S.overview = r.body;
   $("version").textContent = "v" + r.body.version;
-  $("pinWarning").hidden = r.body.installer_pin_set;
+  const open = r.body.open_panels || [];
+  $("pinWarning").hidden = !open.length;
+  $("pinWarning").textContent = t("⚠ No installer PIN on {0} of the panels: anyone at them has every permission and can release the full lock. Set it in the project.", open.length);
+  $("pinWarning").title = open.join(", ");
   renderSetAside(r.body.set_aside);
 }
 
@@ -587,6 +590,7 @@ function renderNav() {
     for (const r of o.pending) {
       nav.append(el("div", { class: "request" },
         el("div", { class: "row" }, el("span", { class: "code" }, r.code), el("span", { class: "muted" }, r.name)),
+        requestNotes(r),
         el("div", { class: "row", style: { marginTop: "6px" } },
           el("button", { class: "primary", onclick: () => wizard(r) }, t("Set up")),
           el("button", { onclick: async () => { await post(`api/pending/${enc(r.request_id)}/reject`); await refresh(); } }, t("Reject"))),
@@ -1927,6 +1931,10 @@ function settingRows(section, values, inherited, inheritLabel, marked) {
   };
 }
 
+// Guidance only, nothing refused: a panel keeps the PIN's hash to work offline, so a long PIN of this
+// project alone is what keeps it from being guessed (docs/audit-9-security.md, item 5).
+const pinHint = () => el("p", { class: "muted" }, t("For the installer PIN: 6 digits or more, and not the PIN of another project."));
+
 function pinRow(label, isSet, setText, onSet, onRemove, removeLabel) {
   const input = el("input", { type: "password", inputmode: "numeric", maxlength: 8, placeholder: t("4 to 8 digits"), autocomplete: "new-password", style: { width: "140px" } });
   return el("div", { class: "row", style: { margin: "6px 0" } },
@@ -2123,6 +2131,7 @@ function securitySection(body, p, cfg) {
   body.append(
     el("div", { class: "box" }, el("h3", {}, t("A PIN for this panel only (optional)")),
       el("p", { class: "muted" }, t("Without it the panel uses the project's PINs.")),
+      pinHint(),
       pinRow(t("Installer PIN"), cfg.config.installer_pin_set, cfg.config.installer_pin_set ? t("● This panel only") : t("From the project"),
         async (pin) => { await post(`api/panels/${enc(pid)}/pin`, { role: "installer", pin }); reload(); },
         async () => { await post(`api/panels/${enc(pid)}/pin`, { role: "installer", pin: null }); reload(); }, t("Use the project's PIN")),
@@ -2451,6 +2460,7 @@ function projectPins() {
   const reload = async () => { await loadSite(); await loadOverview(); render(); };
   return el("div", { class: "box" }, el("h3", {}, t("PINs")),
     el("p", { class: "muted" }, t("The installer PIN gives every local permission on a panel; the user PIN gives what each panel's permissions allow. Panels only get them hashed, and they work offline.")),
+    pinHint(),
     pinRow(t("Installer PIN"), site.installer_pin_set, site.installer_pin_set ? t("● Set") : t("○ Not set"),
       async (pin) => { await post("api/site/pin", { role: "installer", pin }); reload(); },
       async () => { if (confirm(t("Remove the installer PIN? The panels' settings become open."))) { await post("api/site/pin", { role: "installer", pin: null }); reload(); } }, t("Remove")),
@@ -2826,6 +2836,15 @@ function renderDevices(view) {
 
 // ---------- new panel setup: approve, rooms, send ----------
 
+// What the installer should know before approving: it came from the internet through Home Assistant's
+// address, or it takes the place of a paired panel (docs/audit-9-security.md, items 3 and 7).
+function requestNotes(r) {
+  const notes = [];
+  if (r.via_ha) notes.push(el("div", { class: "muted" }, t("Through Home Assistant's address")));
+  if (r.replaces) notes.push(el("div", { class: "msg warn" }, t("Replaces the pairing of {0}: that panel stops working until it pairs again.", r.replaces)));
+  return notes.length ? el("div", { style: { marginTop: "4px" } }, notes) : null;
+}
+
 // [start] 2: a panel paired already (set up over adb), from its name and rooms.
 function wizard(req, start = 1) {
   const st = { step: start, pid: req.panel_id, name: req.name || t("Panel"), area: "", rooms: new Set() };
@@ -2836,6 +2855,7 @@ function wizard(req, start = 1) {
         el("p", { class: "muted" }, t("Approve only if this code is the one on the panel.")),
         el("div", { class: "bigcode" }, req.code),
         el("p", { class: "muted", style: { textAlign: "center" } }, `${req.name || ""} ${req.model ? "· " + req.model : ""}`),
+        requestNotes(req),
         el("div", { class: "actions" },
           el("button", { class: "solid", onclick: async () => {
             const r = await post(`api/pending/${enc(req.request_id)}/approve`);
