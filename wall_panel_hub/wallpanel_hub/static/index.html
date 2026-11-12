@@ -69,7 +69,42 @@
   .chip.on { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
   .chip.off { opacity: .4; cursor: default; }
   .chip .mdi { margin-inline-end: 4px; }
+  /* ---- settings in sections, a list beside them (docs/ui-plan.md 5.4) ---- */
+  .sections { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 20px; align-items: start; }
+  .secnav { background: var(--pane); border: 1px solid var(--line); border-radius: 12px; padding: 8px; position: sticky; top: 0; }
+  .secnav h4 { font-size: 11px; color: var(--muted); font-weight: 600; margin: 12px 8px 4px; text-transform: uppercase; letter-spacing: .04em; }
+  .secitem { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+  .secitem:hover { background: var(--accent-bg); }
+  .secitem.on { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  .secitem .mdi { font-size: 18px; color: var(--muted); }
+  .secitem.on .mdi { color: var(--accent); }
+  .secitem .grow { flex: 1; }
+  .secitem .badge { font-size: 11px; color: var(--accent); font-weight: normal; }
+  .fld { display: grid; grid-template-columns: 220px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+  .fld:first-child { border-top: none; }
+  .fld > :nth-child(2) { justify-self: start; }
+  .fld input { width: min(320px, 100%); }
+  .fld .from { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .fld .own { font-size: 12px; color: var(--accent); white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; }
+  .fld .own button { padding: 2px 8px; font-size: 12px; }
+  @media (max-width: 700px) {
+    .sections { grid-template-columns: minmax(0, 1fr); }
+    .secnav { position: static; display: flex; overflow-x: auto; gap: 2px; }
+    .secnav h4 { display: none; }
+    .secitem { flex: none; }
+    .fld { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  }
   /* A card's settings as rows, as on the panel: the name, its control at the end. */
+  /* Other apps on the panels (K6) */
+  .drop { border: 1px dashed var(--muted); border-radius: 10px; padding: 18px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .drop.over { border-color: var(--accent); background: var(--accent-bg); }
+  .drop .big { font-size: 30px; color: var(--muted); }
+  .app-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .app-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 22px; color: var(--muted); flex: none; }
+  .pkg { direction: ltr; text-align: start; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .sum { display: flex; gap: 12px; font-size: 13px; flex-wrap: wrap; }
+  .fold { color: var(--muted); font-size: 18px; }
+  .sec { font-size: 12px; color: var(--muted); font-weight: 600; margin: 16px 0 6px; }
   .optrow { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
   .optrow .lbl { flex: 1; }
   .optrow .note { font-size: 12px; color: var(--muted); margin-top: 2px; }

@@ -12,6 +12,7 @@ from .catalog import fetch as fetch_catalog
 from .doorbell import Doorbell
 from .gateway import Gateway
 from .install_link import InstallLink
+from .packages import Packages
 from .provision import Adb, Provisioner
 from .intercom import Intercom
 from .speakers import Speakers, load_secret
@@ -58,6 +59,9 @@ async def main() -> None:
     browser = discovery.PanelBrowser()
     async with aiohttp.ClientSession() as session:
         gateway = Gateway(cfg, store, session)
+        # Other apps on the panels (packages.py).
+        gateway.packages = Packages(cfg.data_dir, store)
+        gateway.packages.changed = gateway.notify_packages
         secret = load_secret(cfg.data_dir)
         gateway.speakers = Speakers(store, gateway, secret)
         intercom = Intercom(cfg.data_dir, cfg.sip_port)

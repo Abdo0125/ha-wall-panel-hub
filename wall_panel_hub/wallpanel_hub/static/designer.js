@@ -657,7 +657,7 @@ function renderPanel(view) {
   const pid = S.view.pid;
   const p = S.overview.panels.find((x) => x.id === pid);
   const w = W();
-  const tabs = [["design", t("Design")], ["settings", t("Settings")], ["access", t("Permissions")]];
+  const tabs = [["design", t("Design")], ["settings", t("Settings")]];
   view.append(el("div", { class: "titlebar" },
     el("h2", {}, p.name),
     el("span", { class: "dot " + (p.online ? "on" : "off") }, p.online ? t("● Online") : t("○ Offline")),
@@ -672,8 +672,7 @@ function renderPanel(view) {
     ] : null,
   ));
   if (S.view.tab === "design") renderDesign(view);
-  else if (S.view.tab === "settings") renderSettings(view, p);
-  else renderAccess(view, p);
+  else renderSettings(view, p);
 }
 
 // ---------- my dashboard (S.page === DASH) ----------
@@ -871,10 +870,22 @@ function emptyCell(screen, col, row, block) {
 
 // ---------- the panel's app and its update (docs/distribution-plan.md, D4) ----------
 
+const stateLine = (color, text) => el("div", { class: "row", style: { gap: "8px", marginTop: "8px" } }, el("span", { style: { color } }, "●"), el("span", {}, text));
+
+// Whether the full lock can apply on [p] (docs/kiosk-plan.md, K3): known once the panel reported.
+function ownerLine(p) {
+  if (!p.app?.version_name) return null;
+  return p.app.device_owner
+    ? stateLine("var(--ok)", t("Android device owner: the full lock applies here"))
+    : el("div", { class: "row", style: { justifyContent: "space-between", marginBottom: "8px" } },
+      stateLine("var(--muted)", t("Not the Android device owner: the basic lock only")),
+      el("button", { onclick: () => provisionSheet({ name: p.name }) }, icon("mdi:usb-port"), " ", t("Make it the device owner over adb")));
+}
+
 function appBox(p) {
   const app = p.app || {};
   const carried = S.overview.app || {};
-  const line = (color, text) => el("div", { class: "row", style: { gap: "8px", marginTop: "8px" } }, el("span", { style: { color } }, "●"), el("span", {}, text));
+  const line = stateLine;
   let state;
   const u = app.update;
   if (u?.state === "failed") {
@@ -889,12 +900,6 @@ function appBox(p) {
   else if (u) state = line("var(--accent)", p.online ? t("Sent to the panel") : t("Sent when the panel connects"));
   else if (app.version_name && !app.needs_update) state = line("var(--ok)", t("Up to date ({0})", app.version_name));
   const version = app.version_name ? t("Version {0} on this panel", app.version_name) : t("Version not known yet: the panel says it when it connects.");
-  // Whether the full lock can apply here (docs/kiosk-plan.md, K3): known once the panel reported.
-  const owner = !app.version_name ? null : app.device_owner
-    ? line("var(--ok)", t("Android device owner: the full lock applies here"))
-    : el("div", { class: "row", style: { justifyContent: "space-between" } },
-      line("var(--muted)", t("Not the Android device owner: the basic lock only")),
-      el("button", { onclick: () => provisionSheet({ name: p.name }) }, icon("mdi:usb-port"), " ", t("Make it the device owner over adb")));
   return el("div", { class: "box", id: "appbox" }, el("h3", {}, t("Panel app")),
     el("div", { class: "row", style: { justifyContent: "space-between" } },
       el("div", {}, version, carried.version_name ? el("div", { class: "muted" }, t("This add-on carries {0}", carried.version_name)) : null),
@@ -902,7 +907,7 @@ function appBox(p) {
         await post(`api/panels/${enc(p.id)}/update`);
         await refresh();
       } }, icon("mdi:update"), " ", t("Update")) : null),
-    state, owner);
+    state);
 }
 
 // ---------- install on a new panel (docs/distribution-plan.md, D3) ----------
@@ -1838,50 +1843,85 @@ function selectEl(options, value) {
   return box;
 }
 
-// Display settings: blank means "inherit".
-function displayFields(form, values, inherited, inheritLabel) {
-  const ss = values.screensaver || {};
-  const name = (list, v) => list.find(([k]) => k === v)?.[1] || v;
-  const f = {
-    lang: selectEl([["", `${inheritLabel} (${name(PANEL_LANGS, inherited.lang)})`], ...PANEL_LANGS], values.lang || ""),
-    theme: selectEl([["", `${inheritLabel} (${name(THEMES, inherited.theme)})`], ...THEMES], values.theme || ""),
-    idle: el("input", { type: "number", min: 10, value: ss.idle_seconds ?? "", placeholder: inherited.screensaver.idle_seconds }),
-    dim: el("input", { type: "number", min: 0, max: 100, value: ss.dim_brightness ?? "", placeholder: inherited.screensaver.dim_brightness }),
-    ret: el("input", { type: "number", min: 30, max: 3600, value: values.app_return_seconds ?? "", placeholder: inherited.app_return_seconds }),
-    home: el("input", { maxlength: 40, value: values.home_title ?? "", placeholder: inherited.home_title || t("My dashboard") }),
-    // The full lock, where the panel's app is the Android device owner (docs/kiosk-plan.md, K3).
-    lock: selectEl([["", `${inheritLabel} (${name(LOCKS, inherited.kiosk_lock ? "on" : "off")})`], ...LOCKS],
-      values.kiosk_lock === undefined ? "" : values.kiosk_lock ? "on" : "off"),
-    maint: el("input", { type: "number", min: 1, max: 120, value: values.maintenance_minutes ?? "", placeholder: inherited.maintenance_minutes }),
-    // adb after a device owner panel's setup (docs/kiosk-plan.md, K4): maintenance opens it.
-    adb: selectEl([["", `${inheritLabel} (${name(ADBS, inherited.adb_open ? "open" : "closed")})`], ...ADBS],
-      values.adb_open === undefined ? "" : values.adb_open ? "open" : "closed"),
-  };
-  form.append(
-    el("label", {}, t("Home page title")), f.home,
-    el("label", {}, t("Language")), f.lang,
-    el("label", {}, t("Theme")), f.theme,
-    el("label", {}, t("Screensaver after (seconds)")), f.idle,
-    el("label", {}, t("Dimmed brightness (%)")), f.dim,
-    el("label", {}, t("Back from another app after (seconds)")), f.ret,
-    el("label", {}, t("Full lock (device owner panels)")), f.lock,
-    el("label", {}, t("Maintenance lifts the lock for (minutes)")), f.maint,
-    el("label", {}, t("adb on device owner panels")), f.adb,
-  );
-  return () => {
-    const out = {};
-    if (f.lang.value) out.lang = f.lang.value;
-    if (f.theme.value) out.theme = f.theme.value;
-    const screensaver = {};
-    if (f.idle.value !== "") screensaver.idle_seconds = Number(f.idle.value);
-    if (f.dim.value !== "") screensaver.dim_brightness = Number(f.dim.value);
-    if (Object.keys(screensaver).length) out.screensaver = screensaver;
-    if (f.ret.value !== "") out.app_return_seconds = Number(f.ret.value);
-    if (f.lock.value) out.kiosk_lock = f.lock.value === "on";
-    if (f.maint.value !== "") out.maintenance_minutes = Number(f.maint.value);
-    if (f.adb.value) out.adb_open = f.adb.value === "open";
-    if (f.home.value.trim()) out.home_title = f.home.value.trim();
-    return out;
+// ---------- settings: one row per setting, in sections (docs/ui-plan.md §5.4) ----------
+
+// Every setting a panel takes from the project unless it has its own, in its section: one list
+// for the panel's page and the project's. A [key] may be nested ("screensaver.idle_seconds").
+const SETTING_FIELDS = [
+  { section: "display", key: "home_title", label: () => t("Home page title"), text: 40, empty: () => t("My dashboard") },
+  { section: "display", key: "lang", label: () => t("Language"), options: () => PANEL_LANGS },
+  { section: "display", key: "theme", label: () => t("Theme"), options: () => THEMES },
+  { section: "display", key: "screensaver.idle_seconds", label: () => t("Screensaver after (seconds)"), min: 10 },
+  { section: "display", key: "screensaver.dim_brightness", label: () => t("Dimmed brightness (%)"), min: 0, max: 100 },
+  { section: "apps", key: "app_return_seconds", label: () => t("Back from another app after (seconds)"), min: 30, max: 3600 },
+  // The full lock, where the panel's app is the Android device owner (docs/kiosk-plan.md, K3).
+  { section: "lock", key: "kiosk_lock", label: () => t("Full lock (device owner panels)"), options: () => LOCKS, yes: "on" },
+  { section: "lock", key: "maintenance_minutes", label: () => t("Maintenance lifts the lock for (minutes)"), min: 1, max: 120 },
+  // adb after a device owner panel's setup (docs/kiosk-plan.md, K4): maintenance opens it.
+  { section: "lock", key: "adb_open", label: () => t("adb on device owner panels"), options: () => ADBS, yes: "open" },
+];
+const valueAt = (obj, key) => key.split(".").reduce((o, k) => o?.[k], obj);
+function putAt(obj, key, value) {
+  const keys = key.split(".");
+  let o = obj;
+  for (const k of keys.slice(0, -1)) o = o[k] ??= {};
+  o[keys[keys.length - 1]] = value;
+}
+const sectionFields = (section) => SETTING_FIELDS.filter((f) => f.section === section);
+// How many settings of [section] [values] holds: a panel's own, shown beside the section.
+const ownCount = (values, section) => sectionFields(section).filter((f) => valueAt(values, f.key) !== undefined).length;
+
+// [all] (a panel's overrides, or the project's defaults) with [section]'s settings from [own]:
+// the other sections' stay as they are.
+function withSection(all, section, own) {
+  const out = { ...(all || {}) };
+  for (const f of sectionFields(section)) delete out[f.key.split(".")[0]];
+  return { ...out, ...own };
+}
+
+// [section]'s settings as rows. Blank means [inherited]'s, named [inheritLabel]; [marked]: each
+// row says whether it is this panel's own, with a way back to the project's.
+function settingRows(section, values, inherited, inheritLabel, marked) {
+  const rows = el("div", { class: "fields" });
+  const reads = [];
+  for (const f of sectionFields(section)) {
+    const v = valueAt(values, f.key);
+    const inh = valueAt(inherited, f.key);
+    let ctl, read;
+    if (f.options) {
+      const opts = f.options();
+      const no = opts.find(([k]) => k !== f.yes)?.[0];
+      const asChoice = (x) => (f.yes ? (x ? f.yes : no) : x);
+      const name = (x) => opts.find(([k]) => k === x)?.[1] ?? x;
+      ctl = selectEl([["", `${inheritLabel} (${name(asChoice(inh))})`], ...opts], v === undefined ? "" : asChoice(v));
+      read = () => (ctl.value === "" ? undefined : f.yes ? ctl.value === f.yes : ctl.value);
+    } else if (f.text) {
+      ctl = el("input", { maxlength: f.text, value: v ?? "", placeholder: inh || f.empty?.() || "" });
+      read = () => ctl.value.trim() || undefined;
+    } else {
+      ctl = el("input", { type: "number", min: f.min, max: f.max, value: v ?? "", placeholder: inh });
+      read = () => (ctl.value === "" ? undefined : Number(ctl.value));
+    }
+    reads.push([f.key, read]);
+    const mark = el("span");
+    const draw = () => mark.replaceChildren(read() === undefined
+      ? el("span", { class: "from" }, t("From the project"))
+      : el("span", { class: "own" }, "● " + t("This panel"),
+        el("button", { type: "button", onclick: () => { ctl.value = ""; draw(); } }, icon("mdi:undo-variant"), " ", t("Use the project's"))));
+    if (marked) {
+      ctl.addEventListener("input", draw);
+      ctl.addEventListener("change", draw);
+      draw();
+    }
+    rows.append(el("div", { class: "fld" }, el("label", {}, f.label()), ctl, marked ? mark : null));
+  }
+  return {
+    rows,
+    read: () => {
+      const out = {};
+      for (const [key, read] of reads) { const x = read(); if (x !== undefined) putAt(out, key, x); }
+      return out;
+    },
   };
 }
 
@@ -1912,57 +1952,71 @@ function inheritedDisplay() {
   };
 }
 
-function renderSettings(view, p) {
-  const pid = p.id;
-  const cfg = S.configs[pid];
-  if (!cfg) { loadConfig(pid).then(render); return; }
-  const msg = el("div", { class: "msg" });
-  const reload = async () => { await loadConfig(pid); render(); };
+// A page's sections in a list beside it, as on the panel's own settings. [groups]: [title, items]
+// (a blank title for none). Returns where the open section is drawn.
+function sectionPage(view, groups, current, open) {
+  const nav = el("div", { class: "secnav" });
+  for (const [title, items] of groups) {
+    if (title) nav.append(el("h4", {}, title));
+    for (const s of items) {
+      nav.append(el("div", { class: "secitem" + (s.id === current ? " on" : ""), onclick: () => open(s.id) },
+        icon(s.icon), el("span", { class: "grow" }, s.label), s.badge ? el("span", { class: "badge" }, s.badge) : null));
+    }
+  }
+  const body = el("div", { class: "secbody" });
+  view.append(el("div", { class: "sections" }, nav, body));
+  return body;
+}
 
+const SECTION_TITLES = () => ({ display: t("Display"), apps: t("Apps"), lock: t("Panel lock") });
+
+// ---------- one panel's settings ----------
+
+const PANEL_SECTIONS = () => [
+  { id: "panel", icon: "mdi:tablet-dashboard", label: t("Panel") },
+  { id: "display", icon: "mdi:monitor", label: t("Display") },
+  { id: "apps", icon: "mdi:apps", label: t("Apps") },
+  { id: "lock", icon: "mdi:lock", label: t("Panel lock") },
+  { id: "security", icon: "mdi:shield-lock", label: t("PINs and permissions") },
+];
+
+function renderSettings(view, p) {
+  const cfg = S.configs[p.id];
+  if (!cfg) { loadConfig(p.id).then(render); return; }
+  const own = cfg.config.overrides || {};
+  const current = S.view.section || "panel";
+  const items = PANEL_SECTIONS().map((s) => ({ ...s, badge: ownCount(own, s.id) ? t("{0} own", ownCount(own, s.id)) : "" }));
+  const body = sectionPage(view, [["", items]], current, (id) => { S.view.section = id; render(); });
+  if (current === "panel") panelSection(body, p);
+  else if (current === "security") securitySection(body, p, cfg);
+  else body.append(panelSettingsBox(p, cfg, current));
+}
+
+const savedToast = (p) => toast(p.online ? t("Saved and on the panel.") : t("Saved. The panel gets it when it connects."));
+
+// Its name, where it is, its app; and unpairing.
+function panelSection(body, p) {
+  const pid = p.id;
+  const msg = el("div", { class: "msg" });
   const name = el("input", { value: p.name });
   const place = selectEl([["", t("— None —")], ...S.catalog.areas.map((a) => [a.id, a.name])], S.editor[pid]?.area_id || "");
-  const general = el("div", { class: "form" }, el("label", {}, t("Panel name")), name, el("label", {}, t("Where it is mounted")), place,
-    el("label", {}, t("Device type")), el("div", { class: "muted" }, `${TYPES[p.type] || PLATFORMS[p.platform || "android"] || p.platform}${p.model ? " · " + p.model : ""}`));
-  const display = el("div", { class: "form" });
-  const readDisplay = displayFields(display, cfg.config.overrides || {}, inheritedDisplay(), t("From the project"));
-
-  view.append(
-    appBox(p),
-    el("div", { class: "box" }, el("h3", {}, t("Panel")), general,
-      el("h3", { style: { marginTop: "18px" } }, t("Display")), el("p", { class: "muted" }, t("Empty fields take the project's value.")), display,
+  body.append(
+    el("div", { class: "box" }, el("h3", {}, t("Panel")),
+      el("div", { class: "form" }, el("label", {}, t("Panel name")), name, el("label", {}, t("Where it is mounted")), place,
+        el("label", {}, t("Device type")), el("div", { class: "muted" }, `${TYPES[p.type] || PLATFORMS[p.platform || "android"] || p.platform}${p.model ? " · " + p.model : ""}`)),
       el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
         const newName = name.value.trim();
         if (newName && newName !== p.name) await post(`api/panels/${enc(pid)}/rename`, { name: newName });
         if ((S.editor[pid]?.area_id || "") !== place.value) {
-          await post(`api/panels/${enc(pid)}/area`, { area_id: place.value || null });
+          const r = await post(`api/panels/${enc(pid)}/area`, { area_id: place.value || null });
+          if (!r.ok) { msg.className = "msg error"; msg.textContent = t("Not saved: ") + (r.body?.error || r.status); return; }
           if (S.editor[pid]) S.editor[pid].area_id = place.value || null;
         }
-        // The floors' names and icons stay as they are: the hub keeps them.
-        const r = await putSettings(`api/panels/${enc(pid)}/config`, { overrides: readDisplay() }, cfg.config, () => loadConfig(pid));
-        if (!r.ok) { if (refused(r)) { msg.className = "msg error"; msg.textContent = t("Not saved: ") + (r.body?.error || r.status); } return; }
-        await refresh(); await loadConfig(pid);
-        toast(p.online ? t("Saved and on the panel.") : t("Saved. The panel gets it when it connects."));
+        await refresh();
+        savedToast(p);
         render();
-      } }, t("Save for this panel")),
-      el("button", { onclick: async () => {
-        const display = readDisplay();
-        if (!Object.keys(display).length) { alert(t("This panel has no settings of its own to copy.")); return; }
-        if (!confirm(t("These become the project's settings, replacing every panel's own. Continue?"))) return;
-        const r = await post("api/site/display_all", { display });
-        if (!r.ok) { msg.className = "msg error"; msg.textContent = t("Not saved: ") + (r.body?.error || r.status); return; }
-        await loadSite(); await loadConfig(pid);
-        toast(r.body.replaced ? t("Copied to all panels; {0} panels' own settings replaced.", r.body.replaced) : t("Copied to all panels."));
-        render();
-      } }, t("Copy to all panels"))), msg),
-    appsBox(pid, p, cfg),
-    el("div", { class: "box" }, el("h3", {}, t("A PIN for this panel only (optional)")),
-      el("p", { class: "muted" }, t("Without it the panel uses the project's PINs.")),
-      pinRow(t("Installer PIN"), cfg.config.installer_pin_set, cfg.config.installer_pin_set ? t("● This panel only") : t("From the project"),
-        async (pin) => { await post(`api/panels/${enc(pid)}/pin`, { role: "installer", pin }); reload(); },
-        async () => { await post(`api/panels/${enc(pid)}/pin`, { role: "installer", pin: null }); reload(); }, t("Use the project's PIN")),
-      pinRow(t("User PIN"), cfg.config.user_pin_set, cfg.config.user_pin_set ? t("● This panel only") : t("From the project"),
-        async (pin) => { await post(`api/panels/${enc(pid)}/pin`, { role: "user", pin }); reload(); },
-        async () => { await post(`api/panels/${enc(pid)}/pin`, { role: "user", pin: null }); reload(); }, t("Use the project's PIN"))),
+      } }, t("Save"))), msg),
+    appBox(p),
     el("div", { class: "box" }, el("h3", {}, t("Unpair")),
       el("p", { class: "muted" }, t("The panel is cut off from Home Assistant at once and must be paired again.")),
       el("button", { class: "danger", onclick: async () => {
@@ -1974,9 +2028,54 @@ function renderSettings(view, p) {
   );
 }
 
+const PANEL_NOTES = () => ({
+  display: t("What the panel shows, and when it dims. A blank setting takes the project's."),
+  apps: t("The apps the panel may open, and when it comes back from them."),
+  lock: t("Where the panel's app is Android's device owner: the panel stays in front, and Android's bars and other apps are closed."),
+});
+
+// A section of a panel's own settings: the project's unless set here. Its save leaves the
+// other sections as they are.
+function panelSettingsBox(p, cfg, section) {
+  const pid = p.id;
+  const msg = el("div", { class: "msg" });
+  const fail = (r) => { msg.className = "msg error"; msg.textContent = t("Not saved: ") + (r.body?.error || r.status); };
+  const fields = settingRows(section, cfg.config.overrides || {}, inheritedDisplay(), t("From the project"), true);
+  const apps = section === "apps" ? allowedApps(cfg) : null;
+  const save = async () => {
+    const changes = { overrides: withSection(cfg.config.overrides, section, fields.read()) };
+    if (apps) changes.apps = apps.value();
+    const r = await putSettings(`api/panels/${enc(pid)}/config`, changes, cfg.config, () => loadConfig(pid));
+    if (!r.ok) { if (refused(r)) fail(r); return; }
+    await refresh(); await loadConfig(pid);
+    savedToast(p);
+    render();
+  };
+  const toProject = async () => {
+    const own = fields.read();
+    if (!Object.keys(own).length) { alert(t("This panel has no settings of its own to copy.")); return; }
+    if (!confirm(t("These become the project's settings, replacing every panel's own. Continue?"))) return;
+    const r = await post("api/site/display_all", { display: own });
+    if (!r.ok) { fail(r); return; }
+    await loadSite(); await loadConfig(pid);
+    toast(r.body.replaced ? t("Copied to all panels; {0} panels' own settings replaced.", r.body.replaced) : t("Copied to all panels."));
+    render();
+  };
+  return el("div", { class: "box" }, el("h3", {}, SECTION_TITLES()[section]),
+    el("p", { class: "muted" }, PANEL_NOTES()[section]),
+    section === "lock" ? ownerLine(p) : null,
+    fields.rows,
+    apps ? [el("h3", { style: { marginTop: "18px" } }, t("Allowed apps")), apps.node] : null,
+    el("div", { class: "row", style: { marginTop: "14px" } },
+      el("button", { class: "solid", onclick: save }, t("Save")),
+      el("span", { class: "spacer" }),
+      el("button", { onclick: toProject }, t("Make these the project's"))),
+    msg);
+}
+
 // Apps the panel may open: picked from those installed on it (it reports them when it
-// connects), or typed by package name.
-function appsBox(pid, p, cfg) {
+// connects), or typed by package name. Saved with its section.
+function allowedApps(cfg) {
   const apps = (cfg.config.apps || []).map((a) => ({ ...a }));
   const installed = cfg.installed_apps || [];
   const nameOf = (pkg) => installed.find((a) => a.package === pkg)?.label || pkg;
@@ -2007,24 +2106,32 @@ function appsBox(pid, p, cfg) {
     pick = fresh;
     draw();
   };
-  return el("div", { class: "box" }, el("h3", {}, t("Allowed apps")),
+  const node = el("div", {},
     el("p", { class: "muted" }, t("They show on the panel's apps page, and their widgets are added from +. A blank time takes the general return time.")),
     list,
-    el("div", { class: "row", style: { marginTop: "10px" } }, pick, typed, el("button", { onclick: add }, t("Add"))),
-    el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
-      const clean = apps.map((a) => Object.fromEntries(Object.entries(a).filter(([, v]) => v !== undefined && v !== "")));
-      const r = await putSettings(`api/panels/${enc(pid)}/config`, { apps: clean }, S.configs[pid]?.config, () => loadConfig(pid));
-      if (!r.ok) { if (refused(r)) alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
-      await loadConfig(pid);
-      toast(p.online ? t("Saved and on the panel.") : t("Saved. The panel gets it when it connects."));
-      render();
-    } }, t("Save apps"))));
+    el("div", { class: "row", style: { marginTop: "10px" } }, pick, typed, el("button", { onclick: add }, t("Add"))));
+  const value = () => apps.map((a) => Object.fromEntries(Object.entries(a).filter(([, v]) => v !== undefined && v !== "")));
+  return { node, value };
 }
 
-function renderAccess(view, p) {
+// The panel's own PINs, and what each PIN allows on it.
+function securitySection(body, p, cfg) {
   const pid = p.id;
-  const cfg = S.configs[pid];
-  if (!cfg) { loadConfig(pid).then(render); return; }
+  const reload = async () => { await loadConfig(pid); render(); };
+  body.append(
+    el("div", { class: "box" }, el("h3", {}, t("A PIN for this panel only (optional)")),
+      el("p", { class: "muted" }, t("Without it the panel uses the project's PINs.")),
+      pinRow(t("Installer PIN"), cfg.config.installer_pin_set, cfg.config.installer_pin_set ? t("● This panel only") : t("From the project"),
+        async (pin) => { await post(`api/panels/${enc(pid)}/pin`, { role: "installer", pin }); reload(); },
+        async () => { await post(`api/panels/${enc(pid)}/pin`, { role: "installer", pin: null }); reload(); }, t("Use the project's PIN")),
+      pinRow(t("User PIN"), cfg.config.user_pin_set, cfg.config.user_pin_set ? t("● This panel only") : t("From the project"),
+        async (pin) => { await post(`api/panels/${enc(pid)}/pin`, { role: "user", pin }); reload(); },
+        async () => { await post(`api/panels/${enc(pid)}/pin`, { role: "user", pin: null }); reload(); }, t("Use the project's PIN"))),
+    accessBox(p, cfg));
+}
+
+function accessBox(p, cfg) {
+  const pid = p.id;
   const table = el("table", { class: "access" });
   table.append(el("tr", {}, el("th", {}, ""), ...CAPS.map(([, label]) => el("th", {}, label))));
   const boxes = {};
@@ -2039,7 +2146,7 @@ function renderAccess(view, p) {
     }
     table.append(tr);
   }
-  view.append(el("div", { class: "box" },
+  return el("div", { class: "box" },
     el("h3", {}, t("What is allowed on this panel")),
     el("p", { class: "muted" }, t("Control is always allowed. Rooms, devices, the panel's settings and the project are edited here, and on the panel itself by whoever has the permission.")),
     el("p", { class: "muted" }, t("The panel's settings pages follow these permissions; the security page always shows. Without a PIN the settings do not open.")),
@@ -2050,50 +2157,304 @@ function renderAccess(view, p) {
       const r = await putSettings(`api/panels/${enc(pid)}/config`, { access, access_known: CAPS.map(([c]) => c) }, S.configs[pid]?.config, () => loadConfig(pid));
       if (!r.ok) { if (refused(r)) alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
       await loadConfig(pid);
-      toast(p.online ? t("Saved and on the panel.") : t("Saved. The panel gets it when it connects."));
-    } }, t("Save")))));
+      savedToast(p);
+    } }, t("Save"))));
 }
 
 // ---------- project ----------
 
-function renderProject(view) {
-  const tabs = [["general", t("General")], ["devices", t("Device types")], ["widgets", t("Widgets")], ["intercom", t("Intercom")], ["airplay", "AirPlay"]];
-  view.append(el("div", { class: "titlebar" },
-    el("h2", {}, S.site?.name || t("Project")),
-    el("div", { class: "tabs" }, tabs.map(([id, label]) =>
-      el("button", { class: S.view.tab === id ? "active" : "", onclick: () => { S.view.tab = id; render(); } }, label)))));
-  if (!S.site) { loadSite().then(render); return; }
-  if (S.view.tab === "devices") return renderDevices(view);
-  if (S.view.tab === "widgets") return renderSources(view);
-  if (S.view.tab === "intercom") return renderIntercom(view);
-  if (S.view.tab === "airplay") return renderAirPlay(view);
+const PROJECT_SECTIONS = () => [
+  ["", [{ id: "general", icon: "mdi:information-outline", label: t("General") }]],
+  [t("Every panel"), [
+    { id: "display", icon: "mdi:monitor", label: t("Display") },
+    { id: "apps", icon: "mdi:apps", label: t("Apps") },
+    { id: "lock", icon: "mdi:lock", label: t("Panel lock") },
+    { id: "pins", icon: "mdi:key-variant", label: t("PINs") }]],
+  ["Home Assistant", [
+    { id: "devices", icon: "mdi:devices", label: t("Device types") },
+    { id: "widgets", icon: "mdi:widgets", label: t("Widget sources") }]],
+  [t("Sound and calls"), [
+    { id: "intercom", icon: "mdi:doorbell-video", label: t("Intercom") },
+    { id: "airplay", icon: "mdi:cast-audio", label: "AirPlay" }]],
+];
 
+function renderProject(view) {
+  view.append(el("div", { class: "titlebar" }, el("h2", {}, S.site?.name || t("Project"))));
+  if (!S.site) { loadSite().then(render); return; }
+  const current = S.view.tab || "general";
+  const body = sectionPage(view, PROJECT_SECTIONS(), current, (id) => { S.view.tab = id; render(); });
+  if (current === "general") return projectGeneral(body);
+  if (current === "pins") return body.append(projectPins());
+  if (current === "devices") return renderDevices(body);
+  if (current === "widgets") return renderSources(body);
+  if (current === "intercom") return renderIntercom(body);
+  if (current === "airplay") return renderAirPlay(body);
+  body.append(projectSettingsBox(current));
+  if (current === "apps") managedApps(body);
+}
+
+// ---------- other apps on the panels (packages.py, docs/kiosk-plan.md K6) ----------
+
+const PKG_OPTIONS = () => [
+  ["block_uninstall", t("Block removal"), t("No one can uninstall it from the panel.")],
+  ["grant", t("Grant its permissions"), t("Camera, microphone… granted with no question on the panel. Off: Android asks.")],
+  ["hidden", t("Hidden"), t("As if not installed. Its data stays.")],
+  ["suspended", t("Suspended"), t("Shown, but it does not open.")],
+];
+const PKG_WAY = ["pending", "downloading", "installing", "waiting", "updating", "removing"];
+const PKG_NOT = ["failed", "old_app", "not_owner"];
+const mb = (n) => (n >= 1e6 ? Math.round(n / 1e6) + " MB" : Math.max(1, Math.round(n / 1e3)) + " KB");
+
+// How an app is on a panel, from what the panel said (or what the hub knows without it).
+function pkgState(a, on) {
+  if (a.remove) return on.state === "absent" ? "absent" : "removing";
+  if (on.state === "installed" && a.version_code && (on.version_code || 0) < a.version_code) return "updating";
+  return on.state;
+}
+function pkgStateText(a, on, p) {
+  const st = pkgState(a, on);
+  const details = { signature: t("signed with another key"), android: t("needs a newer Android"), download: t("not downloaded"),
+    install: t("Android refused it"), not_owner: t("not the Android device owner") };
+  const text = {
+    installed: t("Installed, {0}", on.version_name || ""),
+    updating: t("Installed {0}: the new version is on its way", on.version_name || ""),
+    absent: a.remove ? t("Removed") : t("Not on this panel"),
+    removing: p?.online ? t("Being removed") : t("Removed when the panel connects"),
+    pending: p?.online ? t("Being installed") : t("Installed when the panel connects"),
+    downloading: t("Downloading"),
+    installing: t("Installing"),
+    waiting: on.detail === "remote" ? t("Waits for the local network") : t("Waits until the panel is free"),
+    failed: t("Not installed: {0}", details[on.detail] || on.detail || "?"),
+    old_app: t("Update the panel app first"),
+    not_owner: t("Not the Android device owner: not installed"),
+  }[st] || st;
+  const color = st === "installed" || st === "absent" ? "var(--ok)" : PKG_NOT.includes(st) ? "var(--danger)" : "var(--accent)";
+  return { st, text, color };
+}
+
+async function loadPackages() {
+  const r = await api("api/packages");
+  if (r.ok) S.packages = r.body;
+  return r.ok;
+}
+
+function managedApps(body) {
+  if (!S.packages) { loadPackages().then(render); return; }
+  S.openPkg = S.openPkg || new Set();
+  const list = el("div");
+  const draw = () => list.replaceChildren(...S.packages.apps.map(packageBox));
+  body.append(addAppBox(), list);
+  draw();
+  // The panels' word comes as they work: the list follows it while it is open.
+  let seen = JSON.stringify(S.packages);
+  const timer = setInterval(async () => {
+    if (!list.isConnected) return clearInterval(timer);
+    if (list.contains(document.activeElement) || !(await loadPackages())) return;
+    const now = JSON.stringify(S.packages);
+    if (now !== seen) { seen = now; draw(); }
+  }, 3000);
+}
+
+function addAppBox() {
+  const msg = el("div", { class: "msg" });
+  const input = el("input", { type: "file", multiple: true, accept: ".apk,.apks,.xapk", hidden: true });
+  const send = (files) => {
+    if (!files.length) return;
+    const form = new FormData();
+    for (const f of files) form.append("file", f, f.name);
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "api/packages");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) { msg.className = "msg"; msg.textContent = t("Sending… {0}%", Math.round(100 * e.loaded / e.total)); }
+    };
+    xhr.upload.onload = () => { msg.textContent = t("Reading the app…"); };
+    xhr.onload = async () => {
+      let res = null;
+      try { res = JSON.parse(xhr.responseText); } catch (_) { /* not JSON */ }
+      if (xhr.status !== 200) { msg.className = "msg error"; msg.textContent = t("Not added: ") + (res?.error || xhr.status); return; }
+      S.openPkg.add(res.package);
+      await loadPackages();
+      toast(t("{0} added: its panels get it.", res.package));
+      render();
+    };
+    xhr.onerror = () => { msg.className = "msg error"; msg.textContent = t("Not added: ") + t("the connection was cut"); };
+    xhr.send(form);
+  };
+  input.onchange = () => send([...input.files]);
+  const drop = el("div", {
+    class: "drop",
+    ondragover: (e) => { e.preventDefault(); drop.classList.add("over"); },
+    ondragleave: () => drop.classList.remove("over"),
+    ondrop: (e) => { e.preventDefault(); drop.classList.remove("over"); send([...e.dataTransfer.files]); },
+  },
+  el("span", { class: "big" }, icon("mdi:package-variant")),
+  el("div", { style: { flex: "1", minWidth: "200px" } },
+    el("div", {}, t("Drop an .apk here, several split .apk files of one app, or an .apks / .xapk bundle.")),
+    el("div", { class: "muted", style: { marginTop: "4px" } },
+      t("Up to {0}. A newer version of an app here replaces it, and its panels update. An older one is refused.", mb(S.packages.max_size)))),
+  el("button", { class: "primary", onclick: () => input.click() }, t("Choose files")), input);
+  // An app the panels have already (a vendor's): managed for its options, nothing installed.
+  const managed = new Set(S.packages.apps.map((a) => a.package));
+  const others = Object.entries(S.packages.names).filter(([pkg]) => !managed.has(pkg)).sort((a, b) => a[1].localeCompare(b[1]));
+  const pick = selectEl([["", t("— Choose —")], ...others.map(([pkg, label]) => [pkg, `${label} (${pkg})`])], "");
+  return el("div", { class: "box" }, el("h3", {}, t("Add an app")), drop,
+    el("p", { class: "muted", style: { margin: "10px 0 0" } },
+      t("Installed with no tap on panels where the app is Android's device owner, on the local network. The files stay out of the project's backup.")),
+    msg,
+    others.length ? el("div", { class: "row", style: { marginTop: "12px" } },
+      el("span", { class: "muted" }, t("Or manage an app the panels have already:")), pick,
+      el("button", { onclick: async () => {
+        if (!pick.value) return;
+        const r = await post("api/packages/manage", { package: pick.value });
+        if (!r.ok) { alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
+        S.openPkg.add(pick.value);
+        await loadPackages();
+        render();
+      } }, t("Manage"))) : null);
+}
+
+function packageBox(a) {
+  const panels = S.overview.panels;
+  const name = S.packages.names[a.package] || a.package;
+  const open = S.openPkg.has(a.package);
+  const states = Object.entries(a.on).map(([pid, on]) => pkgStateText(a, on, panels.find((p) => p.id === pid)));
+  const count = (pred) => states.filter((s) => pred(s.st)).length;
+  const ok = count((s) => s === "installed");
+  const way = count((s) => PKG_WAY.includes(s));
+  const not = count((s) => PKG_NOT.includes(s));
+  const facts = a.managed_only ? [a.package, t("already on the panels")]
+    : [a.package, a.version_name && `${a.version_name} (${a.version_code})`, a.files && t("{0} files", a.files), a.size && mb(a.size),
+      a.min_sdk && t("Android API {0}+", a.min_sdk)];
+  const head = el("div", { class: "app-head", style: { cursor: "pointer" }, onclick: () => {
+    if (open) S.openPkg.delete(a.package); else S.openPkg.add(a.package);
+    render();
+  } },
+  el("div", { class: "app-icon" }, icon(a.remove ? "mdi:delete-clock-outline" : "mdi:android")),
+  el("div", { style: { flex: "1", minWidth: "0" } }, el("div", { style: { fontWeight: "600" } }, name),
+    el("div", { class: "pkg" }, facts.filter(Boolean).join(" · "))),
+  el("div", { class: "sum" },
+    a.missing ? el("span", { style: { color: "var(--danger)" } }, "● ", t("The file is not here: send it again")) : null,
+    ok ? el("span", { style: { color: "var(--ok)" } }, "● ", t("{0} installed", ok)) : null,
+    way ? el("span", { style: { color: "var(--accent)" } }, "● ", a.remove ? t("Being removed") : t("{0} on its way", way)) : null,
+    not ? el("span", { style: { color: "var(--danger)" } }, "● ", t("{0} not possible", not)) : null),
+  icon(open ? "mdi:chevron-up" : "mdi:chevron-down", { class: "fold" }));
+  if (!open) return el("div", { class: "box" }, head);
+
+  // Its panels: all (those added later too), or chosen ones.
+  let chosen = a.panels === null ? null : new Set(a.panels);
+  const opts = { ...a.options };
+  const chips = el("div", { class: "chips" });
+  const drawChips = () => chips.replaceChildren(
+    el("span", { class: "chip" + (chosen === null ? " on" : ""), onclick: () => { chosen = chosen === null ? new Set() : null; drawChips(); } }, t("All panels")),
+    ...panels.map((p) => el("span", { class: "chip" + (chosen === null || chosen.has(p.id) ? " on" : ""), onclick: () => {
+      if (chosen === null) chosen = new Set(panels.map((x) => x.id));
+      if (chosen.has(p.id)) chosen.delete(p.id); else chosen.add(p.id);
+      drawChips();
+    } }, p.name)));
+  drawChips();
+  const rows = Object.entries(a.on).map(([pid, on]) => {
+    const p = panels.find((x) => x.id === pid);
+    const s = pkgStateText(a, on, p);
+    return el("tr", {}, el("td", {}, p?.name || pid), el("td", {}, stateLine(s.color, s.text)),
+      el("td", { style: { textAlign: "end" } }, s.st === "not_owner" && p
+        ? el("button", { onclick: () => provisionSheet({ name: p.name }) }, icon("mdi:usb-port"), " ", t("Make it the device owner over adb")) : null));
+  });
+  const optBox = el("div");
+  const drawOpts = () => optBox.replaceChildren(...PKG_OPTIONS().map(([k, label, note]) =>
+    optionRow(label, note, toggle(opts[k], (v) => { opts[k] = v; drawOpts(); }))));
+  drawOpts();
+  const msg = el("div", { class: "msg" });
+  const path = `api/packages/${enc(a.package)}`;
+  const forget = async () => { await api(path, { method: "DELETE" }); await loadPackages(); render(); };
+  const foot = a.remove
+    ? el("div", { class: "row", style: { marginTop: "14px" } },
+      el("span", { class: "muted" }, t("Dropped from this list once each panel says it is gone.")), el("span", { class: "spacer" }),
+      el("button", { onclick: forget }, t("Stop waiting")))
+    : el("div", { class: "row", style: { marginTop: "14px" } },
+      el("button", { class: "solid", onclick: async () => {
+        const r = await put(path, { panels: chosen === null ? null : [...chosen], options: opts });
+        if (!r.ok) { msg.className = "msg error"; msg.textContent = t("Not saved: ") + (r.body?.error || r.status); return; }
+        await loadPackages();
+        toast(t("Saved: its panels get it."));
+        render();
+      } }, t("Save")),
+      el("span", { class: "spacer" }),
+      el("button", { onclick: () => {
+        if (confirm(t("Stop managing {0}? It stays on its panels as it is, and its options there are undone.", name))) forget();
+      } }, t("Stop managing")),
+      a.managed_only ? null : el("button", { class: "danger", onclick: async () => {
+        const names = Object.keys(a.on).map((pid) => panels.find((p) => p.id === pid)?.name || pid).join(", ");
+        if (!confirm(t("Remove {0} from these panels, with its data? {1}", name, names || "—"))) return;
+        await post(`${path}/remove`);
+        await loadPackages();
+        render();
+      } }, icon("mdi:delete-outline"), " ", t("Remove from panels")));
+  return el("div", { class: "box" }, head,
+    a.remove ? null : el("div", { class: "sec" }, t("Panels")),
+    a.remove ? null : chips,
+    a.remove ? null : el("p", { class: "muted", style: { margin: "6px 0 0" } }, t("A panel taken out keeps the app as it is.")),
+    el("div", { class: "sec" }, t("On each panel")),
+    rows.length ? el("table", {}, el("tr", {}, el("th", {}, t("Panel")), el("th", {}, t("State")), el("th", {})), ...rows)
+      : el("p", { class: "muted" }, t("On no panel.")),
+    a.remove ? null : el("div", { class: "sec" }, t("On its panels")),
+    a.remove ? null : optBox,
+    foot, msg);
+}
+
+function projectGeneral(body) {
   const site = S.site;
   const name = el("input", { value: site.name || "" });
-  const display = el("div", { class: "form" });
-  const read = displayFields(display, site.defaults || {}, BUILT_IN, t("Default"));
-  const reload = async () => { await loadSite(); await loadOverview(); render(); };
-  view.append(
+  body.append(
     el("div", { class: "box" }, el("h3", {}, t("Project")),
       el("div", { class: "form" }, el("label", {}, t("Project name")), name),
-      el("h3", { style: { marginTop: "18px" } }, t("Default settings for all panels")), display,
       el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
-        // The floors' names and icons are not on this form: the hub keeps them.
-        const r = await putSettings("api/site", { name: name.value.trim(), defaults: read() }, site, loadSite);
+        const r = await putSettings("api/site", { name: name.value.trim() }, site, loadSite);
         if (!r.ok) { if (refused(r)) alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
         S.site = r.body; toast(t("Saved, and on every online panel.")); render();
       } }, t("Save")))),
-    el("div", { class: "box" }, el("h3", {}, t("PINs")),
-      el("p", { class: "muted" }, t("The installer PIN gives every local permission on a panel; the user PIN gives what each panel's permissions allow. Panels only get them hashed, and they work offline.")),
-      pinRow(t("Installer PIN"), site.installer_pin_set, site.installer_pin_set ? t("● Set") : t("○ Not set"),
-        async (pin) => { await post("api/site/pin", { role: "installer", pin }); reload(); },
-        async () => { if (confirm(t("Remove the installer PIN? The panels' settings become open."))) { await post("api/site/pin", { role: "installer", pin: null }); reload(); } }, t("Remove")),
-      pinRow(t("User PIN"), site.user_pin_set, site.user_pin_set ? t("● Set") : t("○ Not set"),
-        async (pin) => { await post("api/site/pin", { role: "user", pin }); reload(); },
-        async () => { await post("api/site/pin", { role: "user", pin: null }); reload(); }, t("Remove"))),
     integrationBox(),
     backupBox(),
   );
+}
+
+// A section of the settings every panel takes, unless it has its own.
+function projectSettingsBox(section) {
+  const site = S.site;
+  const fields = settingRows(section, site.defaults || {}, BUILT_IN, t("Default"), false);
+  return el("div", { class: "box" }, el("h3", {}, SECTION_TITLES()[section]),
+    el("p", { class: "muted" }, t("For every panel. A panel may have its own, in its settings.")),
+    section === "lock" ? ownersLine() : null,
+    fields.rows,
+    el("div", { class: "row", style: { marginTop: "14px" } }, el("button", { class: "solid", onclick: async () => {
+      // The floors' names and icons are not on this form: the hub keeps them.
+      const r = await putSettings("api/site", { defaults: withSection(site.defaults, section, fields.read()) }, site, loadSite);
+      if (!r.ok) { if (refused(r)) alert(t("Not saved: ") + (r.body?.error || r.status)); return; }
+      S.site = r.body; toast(t("Saved, and on every online panel.")); render();
+    } }, t("Save"))));
+}
+
+// How many panels the full lock applies to: those that reported, and are the device owner.
+function ownersLine() {
+  const known = S.overview.panels.filter((p) => p.app?.version_name);
+  if (!known.length) return null;
+  const owners = known.filter((p) => p.app.device_owner).length;
+  return el("div", { class: "row", style: { justifyContent: "space-between", marginBottom: "8px" } },
+    stateLine(owners === known.length ? "var(--ok)" : "var(--muted)",
+      t("{0} of {1} panels are Android's device owner: the full lock applies there.", owners, known.length)),
+    owners < known.length ? el("button", { onclick: () => provisionSheet() }, icon("mdi:usb-port"), " ", t("Set up a panel over adb")) : null);
+}
+
+function projectPins() {
+  const site = S.site;
+  const reload = async () => { await loadSite(); await loadOverview(); render(); };
+  return el("div", { class: "box" }, el("h3", {}, t("PINs")),
+    el("p", { class: "muted" }, t("The installer PIN gives every local permission on a panel; the user PIN gives what each panel's permissions allow. Panels only get them hashed, and they work offline.")),
+    pinRow(t("Installer PIN"), site.installer_pin_set, site.installer_pin_set ? t("● Set") : t("○ Not set"),
+      async (pin) => { await post("api/site/pin", { role: "installer", pin }); reload(); },
+      async () => { if (confirm(t("Remove the installer PIN? The panels' settings become open."))) { await post("api/site/pin", { role: "installer", pin: null }); reload(); } }, t("Remove")),
+    pinRow(t("User PIN"), site.user_pin_set, site.user_pin_set ? t("● Set") : t("○ Not set"),
+      async (pin) => { await post("api/site/pin", { role: "user", pin }); reload(); },
+      async () => { await post("api/site/pin", { role: "user", pin: null }); reload(); }, t("Remove")));
 }
 
 // The project in one file (backup.py): exported, or restored in place of this one.

@@ -22,6 +22,9 @@ log = logging.getLogger(__name__)
 
 # Display settings that live in the panel configuration once a hub manages the panel.
 DISPLAY = ("lang", "theme", "screensaver", "home_title")
+# Every setting a panel takes from the project unless it has its own (the floors aside: they are
+# named one by one). The schema's "settings" holds the same, and a test checks it.
+SETTINGS = (*DISPLAY, "app_return_seconds", "kiosk_lock", "maintenance_minutes", "adb_open")
 # The apps that pair with the hub, one per kind of device.
 PLATFORMS = ("android", "esp32", "phone")
 # The kinds of panel, each with its own app: a layout or a setting that depends on the screen's
@@ -553,10 +556,11 @@ class Store:
                             panel_id, PIN_TRIES, PIN_LOCK_S, PIN_LOCK_S)
         return role
 
-    def save_display_for_all(self, display: dict) -> int:
-        """Display settings for every panel: the project's, and no panel keeps its own value
-        for them any more. Returns how many panels had their own value replaced."""
-        keys = [k for k in DISPLAY if k in display]
+    def save_display_for_all(self, display: dict, allowed: tuple = DISPLAY) -> int:
+        """Settings for every panel: the project's, and no panel keeps its own value for them any
+        more. [allowed]: the display settings from a panel; any of SETTINGS from the add-on's
+        page. Returns how many panels had their own value replaced."""
+        keys = [k for k in allowed if k in display]
         site = self.get_site()
         defaults = dict(site.get("defaults") or {})
         for key in keys:

@@ -31,9 +31,10 @@ MAX_SIZE = 20 * 1024 * 1024
 MAX_UNPACKED = 100 * 1024 * 1024
 MAX_FILES = 5000
 
-TOP = ("panels.json", "site.json", "intercom.json", "airplay.json")
+# packages.json: the apps managed on the panels, not their files (packages.py).
+TOP = ("panels.json", "site.json", "intercom.json", "airplay.json", "packages.json")
 FOLDERS = ("config", "layouts", "drafts")
-NAME = re.compile(r"^(?:(?:panels|site|intercom|airplay)\.json|(?:config|layouts|drafts)/[A-Za-z0-9_-]+\.json)$")
+NAME = re.compile(r"^(?:(?:panels|site|intercom|airplay|packages)\.json|(?:config|layouts|drafts)/[A-Za-z0-9_-]+\.json)$")
 # The files only the hub's own user may read: they hold passwords.
 PRIVATE = {"intercom.json", "airplay.json"}
 # What was here before the last import, to go back to.
@@ -90,6 +91,9 @@ def _check(name: str, doc: Any) -> None:
             if not isinstance(doc, dict):
                 raise BackupInvalid(f"{name} is not a layout")
             validate_layout({k: v for k, v in readable(doc).items() if k != "panel"})
+        elif name == "packages.json":
+            if not isinstance(doc, dict) or not isinstance(doc.get("apps", []), list):
+                raise BackupInvalid("packages.json is not a list of apps")
         elif not isinstance(doc, dict):  # drafts (half done, checked when sent), intercom, AirPlay
             raise BackupInvalid(f"{name} is not what it should be")
     except BackupInvalid:

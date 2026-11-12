@@ -28,6 +28,7 @@ import aiohttp
 from aiohttp import WSMsgType, web
 
 from .airplay import AirPlayInvalid
+from . import packages
 from .app_updates import AppUpdates
 from .intercom import DOMAIN, networks
 from . import relay as sound
@@ -175,6 +176,8 @@ class PanelConnection:
         self.config_subs: set[int] = set()
         # wallpanel/app/subscribe: the hub's offer of an app update (app_updates.py).
         self.app_subs: set[int] = set()
+        # wallpanel/packages/subscribe: the other apps it should have (packages.py).
+        self.package_subs: set[int] = set()
         # Layout format the panel's app reads, until it says.
         self.schema = SCHEMA
         # What each of its devices can do, added to the states going to it.
@@ -262,6 +265,8 @@ class PanelConnection:
                                             self.gateway.installed_apps.get(self.panel_id, []), role)
                 if getattr(self.gateway, "airplay", None) is not None:
                     result["airplay"] = self.gateway.airplay.view(self.panel_id)
+                if self.gateway.packages is not None:
+                    result["packages"] = self.gateway.packages.for_settings(self.panel_id, self.gateway.app_names())
             elif kind == "wallpanel/panel/update":
                 areas = {a["id"] for a in await _areas(self.gateway)}
                 changes = msg.get("changes") or {}
@@ -271,7 +276,16 @@ class PanelConnection:
                         self.gateway.airplay.update(self.panel_id, airplay)
                     except AirPlayInvalid as e:
                         raise panel_settings.Refused(str(e)) from e
-                panel_settings.update(store, self.panel_id, role, {k: v for k, v in changes.items() if k != "airplay"}, areas)
+                # The add-on's managed apps on this panel or not (packages.py): {package: on}.
+                managed = changes.get("packages")
+                if isinstance(managed, dict) and self.gateway.packages is not None:
+                    for pkg, on in managed.items():
+                        try:
+                            await self.gateway.packages.set_panel(str(pkg), self.panel_id, on is True)
+                        except packages.Refused as e:
+                            raise panel_settings.Refused(str(e)) from e
+                panel_settings.update(store, self.panel_id, role,
+                                      {k: v for k, v in changes.items() if k not in ("airplay", "packages")}, areas)
                 result = None
             elif kind == "wallpanel/panel/pin":
                 panel_settings.set_pin(store, self.panel_id, str(msg.get("role") or ""), msg.get("new_pin"), role)
@@ -548,6 +562,14 @@ class PanelConnection:
         for sub in list(self.app_subs):
             await self.send({"id": sub, "type": "event", "event": {"offer": offer}})
 
+    async def push_packages(self) -> None:
+        packages = self.gateway.packages
+        if packages is None:
+            return
+        event = {"packages": packages.for_panel(self.panel_id)}
+        for sub in list(self.package_subs):
+            await self.send({"id": sub, "type": "event", "event": event})
+
     async def push_layout(self) -> None:
         layout = self.layout_for_panel()
         for sub in list(self.layout_subs):
@@ -660,7 +682,8 @@ class PanelConnection:
         elif kind == "wallpanel/apps/report":
             # The apps installed on the panel, so the add-on can offer them by name.
             apps = [
-                {"package": a["package"], "label": str(a.get("label") or a["package"])[:80]}
+                {"package": a["package"], "label": str(a.get("label") or a["package"])[:80],
+                 "version_code": a["version_code"] if isinstance(a.get("version_code"), int) else None}
                 for a in (msg.get("apps") or [])[:300]
                 if isinstance(a, dict) and isinstance(a.get("package"), str) and PACKAGE.fullmatch(a["package"])
             ]
@@ -692,6 +715,18 @@ class PanelConnection:
         elif kind == "wallpanel/app/status":
             detail = msg.get("detail")
             self.gateway.updates.status(self.panel_id, str(msg.get("state")), str(detail)[:200] if detail else None)
+            await self.send({"id": mid, "type": "result", "success": True, "result": None})
+        elif kind == "wallpanel/packages/subscribe":
+            # The other apps this panel should have (packages.py, docs/kiosk-plan.md K6).
+            self.package_subs.add(mid)
+            await self.send({"id": mid, "type": "result", "success": True, "result": None})
+            await self.push_packages()
+        elif kind == "wallpanel/packages/status":
+            packages, pkg = self.gateway.packages, msg.get("package")
+            if packages is not None and isinstance(pkg, str):
+                code, name, detail = msg.get("version_code"), msg.get("version_name"), msg.get("detail")
+                packages.reported(self.panel_id, pkg, str(msg.get("state")), code if isinstance(code, int) else None,
+                                  str(name)[:40] if name else None, str(detail)[:200] if detail else None)
             await self.send({"id": mid, "type": "result", "success": True, "result": None})
         elif kind == "wallpanel/config/subscribe":
             self.config_subs.add(mid)
@@ -837,6 +872,8 @@ class Gateway:
         self.installed_widgets: dict[str, list[dict]] = {}
         # The app updates asked for in the add-on (app_updates.py).
         self.updates = AppUpdates(store)
+        # The other apps managed from the add-on (packages.Packages).
+        self.packages = None
         # HA's building (catalog.CatalogCache), for panels that add rooms and devices.
         self.catalog = None
         # Rooms' pictures from HA, by area, until HA's picture changes.
@@ -987,6 +1024,21 @@ class Gateway:
         """An update asked for: offered to the panel at once if it is connected."""
         for conn in list(self.connections.get(panel_id, ())):
             await conn.push_app()
+
+    def app_names(self) -> dict[str, str]:
+        """The names the panels gave their apps, by package."""
+        names: dict[str, str] = {}
+        for apps in self.installed_apps.values():
+            for a in apps:
+                names.setdefault(a["package"], a["label"])
+        return names
+
+    async def notify_packages(self, panels: list[str] | None = None) -> None:
+        """A change in the managed apps: the lists of [panels] (all: None) again."""
+        for pid, conns in list(self.connections.items()):
+            if panels is None or pid in panels:
+                for conn in list(conns):
+                    await conn.push_packages()
 
     async def notify_config(self, panel_id: str | None = None) -> None:
         """New effective configuration for one panel, or for all (site change)."""

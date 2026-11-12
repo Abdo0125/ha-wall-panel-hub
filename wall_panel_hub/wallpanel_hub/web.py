@@ -10,13 +10,14 @@ import base64
 import ipaddress
 import logging
 import re
+import shutil
 import time
 from pathlib import Path
 
 import aiohttp
 from aiohttp import web
 
-from . import backup, install_link, panel_app, provision
+from . import backup, install_link, packages, panel_app, provision
 from .airplay import AirPlayInvalid
 from .cards import REGISTRY, offered_options
 from .intercom import ECHO, IntercomInvalid
@@ -26,7 +27,7 @@ from .config import ConfigInvalid
 from .pins import PinInvalid, hash_pin
 from .gateway import Gateway, public
 from .settings import VERSION
-from .store import LayoutConflict, LayoutInvalid, Store, layout_summary
+from .store import SETTINGS, LayoutConflict, LayoutInvalid, Store, layout_summary
 
 STATIC = Path(__file__).parent / "static"
 # The page's files, under a path that changes with each version and has no "/static/" in it:
@@ -167,6 +168,19 @@ def panel_api(store: Store, gateway: Gateway, install: install_link.InstallLink 
 
     app.router.add_get("/api/app/file", update_apk)
     app.router.add_get("/api/app/dm", update_dm)
+
+    # A managed app's file (packages.py): with the panel's key, only of an app on its list.
+    async def package_file(request: web.Request):
+        key = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        panel = store.authenticate(key) if key else None
+        if panel is None:
+            raise web.HTTPUnauthorized()
+        found = gateway.packages.file_for(panel.id, request.match_info["package"], request.match_info["name"])             if gateway.packages is not None else None
+        if found is None or not found.is_file():
+            raise web.HTTPNotFound()
+        return web.FileResponse(found, headers={"Content-Type": panel_app.MIME, "Cache-Control": "no-store"})
+
+    app.router.add_get(r"/api/packages/{package:[A-Za-z0-9_.]+}/{name:[A-Za-z0-9_.]+\.apk}", package_file)
 
     app.router.add_get(r"/get/{code:[0-9]{1,8}}", install_page)
     app.router.add_get(r"/get/{code:[0-9]{1,8}}/{name}", install_file)
@@ -383,6 +397,8 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         if getattr(gateway, "airplay", None) is not None:
             gateway.airplay.load()
             await gateway.airplay.apply()
+        if gateway.packages is not None:
+            gateway.packages.load()
         # Each panel connects again, as what the backup says it is (or is told it is not paired).
         for pid in list(gateway.connections):
             await gateway.disconnect(pid)
@@ -533,10 +549,10 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         return web.json_response(_without_pins(saved))
 
     async def display_all(request: web.Request):
-        """Display settings for every panel: the project's, replacing each panel's own."""
+        """A panel's settings for every panel: the project's, replacing each panel's own."""
         body = await _body(request)
         try:
-            replaced = store.save_display_for_all(body.get("display") or {})
+            replaced = store.save_display_for_all(body.get("display") or {}, SETTINGS)
         except ConfigInvalid as e:
             return _invalid(e)
         await gateway.notify_config()
@@ -720,6 +736,79 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
         for pid in asked:
             await gateway.notify_app(pid)
         return web.json_response({"asked": len(asked)})
+
+    # ---- other apps on the panels (packages.py, docs/kiosk-plan.md K6) ----
+
+    def _packages() -> packages.Packages:
+        if gateway.packages is None:
+            raise web.HTTPNotFound()
+        return gateway.packages
+
+    async def list_packages(_):
+        # The names the panels gave their apps, and those they have, to manage one already there.
+        return web.json_response({"apps": _packages().views(), "names": gateway.app_names(), "max_size": packages.MAX_SIZE})
+
+    async def upload_package(request: web.Request):
+        """One app as files: an .apk, its splits, or an .apks / .xapk bundle. Streamed to disk:
+        larger than the page's other requests."""
+        pk = _packages()
+        try:
+            reader = await request.multipart()
+        except Exception:
+            raise web.HTTPBadRequest(text="files required")
+        work = packages.work_dir(store.dir)
+        try:
+            paths, total = [], 0
+            while (part := await reader.next()) is not None:
+                if part.name != "file" or not part.filename:
+                    continue
+                suffix = Path(part.filename).suffix.lower()
+                if suffix not in (".apk", ".apks", ".xapk"):
+                    return _invalid(packages.Refused(f"{part.filename}: not an .apk, .apks or .xapk file"))
+                dest = work / f"upload{len(paths)}{suffix}"
+                with open(dest, "wb") as f:
+                    while chunk := await part.read_chunk(1 << 20):
+                        total += len(chunk)
+                        if total > packages.MAX_SIZE:
+                            return _invalid(packages.Refused("the app is larger than allowed"))
+                        f.write(chunk)
+                paths.append(dest)
+            if not paths:
+                return _invalid(packages.Refused("no file"))
+            return web.json_response(await pk.upload(paths, work))
+        except packages.Refused as e:
+            return _invalid(e)
+        finally:
+            await asyncio.to_thread(shutil.rmtree, work, True)
+
+    async def manage_package(request: web.Request):
+        try:
+            return web.json_response(await _packages().manage(str((await _body(request)).get("package") or "")))
+        except packages.Refused as e:
+            return _invalid(e)
+
+    async def put_package(request: web.Request):
+        try:
+            return web.json_response(await _packages().update(request.match_info["package"], await _body(request)))
+        except packages.Refused as e:
+            return _invalid(e)
+
+    async def remove_package(request: web.Request):
+        try:
+            return web.json_response(await _packages().remove(request.match_info["package"]))
+        except packages.Refused as e:
+            return _invalid(e)
+
+    async def forget_package(request: web.Request):
+        await _packages().forget(request.match_info["package"])
+        return web.json_response({"ok": True})
+
+    app.router.add_get("/api/packages", list_packages)
+    app.router.add_post("/api/packages", upload_package)
+    app.router.add_post("/api/packages/manage", manage_package)
+    app.router.add_put("/api/packages/{package}", put_package)
+    app.router.add_post("/api/packages/{package}/remove", remove_package)
+    app.router.add_delete("/api/packages/{package}", forget_package)
 
     app.router.add_post("/api/panels/{pid}/update", update_panel)
     app.router.add_post("/api/app/update_all", update_all)

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.68.0
+
+- Other apps on the panels: send an .apk, the split .apk files of one app, or an .apks / .xapk
+  bundle in the project's Apps section, choose its panels (all, or some), and the hub installs it
+  on them with no tap where the panel app is the Android device owner (app 0.80.0), on the local
+  network. A newer version replaces it and updates its panels; an older one is refused. A panel
+  that is off catches up when it connects. Each panel's state shows for each app.
+- Options for each app: block its removal, grant its permissions, hide it, suspend it. They also
+  apply to an app the panels have already, such as a vendor's, managed with no file.
+- Remove from panels uninstalls it with its data; Stop managing leaves it installed and undoes its
+  options. A panel taken out of an app's panels keeps the app.
+- A panel's own settings show the managed apps, and take the panel in or out of each.
+- The settings pages are split into sections, for each panel and for the project; each field says
+  whether it is the panel's own or the project's. Copying a panel's settings to every panel now
+  copies the lock, adb and app return settings too, not only the display ones.
+- The managed apps' list is in the project's backup; their files are not.
+- Carries the panel app 0.80.0.
+
 ## 0.67.0
 
 - Set up a panel over adb from the add-on: type its address (or search the network), and the hub
