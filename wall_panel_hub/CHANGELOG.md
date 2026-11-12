@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.69.0
+
+- The panel app is signed with its own release key from app 0.81.0 on, for good. Panels with an
+  earlier app take it as an ordinary update, from this add-on or over adb: the app carries the old
+  key's handover, so their settings, pairing and device ownership stay, with no reinstall. An app
+  signed with the old key alone can no longer replace it.
+- The panel app needs Android 9 or later from app 0.81.0 on. The hub offers it to no older panel,
+  and says so on the panel's page; a setup over adb stops before installing on one.
+- Carries the panel app 0.81.0.
+
 ## 0.68.0
 
 - Other apps on the panels: send an .apk, the split .apk files of one app, or an .apks / .xapk

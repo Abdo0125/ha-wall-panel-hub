@@ -24,11 +24,18 @@ class AppUpdates:
         return app if app and panel_app.path() is not None else None
 
     def needs(self, panel_id: str) -> bool:
-        """The add-on carries a newer app than the panel's (an unknown version counts as older)."""
+        """The add-on carries a newer app than the panel's (an unknown version counts as older), and
+        the panel's Android takes it."""
         app, panel = self.carried(), self.store.panels.get(panel_id)
-        if app is None or panel is None:
+        if app is None or panel is None or self.too_old(panel_id):
             return False
         return (panel.app_version_code or 0) < app["version_code"]
+
+    def too_old(self, panel_id: str) -> bool:
+        """The panel's Android is below the one the carried app needs (an unknown one is not)."""
+        app, panel = self.carried(), self.store.panels.get(panel_id)
+        sdk, need = getattr(panel, "android_sdk", None), (app or {}).get("min_sdk")
+        return bool(sdk and need and sdk < need)
 
     def request(self, panel_id: str) -> bool:
         """The installer asks: offered to the panel if it needs it. False if it does not."""
@@ -68,5 +75,6 @@ class AppUpdates:
             "can_install": bool(getattr(panel, "can_install", False)),
             "device_owner": bool(getattr(panel, "device_owner", False)),
             "needs_update": self.needs(panel_id),
+            "android_too_old": self.too_old(panel_id),
             "update": self.state.get(panel_id),
         }

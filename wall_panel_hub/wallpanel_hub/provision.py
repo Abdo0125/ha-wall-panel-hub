@@ -295,6 +295,8 @@ class Provisioner:
             return None
         if apk is None:
             raise Failed("no_app")
+        if app.get("min_sdk") and 0 < job.device.get("sdk", 0) < app["min_sdk"]:
+            raise Failed("android_too_old", job.device.get("android") or str(job.device["sdk"]))
         if job.replace and have is not None:
             out = await self.adb.run("-s", job.address, "uninstall", PKG, timeout=60)
             if "Success" not in out:

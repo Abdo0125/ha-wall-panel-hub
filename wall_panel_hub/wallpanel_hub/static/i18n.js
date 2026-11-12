@@ -686,7 +686,9 @@ const I18N = {
   "{0} files": "{0} ملفات",
   "{0} installed": "{0} مثبَّت",
   "{0} not possible": "{0} غير ممكن",
-  "{0} on its way": "{0} في الطريق"
+  "{0} on its way": "{0} في الطريق",
+  "The panel app needs Android 9 or later; this panel has Android {0}.": "تطبيق الشاشة يحتاج أندرويد 9 فما فوق، وهذه الشاشة بأندرويد {0}.",
+  "This panel's Android is too old for the app this add-on carries: it needs Android 9 or later.": "أندرويد هذه الشاشة أقدم من أن يأخذ التطبيق الذي يحمله هذا الـ add-on: يحتاج أندرويد 9 فما فوق."
  },
  "fr": {
   "Update available": "Mise à jour disponible",
@@ -1365,7 +1367,9 @@ const I18N = {
   "{0} files": "{0} fichiers",
   "{0} installed": "{0} installée(s)",
   "{0} not possible": "{0} impossible(s)",
-  "{0} on its way": "{0} en cours"
+  "{0} on its way": "{0} en cours",
+  "The panel app needs Android 9 or later; this panel has Android {0}.": "L'application de l'écran demande Android 9 ou plus récent ; cet écran a Android {0}.",
+  "This panel's Android is too old for the app this add-on carries: it needs Android 9 or later.": "L'Android de cet écran est trop ancien pour l'application que porte ce module : elle demande Android 9 ou plus récent."
  },
  "es": {
   "Update available": "Actualización disponible",
@@ -2044,7 +2048,9 @@ const I18N = {
   "{0} files": "{0} archivos",
   "{0} installed": "{0} instalada(s)",
   "{0} not possible": "{0} no posible(s)",
-  "{0} on its way": "{0} en camino"
+  "{0} on its way": "{0} en camino",
+  "The panel app needs Android 9 or later; this panel has Android {0}.": "La aplicación de la pantalla necesita Android 9 o posterior; esta pantalla tiene Android {0}.",
+  "This panel's Android is too old for the app this add-on carries: it needs Android 9 or later.": "El Android de esta pantalla es demasiado antiguo para la aplicación que lleva este complemento: necesita Android 9 o posterior."
  }
 };
 

@@ -898,6 +898,7 @@ function appBox(p) {
   else if (u?.state === "confirm") state = line("var(--accent)", t("Waiting for a tap on the panel to install"));
   else if (u?.state === "waiting") state = line("var(--accent)", t("Waiting for the panel to be free (a call or an edit)"));
   else if (u) state = line("var(--accent)", p.online ? t("Sent to the panel") : t("Sent when the panel connects"));
+  else if (app.android_too_old) state = line("var(--danger)", t("This panel's Android is too old for the app this add-on carries: it needs Android 9 or later."));
   else if (app.version_name && !app.needs_update) state = line("var(--ok)", t("Up to date ({0})", app.version_name));
   const version = app.version_name ? t("Version {0} on this panel", app.version_name) : t("Version not known yet: the panel says it when it connects.");
   return el("div", { class: "box", id: "appbox" }, el("h3", {}, t("Panel app")),
@@ -980,6 +981,7 @@ function provisionWhy(s) {
     timeout: t("The panel did not answer in time."),
     up_to_date: t("Installed already, this version or newer."),
     no_app: t("The panel app is not in this add-on: update or reinstall the add-on."),
+    android_too_old: t("The panel app needs Android 9 or later; this panel has Android {0}.", d),
     signed_differently: t("Another build of the app is installed, signed with another key. Removing it deletes its settings on the panel."),
     not_removed: t("The old app was not removed: {0}", d),
     install_failed: t("Not installed: {0}", d),
