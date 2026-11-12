@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.71.0
+
+Security review, second batch: the local network encrypted (docs/lan-tls-plan.md).
+
+- The hub makes its own certificate on its first start and serves the panels on an encrypted port
+  as well, 8766 (the new `tls_port` option). The certificate is kept in the backup: a hub restored
+  from it is the same hub to its panels. Panels trust it by its key's fingerprint, not by a name, so
+  the hub's address may change.
+- Paired panels move to the encrypted port by themselves once they take app 0.83.0, with nothing to
+  do and nothing shown. On their first encrypted connection the hub hands them a new key: the one
+  that crossed the network in clear stops working once the panel has saved the new one. From then on
+  the hub refuses a moved panel's key, files and sounds on the plain port; Home Assistant's
+  integration on the same machine still carries panels reached through Home Assistant's address.
+- Pairing a new panel on the local network goes over the encrypted port, and the 6-digit code the
+  installer compares is made from the hub's fingerprint: someone in between cannot make the panel's
+  code and the add-on's agree. The add-on shows "Waiting for the panel" for the moment before the
+  code is ready. A setup over adb hands the panel the fingerprint itself.
+- A panel's page says when its connection is not encrypted yet, or goes through Home Assistant's
+  address.
+- The plain port 8765 stays, for older apps, the install link and Home Assistant's integration.
+- New dependency: cryptography (Apache 2.0 / BSD).
+- Carries the panel app 0.83.0.
+
 ## 0.70.0
 
 Security review, first batch (docs/audit-9-security.md).

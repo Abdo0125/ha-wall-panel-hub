@@ -2,6 +2,9 @@ configuration:
   panel_port:
     name: "Panel port"
     description: "The port the panels on the home network use to pair and connect."
+  tls_port:
+    name: "Encrypted panel port"
+    description: "The encrypted port the panels on the home network connect on. Panels move to it by themselves; the panel port stays for older apps."
   sip_port:
     name: "Intercom SIP port"
     description: "The intercom's SIP port, for doors and other SIP devices. Calls' sound uses UDP 10000-10199."

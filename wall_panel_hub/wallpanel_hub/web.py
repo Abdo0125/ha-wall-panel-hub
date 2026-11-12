@@ -1,6 +1,7 @@
 """Two HTTP servers.
 
-- Panel API (LAN, panel_port): discovery check, pairing, WebSocket gateway.
+- Panel API (LAN, panel_port, and encrypted on tls_port: docs/lan-tls-plan.md): discovery check,
+  pairing, WebSocket gateway.
 - Management UI (ingress_port): opened from the Home Assistant sidebar. Requests are
   accepted only from the Supervisor's ingress proxy, so the LAN cannot reach it.
 """
@@ -25,9 +26,9 @@ from .intercom import addresses as intercom_addresses
 from .catalog import CatalogCache, device_types, features_of, with_types
 from .config import ConfigInvalid
 from .pins import PinInvalid, hash_pin
-from .gateway import Gateway, public
+from .gateway import Gateway, public, refused_in_clear
 from .settings import VERSION
-from .store import SETTINGS, LayoutConflict, LayoutInvalid, PairingBusy, Store, layout_summary
+from .store import SETTINGS, LayoutConflict, LayoutInvalid, NotRevealed, PairingBusy, Store, layout_summary
 
 STATIC = Path(__file__).parent / "static"
 # The page's files, under a path that changes with each version and has no "/static/" in it:
@@ -43,7 +44,7 @@ def panel_api(store: Store, gateway: Gateway, install: install_link.InstallLink 
     app = web.Application(client_max_size=256 * 1024)
 
     async def info(_):
-        return web.json_response({"service": "wall_panel_hub", "version": VERSION})
+        return web.json_response({"service": "wall_panel_hub", "version": VERSION, **gateway.tls_offer()})
 
     async def pair(request: web.Request):
         try:
@@ -54,22 +55,41 @@ def panel_api(store: Store, gateway: Gateway, install: install_link.InstallLink 
         token = body.get("provision_token")
         # Set by the HA integration on what it forwards; a LAN client that sets it only lowers its own place.
         via_ha = request.headers.get(VIA_HEADER) == "ha"
+        # On the encrypted port, the code is bound to the hub's pin when the panel commits to a nonce.
+        secure = request.secure and gateway.tls is not None
         try:
             req = store.request_pairing(panel_id, str(body.get("name", "")), str(body.get("model", "")),
                                         str(body.get("platform", "android")), body.get("type"),
-                                        token if isinstance(token, str) else None, via_ha)
+                                        token if isinstance(token, str) else None, via_ha,
+                                        tls=secure, commit=body.get("commit") if secure else None)
         except PairingBusy:
             raise web.HTTPTooManyRequests(text="too many pairing requests, try again later")
-        return web.json_response({"request_id": req.request_id, "code": req.code})
+        out = {"request_id": req.request_id, "code": req.code}
+        if req.nonce_hub:
+            out["nonce"] = req.nonce_hub
+        return web.json_response(out)
+
+    async def pair_reveal(request: web.Request):
+        """The panel's nonce, on the connection it pinned: the code is made from it and the hub's pin."""
+        if not request.secure or gateway.tls is None:
+            raise web.HTTPNotFound()
+        try:
+            nonce = str((await request.json())["nonce"])
+        except Exception:
+            raise web.HTTPBadRequest(text="nonce required")
+        if not store.reveal(request.match_info["rid"], nonce, gateway.tls.spki):
+            raise web.HTTPBadRequest(text="not the nonce committed to")
+        return web.json_response({"ok": True})
 
     async def pair_status(request: web.Request):
-        return web.json_response(store.pairing_status(request.match_info["rid"]))
+        return web.json_response(store.pairing_status(request.match_info["rid"], request.secure))
 
     async def media(request: web.Request):
         """A sound HA keeps (TTS, its media folder), handed to a panel on the add-on's network
         for HA's command to its speaker (speakers.py): only the paths handed out."""
-        path = gateway.speakers.media_path(request.match_info["token"]) if gateway.speakers else None
-        if path is None:
+        token = request.match_info["token"]
+        path = gateway.speakers.media_path(token) if gateway.speakers else None
+        if path is None or refused_in_clear(store.panels.get(gateway.speakers.media_panel(token) or ""), request):
             raise web.HTTPNotFound()
         timeout = aiohttp.ClientTimeout(total=None, sock_connect=10, sock_read=60)
         headers = dict(gateway.ha_auth)
@@ -122,11 +142,14 @@ def panel_api(store: Store, gateway: Gateway, install: install_link.InstallLink 
     app.router.add_get(r"/api/hls/{token:[a-f0-9]+}/{tail:[A-Za-z0-9_./-]+}", hls)
     app.router.add_post("/api/pair", pair)
     app.router.add_get(r"/api/pair/{rid:[A-Za-z0-9_-]{1,64}}", pair_status)
+    app.router.add_post(r"/api/pair/{rid:[A-Za-z0-9_-]{1,64}}/reveal", pair_reveal)
     app.router.add_get("/api/websocket", gateway.handle)
     app.router.add_get(r"/api/media/{token:[a-f0-9]{32}}", media)
 
     async def airplay(request: web.Request):
         if getattr(gateway, "airplay", None) is None:
+            raise web.HTTPNotFound()
+        if refused_in_clear(store.panels.get(gateway.airplay.panel_of(request.match_info["token"]) or ""), request):
             raise web.HTTPNotFound()
         return await gateway.airplay.stream(request)
 
@@ -156,7 +179,7 @@ def panel_api(store: Store, gateway: Gateway, install: install_link.InstallLink 
     async def update_file(request: web.Request, dm: bool):
         key = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         panel = store.authenticate(key) if key else None
-        if panel is None:
+        if panel is None or refused_in_clear(panel, request):
             raise web.HTTPUnauthorized()
         offer = gateway.updates.offer(panel.id)
         path = panel_app.dm_path() if dm else panel_app.path()
@@ -180,7 +203,7 @@ def panel_api(store: Store, gateway: Gateway, install: install_link.InstallLink 
     async def package_file(request: web.Request):
         key = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         panel = store.authenticate(key) if key else None
-        if panel is None:
+        if panel is None or refused_in_clear(panel, request):
             raise web.HTTPUnauthorized()
         found = gateway.packages.file_for(panel.id, request.match_info["package"], request.match_info["name"])             if gateway.packages is not None else None
         if found is None or not found.is_file():
@@ -369,6 +392,9 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
                     "paired_at": p.paired_at,
                     "last_seen": p.last_seen,
                     "online": gateway.online(p.id),
+                    # Encrypted on the LAN (docs/lan-tls-plan.md, 6), or through Home Assistant's address.
+                    "tls": p.tls,
+                    "via_ha": p.via_ha,
                     "layout_version": (store.get_layout(p.id) or {}).get("version"),
                     "app": gateway.updates.for_panel(p.id),
                 }
@@ -412,6 +438,9 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
             await gateway.airplay.apply()
         if gateway.packages is not None:
             gateway.packages.load()
+        # The backup's certificate, for the connections from now on: its panels trust that one.
+        if gateway.tls is not None:
+            gateway.tls.load()
         # Each panel connects again, as what the backup says it is (or is told it is not paired).
         for pid in list(gateway.connections):
             await gateway.disconnect(pid)
@@ -491,6 +520,8 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
             panel = store.approve(request.match_info["rid"])
         except KeyError:
             raise web.HTTPNotFound(text="request expired")
+        except NotRevealed:
+            raise web.HTTPConflict(text="the panel has not shown its code yet")
         return web.json_response({"ok": True, "panel_id": panel.id})
 
     async def reject(request: web.Request):

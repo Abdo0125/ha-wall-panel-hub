@@ -20,6 +20,7 @@ and what a card's settings offer comes from cards.offered_options.
 
 import asyncio
 import base64
+import ipaddress
 import json
 import logging
 import re
@@ -782,6 +783,10 @@ class PanelConnection:
                       "wallpanel/intercom/contacts", "wallpanel/intercom/mode", "wallpanel/intercom/open",
                       "wallpanel/intercom/state"):
             await self.intercom(mid, kind, msg)
+        elif kind == "wallpanel/key/saved":
+            # The key handed out in auth_ok is saved: the panel's old one no longer opens.
+            self.gateway.store.key_saved(self.panel_id)
+            await self.send({"id": mid, "type": "result", "success": True, "result": None})
         elif kind == "wallpanel/registry/get":
             await self.send({"id": mid, "type": "result", "success": True, "result": REGISTRY})
         elif kind == "wallpanel/card/options":
@@ -862,6 +867,20 @@ MAX_STREAMS = 4
 PICTURE_TIMEOUT = aiohttp.ClientTimeout(total=20)
 
 
+def loopback(request: web.Request) -> bool:
+    """From this machine: Home Assistant's integration, carrying a panel through HA's address."""
+    try:
+        return ipaddress.ip_address(request.remote or "").is_loopback
+    except ValueError:
+        return False
+
+
+def refused_in_clear(panel, request: web.Request) -> bool:
+    """A panel that moved to the encrypted port, asking on the plain one from the LAN: its key, its
+    files and its sounds are refused there (docs/lan-tls-plan.md, 3.4)."""
+    return panel is not None and panel.tls and not request.secure and not loopback(request)
+
+
 def _error(mid, code: str, message: str) -> dict:
     return {"id": mid, "type": "result", "success": False, "error": {"code": code, "message": message}}
 
@@ -889,6 +908,16 @@ class Gateway:
         self.intercom = None
         # Panels as AirPlay speakers (airplay.AirPlay).
         self.airplay = None
+        # The hub's certificate (tls.HubTls) and its encrypted port, once they serve.
+        self.tls = None
+        self.tls_port: int | None = None
+
+    def tls_offer(self) -> dict:
+        """The encrypted port and the hub's pin, told to panels (auth_ok, /api/info). For information:
+        a panel trusts the pin it got over adb, bound to its pairing code, or on its first connection."""
+        if self.tls is None or not self.tls_port:
+            return {}
+        return {"tls_port": self.tls_port, "spki": self.tls.pin}
 
     async def open_door(self, target: str, panel_id: str | None, calls: bool = True) -> dict | str:
         """Opens [target] for a panel (or HA: panel_id None): {"opened"}, or {"dtmf": code} for
@@ -1072,9 +1101,15 @@ class Gateway:
             await ws.close()
             return ws
         valid = isinstance(first, dict) and first.get("type") == "auth"
-        panel = self.store.authenticate(str(first.get("access_token", ""))) if valid else None
+        key = str(first.get("access_token", "")) if valid else ""
+        panel = self.store.authenticate(key) if valid else None
         if panel is None:
             await ws.send_json({"type": "auth_invalid", "message": "Unknown or revoked panel"})
+            await ws.close()
+            return ws
+        if refused_in_clear(panel, request):
+            log.warning("panel %s refused: it connects on the encrypted port only", panel.id)
+            await ws.send_json({"type": "auth_invalid", "message": "Encrypted port only", "reason": "tls_required"})
             await ws.close()
             return ws
 
@@ -1091,11 +1126,16 @@ class Gateway:
             await ws.close(code=1011, message=b"home assistant unreachable")
             return ws
 
+        # Its first connection on the encrypted port: a key that never crossed the plain one.
+        new_key = self.store.secure_connection(panel.id, key) if request.secure else None
         conn = PanelConnection(self, panel.id, ws)
         self.connections.setdefault(panel.id, set()).add(conn)
-        self.store.seen(panel.id)
-        log.info("panel %s (%s) connected", panel.name, panel.id)
-        await ws.send_json({"type": "auth_ok", "ha_version": ok.get("ha_version")})
+        self.store.seen(panel.id, via_ha=loopback(request))
+        log.info("panel %s (%s) connected%s", panel.name, panel.id, ", encrypted" if request.secure else "")
+        auth_ok = {"type": "auth_ok", "ha_version": ok.get("ha_version"), **self.tls_offer()}
+        if new_key:
+            auth_ok["key"] = new_key
+        await ws.send_json(auth_ok)
         if self.speakers is not None:
             await self.speakers.changed()
 

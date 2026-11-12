@@ -180,9 +180,12 @@ class Job:
 
 
 class Provisioner:
-    def __init__(self, store, panel_port: int, adb: Adb):
+    def __init__(self, store, panel_port: int, adb: Adb, tls=lambda: {}):
         self.store = store
         self.panel_port = panel_port
+        # The encrypted port and the hub's pin (Gateway.tls_offer): handed to the panel over adb, so its
+        # trust in this hub never crosses the network (docs/lan-tls-plan.md, 5.1).
+        self.tls = tls
         self.adb = adb
         self.jobs: dict[str, Job] = {}
         self._tasks: set[asyncio.Task] = set()
@@ -362,8 +365,10 @@ class Provisioner:
         await self.adb.shell(s, f"am start -n {ACTIVITY}")
         token = self.store.new_provision(job.name, area_id)
         hub = f"http://{self.hub_address(job.address.split(':')[0])}:{self.panel_port}"
+        offer = self.tls()
+        pinned = f" --es pin {offer['spki']} --ei tls_port {offer['tls_port']}" if offer else ""
         # The token goes to the panel only, never to the log.
-        out = await self.adb.shell(s, f"am broadcast -n {RECEIVER} --es hub {hub} --es token {token}")
+        out = await self.adb.shell(s, f"am broadcast -n {RECEIVER} --es hub {hub} --es token {token}{pinned}")
         m = re.search(r"result=(-?\d+)", out)
         answer = int(m.group(1)) if m else None
         if answer == PAIRED:

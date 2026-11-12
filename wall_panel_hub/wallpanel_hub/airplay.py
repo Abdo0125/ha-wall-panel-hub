@@ -505,6 +505,12 @@ class AirPlay:
                         q.get_nowait()
                     q.put_nowait(silence)
 
+    def panel_of(self, token: str) -> str | None:
+        """The panel whose session [token] is."""
+        sp = next((s for s in self.speakers.values()
+                   if s.session and secrets.compare_digest(s.session.token, token)), None)
+        return sp.panel_id if sp else None
+
     async def stream(self, request: web.Request) -> web.StreamResponse:
         """GET /api/airplay/<token>: the session's sound, as a WAV stream."""
         token = request.match_info["token"]

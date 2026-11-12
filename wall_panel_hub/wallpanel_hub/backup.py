@@ -3,8 +3,8 @@
 
 The file holds every panel, its layout, its draft and its settings, the project's settings, the
 intercom's and AirPlay's. Panels stay paired when it is restored, because the hub keeps only their
-keys' hashes. It also holds the doors' and SIP servers' passwords as Asterisk needs them, so the page
-says to keep it safe.
+keys' hashes. It also holds the doors' and SIP servers' passwords as Asterisk needs them, and the
+hub's certificate with its private key (tls.json), so the page says to keep it safe.
 
 Not in it: integration.json, the secret Home Assistant's integration on this machine was set up
 with, and what the hub makes again (Asterisk's files, copies, files set aside).
@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from . import config as panel_config
+from . import tls
 from .files import read_json, remove, write_bytes, write_json
 from .migrate import SCHEMA
 from .settings import VERSION
@@ -32,11 +33,12 @@ MAX_UNPACKED = 100 * 1024 * 1024
 MAX_FILES = 5000
 
 # packages.json: the apps managed on the panels, not their files (packages.py).
-TOP = ("panels.json", "site.json", "intercom.json", "airplay.json", "packages.json")
+# tls.json: the hub's certificate, so a hub restored from it is the one its panels trust (tls.py).
+TOP = ("panels.json", "site.json", "intercom.json", "airplay.json", "packages.json", "tls.json")
 FOLDERS = ("config", "layouts", "drafts")
-NAME = re.compile(r"^(?:(?:panels|site|intercom|airplay|packages)\.json|(?:config|layouts|drafts)/[A-Za-z0-9_-]+\.json)$")
+NAME = re.compile(r"^(?:(?:panels|site|intercom|airplay|packages|tls)\.json|(?:config|layouts|drafts)/[A-Za-z0-9_-]+\.json)$")
 # The files only the hub's own user may read: they hold passwords.
-PRIVATE = {"intercom.json", "airplay.json"}
+PRIVATE = {"intercom.json", "airplay.json", "tls.json"}
 # What was here before the last import, to go back to.
 BEFORE = "before-import.zip"
 
@@ -91,6 +93,8 @@ def _check(name: str, doc: Any) -> None:
             if not isinstance(doc, dict):
                 raise BackupInvalid(f"{name} is not a layout")
             validate_layout({k: v for k, v in readable(doc).items() if k != "panel"})
+        elif name == "tls.json":
+            tls.check(doc)
         elif name == "packages.json":
             if not isinstance(doc, dict) or not isinstance(doc.get("apps", []), list):
                 raise BackupInvalid("packages.json is not a list of apps")
@@ -98,7 +102,7 @@ def _check(name: str, doc: Any) -> None:
             raise BackupInvalid(f"{name} is not what it should be")
     except BackupInvalid:
         raise
-    except (LayoutInvalid, ValueError, TypeError, KeyError) as e:
+    except (LayoutInvalid, tls.TlsInvalid, ValueError, TypeError, KeyError) as e:
         raise BackupInvalid(f"{name}: {e}") from e
 
 
@@ -137,7 +141,10 @@ def restore(data_dir: Path, data: bytes) -> dict:
     when [data] is not a backup this add-on can restore (BackupInvalid)."""
     docs = read(data)
     write_bytes(data_dir / BEFORE, export(data_dir), private=True)
-    for path in _entries(data_dir).values():
+    for name, path in _entries(data_dir).items():
+        # A backup from before tls.json keeps this hub's certificate: its panels still trust it.
+        if name == tls.FILE and name not in docs:
+            continue
         remove(path)
     for name, doc in docs.items():
         (data_dir / name).parent.mkdir(parents=True, exist_ok=True)

@@ -17,6 +17,7 @@ from .provision import Adb, Provisioner
 from .intercom import Intercom
 from .speakers import Speakers, load_secret
 from .store import Store
+from .tls import HubTls
 from .web import management_ui, panel_api
 
 
@@ -59,6 +60,11 @@ async def main() -> None:
     browser = discovery.PanelBrowser()
     async with aiohttp.ClientSession() as session:
         gateway = Gateway(cfg, store, session)
+        # The hub's certificate, for the encrypted port (docs/lan-tls-plan.md). Without it the panels go on in clear.
+        try:
+            gateway.tls = HubTls(cfg.data_dir)
+        except Exception:
+            log.exception("the hub's certificate failed: panels connect without encryption")
         # Other apps on the panels (packages.py).
         gateway.packages = Packages(cfg.data_dir, store)
         gateway.packages.changed = gateway.notify_packages
@@ -99,7 +105,7 @@ async def main() -> None:
         # The link that installs the app on a new panel: opened in the management page, used on the panel port.
         install = InstallLink(cfg.panel_port)
         # Setting up panels over adb from the management page (provision.py).
-        provisioner = Provisioner(store, cfg.panel_port, Adb(cfg.data_dir))
+        provisioner = Provisioner(store, cfg.panel_port, Adb(cfg.data_dir), gateway.tls_offer)
         for app, port in ((panel_api(store, gateway, install), cfg.panel_port),
                           (management_ui(store, gateway, cfg.ui_allowed, catalog, browser, intercom, install, provisioner), cfg.ui_port)):
             # No line per request: the add-on page asks every few seconds and a camera's video
@@ -109,8 +115,16 @@ async def main() -> None:
             await web.TCPSite(runner, "0.0.0.0", port).start()
             runners.append(runner)
         log.info("panel API on :%s, management UI on :%s", cfg.panel_port, cfg.ui_port)
+        # The same panel API, encrypted: one more site of the panel API's runner.
+        if gateway.tls is not None:
+            try:
+                await web.TCPSite(runners[0], "0.0.0.0", cfg.tls_port, ssl_context=gateway.tls.context).start()
+                gateway.tls_port = cfg.tls_port
+                log.info("encrypted panel API on :%s", cfg.tls_port)
+            except OSError as e:
+                log.error("encrypted panel API not started on :%s: %s; panels connect without encryption", cfg.tls_port, e)
 
-        zc = await discovery.announce(cfg.panel_port)
+        zc = await discovery.announce(cfg.panel_port, gateway.tls_offer())
         if zc:
             browser.start(zc)
         if not cfg.dev:

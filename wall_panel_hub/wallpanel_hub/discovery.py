@@ -36,7 +36,8 @@ def lan_address() -> str:
         return "127.0.0.1"
 
 
-async def announce(port: int) -> AsyncZeroconf | None:
+async def announce(port: int, tls: dict | None = None) -> AsyncZeroconf | None:
+    """[tls]: the encrypted port and the hub's pin (Gateway.tls_offer), for information only."""
     try:
         ip = _lan_ip()
         zc = AsyncZeroconf(ip_version=IPVersion.V4Only)
@@ -45,7 +46,7 @@ async def announce(port: int) -> AsyncZeroconf | None:
             f"Wall Panel Hub.{SERVICE_TYPE}",
             addresses=[socket.inet_aton(ip)],
             port=port,
-            properties={"version": VERSION},
+            properties={"version": VERSION, **{k: str(v) for k, v in (tls or {}).items()}},
         )
         await zc.async_register_service(info)
         log.info("announced %s on %s:%s", SERVICE_TYPE, ip, port)

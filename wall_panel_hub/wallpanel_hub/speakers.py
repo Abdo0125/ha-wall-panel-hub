@@ -112,7 +112,7 @@ class Speakers:
         self.calls: dict[str, dict] = {}
         self.links: set[web.WebSocketResponse] = set()
         # Sounds of HA's handed out to panels on the add-on's network: token -> (path, time).
-        self.media: dict[str, tuple[str, float]] = {}
+        self.media: dict[str, tuple[str, float, str | None]] = {}
 
     # ---- what the integration sees ----
 
@@ -201,14 +201,15 @@ class Speakers:
 
     # ---- HA's sounds for panels on the add-on's network ----
 
-    def media_token(self, path: str) -> str:
+    def media_token(self, path: str, panel_id: str | None = None) -> str:
+        """A token for [path], handed to [panel_id] (a panel on the encrypted port fetches it there only)."""
         now = time.time()
-        for t in [t for t, (_, at) in self.media.items() if now - at > MEDIA_TTL_S]:
+        for t in [t for t, (_, at, _p) in self.media.items() if now - at > MEDIA_TTL_S]:
             del self.media[t]
         while len(self.media) >= MAX_MEDIA:
             del self.media[next(iter(self.media))]
         token = secrets.token_hex(16)
-        self.media[token] = (path, now)
+        self.media[token] = (path, now, panel_id)
         return token
 
     def media_path(self, token: str) -> str | None:
@@ -216,6 +217,11 @@ class Speakers:
         if found is None or time.time() - found[1] > MEDIA_TTL_S:
             return None
         return found[0]
+
+    def media_panel(self, token: str) -> str | None:
+        """The panel [token] was handed to."""
+        found = self.media.get(token)
+        return found[2] if found else None
 
     # ---- commands ----
 
@@ -230,7 +236,7 @@ class Speakers:
             log.warning("speaker %s: command refused: %s", panel_id, reason)
             return reason
         if "path" in forward:
-            forward["hub_path"] = f"/api/media/{self.media_token(forward['path'])}"
+            forward["hub_path"] = f"/api/media/{self.media_token(forward['path'], panel_id)}"
         # HA's own sound, or its stop or pause, ends AirPlay on the panel; an announcement only lowers it.
         airplay = getattr(self.gateway, "airplay", None)
         if (airplay is not None and airplay.active(panel_id) and forward["command"] in ("play_media", "stop", "pause")

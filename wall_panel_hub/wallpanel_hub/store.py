@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 import secrets
 import time
 from dataclasses import asdict, dataclass, field, fields
@@ -17,6 +18,7 @@ from .cards import card_entities, check_card, kind_of_card
 from .files import DAMAGED, read_json, remove, write_json
 from .migrate import LayoutTooNew, LayoutTooOld, is_current, upgrade
 from .pins import verify_pin
+from .tls import pairing_code
 
 log = logging.getLogger(__name__)
 
@@ -166,6 +168,14 @@ class Panel:
     android_sdk: int | None = None
     can_install: bool = False
     device_owner: bool = False
+    # Connected on the hub's encrypted port once (docs/lan-tls-plan.md, 3.4): its key is refused on the
+    # plain port from then on, Home Assistant's integration on this machine aside.
+    tls: bool = False
+    # The key handed to it on that first encrypted connection, until it says it saved it: its own key
+    # may have been read on the plain port before, the new one never was.
+    pending_key_hash: str | None = None
+    # Last connected through Home Assistant's address (the integration), not on the LAN.
+    via_ha: bool = False
 
 
 @dataclass
@@ -183,10 +193,24 @@ class PairRequest:
     rejected: bool = False
     # Came through Home Assistant's address (the integration says so): from anywhere on the internet.
     via_ha: bool = False
+    # Asked on the encrypted port: its key leaves on that port only.
+    tls: bool = False
+    # Pairing bound to the hub's pin (docs/lan-tls-plan.md, 5.2): the panel's SHA-256 of its nonce, the
+    # hub's nonce (hex), and the code once the panel shows its nonce; until then [code] is "".
+    commit: str | None = None
+    nonce_hub: str | None = None
 
 
 class PairingBusy(Exception):
     """Too many pairing requests through Home Assistant's address: the ones from the LAN stay."""
+
+
+class NotRevealed(Exception):
+    """A pairing bound to the pin has no code yet: the panel has not shown its nonce."""
+
+
+# A SHA-256, or a 32-byte nonce, in hex.
+HEX32 = re.compile(r"[0-9a-f]{64}")
 
 
 @dataclass
@@ -281,7 +305,7 @@ class Store:
 
     def request_pairing(self, panel_id: str, name: str, model: str, platform: str = "android",
                         kind: str | None = None, provision_token: str | None = None,
-                        via_ha: bool = False) -> PairRequest:
+                        via_ha: bool = False, tls: bool = False, commit: str | None = None) -> PairRequest:
         self._expire()
         # One open request per panel: a retry replaces the previous one.
         for rid in [r for r, p in self.pending.items() if p.panel_id == panel_id]:
@@ -304,11 +328,18 @@ class Store:
             platform=platform if platform in PLATFORMS else "android",
             type=_type(platform, kind),
             via_ha=via_ha,
+            tls=tls,
         )
+        # On the encrypted port, a panel that commits to a nonce gets a code made from the pin.
+        if tls and isinstance(commit, str) and HEX32.fullmatch(commit):
+            req.commit, req.nonce_hub, req.code = commit, secrets.token_hex(32), ""
         self.pending[req.request_id] = req
         # Set up from the add-on: the installer approved it by starting the setup.
         prov = self._provision(provision_token)
         if prov is not None:
+            # Its pin came over adb with the token: no code to compare.
+            req.commit = req.nonce_hub = None
+            req.code = req.code or f"{secrets.randbelow(1_000_000):06d}"
             if prov.name:
                 req.name = prov.name
             self.approve(req.request_id, area_id=prov.area_id)
@@ -316,11 +347,26 @@ class Store:
             log.info("panel paired by its setup from the add-on")
         return req
 
+    def reveal(self, request_id: str, nonce: str, spki: bytes) -> bool:
+        """The panel's nonce for a pairing bound to the pin: True and its code made, if it is the one
+        it committed to."""
+        self._expire()
+        req = self.pending.get(request_id)
+        if req is None or req.commit is None or req.code or not HEX32.fullmatch(nonce or ""):
+            return False
+        if not hmac.compare_digest(hashlib.sha256(bytes.fromhex(nonce)).hexdigest(), req.commit):
+            return False
+        req.code = pairing_code(bytes.fromhex(nonce), bytes.fromhex(req.nonce_hub), spki)
+        return True
+
     def approve(self, request_id: str, area_id: str | None = None) -> Panel:
         self._expire()
         req = self.pending[request_id]
+        if not req.code:
+            raise NotRevealed()
         key = secrets.token_urlsafe(32)
-        panel = Panel(req.panel_id, req.name, req.model, _hash(key), time.time(), platform=req.platform, type=req.type)
+        panel = Panel(req.panel_id, req.name, req.model, _hash(key), time.time(), platform=req.platform, type=req.type,
+                      tls=req.tls)
         # Paired again: it is still in its room.
         before = self.panels.get(panel.id)
         if before is not None:
@@ -336,11 +382,14 @@ class Store:
         if request_id in self.pending:
             self.pending[request_id].rejected = True
 
-    def pairing_status(self, request_id: str) -> dict:
+    def pairing_status(self, request_id: str, secure: bool = False) -> dict:
         self._expire()
         req = self.pending.get(request_id)
         if req is None:
             return {"status": "expired"}
+        # Asked on the encrypted port: its key is never handed out on the plain one.
+        if req.tls and not secure:
+            return {"status": "pending"}
         if req.rejected:
             del self.pending[request_id]
             return {"status": "rejected"}
@@ -352,15 +401,47 @@ class Store:
     # ---- panels ----
 
     def authenticate(self, key: str) -> Panel | None:
+        """The panel with [key]: its own, or the one handed to it on the encrypted port and not yet
+        said saved (the answer may have been lost)."""
         h = _hash(key)
         for panel in self.panels.values():
             if hmac.compare_digest(panel.key_hash, h):
                 return panel
+            if panel.pending_key_hash and hmac.compare_digest(panel.pending_key_hash, h):
+                return panel
         return None
 
-    def seen(self, panel_id: str) -> None:
+    def secure_connection(self, panel_id: str, key: str) -> str | None:
+        """A panel connected on the encrypted port with [key] (docs/lan-tls-plan.md, 5.3). Returns a new
+        key for it when its own may have crossed the plain port: its first encrypted connection, or one
+        before it said it saved the last key handed out. Connecting with that key saves it."""
+        panel = self.panels[panel_id]
+        h = _hash(key)
+        if panel.pending_key_hash and hmac.compare_digest(panel.pending_key_hash, h):
+            self.key_saved(panel_id)
+            return None
+        if panel.tls and not panel.pending_key_hash:
+            return None
+        new = secrets.token_urlsafe(32)
+        panel.tls, panel.pending_key_hash = True, _hash(new)
+        self._save_panels()
+        log.info("panel %s moved to the encrypted port: a new key handed to it", panel_id)
+        return new
+
+    def key_saved(self, panel_id: str) -> None:
+        """The panel saved the key handed to it: that one alone opens from now on."""
+        panel = self.panels.get(panel_id)
+        if panel is None or not panel.pending_key_hash:
+            return
+        panel.key_hash, panel.pending_key_hash = panel.pending_key_hash, None
+        self._save_panels()
+        log.info("panel %s saved its new key: the old one no longer opens", panel_id)
+
+    def seen(self, panel_id: str, via_ha: bool | None = None) -> None:
         if panel_id in self.panels:
             self.panels[panel_id].last_seen = time.time()
+            if via_ha is not None:
+                self.panels[panel_id].via_ha = via_ha
             self._save_panels()
 
     def save_device(self, panel_id: str, version_name: str | None, version_code: int | None,

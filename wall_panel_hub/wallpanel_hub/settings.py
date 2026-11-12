@@ -5,7 +5,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-VERSION = "0.70.0"
+VERSION = "0.71.0"
 
 # The largest message taken from Home Assistant. Its get_states and registries carry every device
 # of the home, far above aiohttp's default of 4 MiB in a large one.
@@ -30,6 +30,8 @@ class Settings:
     ha_config: Path | None = None
     # The intercom's SIP port (Asterisk, on the host's network).
     sip_port: int = 5060
+    # The panels' encrypted port (docs/lan-tls-plan.md, 3.2).
+    tls_port: int = 8766
 
 
 # HA's base images start the program through s6-overlay, which does not pass the
@@ -63,6 +65,7 @@ def load() -> Settings:
             dev=False,
             ha_config=Path("/homeassistant"),
             sip_port=int(options.get("sip_port", 5060)),
+            tls_port=int(options.get("tls_port", 8766)),
         )
 
     # Developer mode: python -m wallpanel_hub with HA_URL and HA_TOKEN set.
@@ -76,4 +79,5 @@ def load() -> Settings:
         ui_port=int(os.environ.get("UI_PORT", "8099")),
         ui_allowed=("127.0.0.0/8", "::1/128"),
         dev=True,
+        tls_port=int(os.environ.get("TLS_PORT", "8766")),
     )

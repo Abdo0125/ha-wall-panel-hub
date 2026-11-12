@@ -1,5 +1,5 @@
 name: Wall Panel Hub
-version: "0.70.0"
+version: "0.71.0"
 slug: wall_panel_hub
 description: Unified management for wall panels (Android and ESP32) - pairing, layouts, secure gateway to Home Assistant
 url: https://github.com/Abdo0125/ha-wall-panel-hub
@@ -29,9 +29,12 @@ panel_icon: mdi:tablet-dashboard
 panel_title: Wall Panels
 options:
   panel_port: 8765
+  tls_port: 8766
   sip_port: 5060
 schema:
   panel_port: port
+  # The panels' encrypted port on the LAN (docs/lan-tls-plan.md); panel_port stays for older panels.
+  tls_port: port
   # The intercom's SIP port; audio uses UDP 10000-10199. AirPlay (for panels with it on):
   # TCP 51000-51049, UDP 51100-51599, announced over mDNS on the home network.
   sip_port: port

@@ -589,10 +589,12 @@ function renderNav() {
     nav.append(el("h2", {}, t("Panels asking to pair")));
     for (const r of o.pending) {
       nav.append(el("div", { class: "request" },
-        el("div", { class: "row" }, el("span", { class: "code" }, r.code), el("span", { class: "muted" }, r.name)),
+        // A code bound to the hub's pin comes a moment after the request (docs/lan-tls-plan.md, 5.2).
+        el("div", { class: "row" }, r.code ? el("span", { class: "code" }, r.code) : el("span", { class: "muted" }, t("Waiting for the panel…")),
+          el("span", { class: "muted" }, r.name)),
         requestNotes(r),
         el("div", { class: "row", style: { marginTop: "6px" } },
-          el("button", { class: "primary", onclick: () => wizard(r) }, t("Set up")),
+          el("button", { class: "primary", disabled: !r.code, onclick: () => wizard(r) }, t("Set up")),
           el("button", { onclick: async () => { await post(`api/pending/${enc(r.request_id)}/reject`); await refresh(); } }, t("Reject"))),
       ));
     }
@@ -665,6 +667,7 @@ function renderPanel(view) {
   view.append(el("div", { class: "titlebar" },
     el("h2", {}, p.name),
     el("span", { class: "dot " + (p.online ? "on" : "off") }, p.online ? t("● Online") : t("○ Offline")),
+    connectionNote(p),
     el("div", { class: "tabs" }, tabs.map(([id, label]) =>
       el("button", { class: S.view.tab === id ? "active" : "", onclick: () => { S.view.tab = id; render(); } }, label))),
     el("span", { class: "spacer" }),
@@ -2834,6 +2837,15 @@ function renderDevices(view) {
     el("div", { class: "row", style: { marginTop: "14px" } }, save)));
 }
 
+// How the panel reaches the hub: through Home Assistant's address, or on the LAN in clear until its app
+// moves it to the encrypted port (docs/lan-tls-plan.md, 6). Encrypted needs no word.
+function connectionNote(p) {
+  if (p.via_ha) return el("span", { class: "muted" }, t("Through Home Assistant's address"));
+  if (!p.tls) return el("span", { class: "muted", title: t("Nothing to do: it moves by itself.") },
+    t("Not encrypted: it moves by itself when the panel takes app {0}", "0.83.0"));
+  return null;
+}
+
 // ---------- new panel setup: approve, rooms, send ----------
 
 // What the installer should know before approving: it came from the internet through Home Assistant's
@@ -2859,6 +2871,7 @@ function wizard(req, start = 1) {
         el("div", { class: "actions" },
           el("button", { class: "solid", onclick: async () => {
             const r = await post(`api/pending/${enc(req.request_id)}/approve`);
+            if (r.status === 409) { alert(t("Waiting for the panel…")); return; }
             if (!r.ok) { alert(t("The request expired. The panel will ask to pair again.")); closeSheet(); refresh(); return; }
             st.pid = r.body.panel_id || st.pid;
             st.step = 2; show(); refresh();
