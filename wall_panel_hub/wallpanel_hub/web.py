@@ -397,10 +397,14 @@ def management_ui(store: Store, gateway: Gateway, allowed: tuple[str, ...],
                     "via_ha": p.via_ha,
                     "layout_version": (store.get_layout(p.id) or {}).get("version"),
                     "app": gateway.updates.for_panel(p.id),
+                    # Its app reads a layout format this add-on no longer serves (docs/audit-10-compat.md, 2).
+                    "app_too_old": gateway.app_too_old(p.id),
                 }
                 for p in sorted(store.panels.values(), key=lambda p: p.name)
             ],
             "app": panel_app.info(),
+            # The integration Home Assistant runs against the one this add-on carries (audit 10, item 5).
+            "integration": gateway.speakers.integration() if gateway.speakers else None,
             "pending": [
                 {"request_id": r.request_id, "panel_id": r.panel_id, "name": r.name, "model": r.model, "platform": r.platform, "type": r.type,
                  "code": r.code, "age": int(now - r.created), "via_ha": r.via_ha,

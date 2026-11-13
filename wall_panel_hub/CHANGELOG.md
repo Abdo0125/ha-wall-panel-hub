@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.72.0
+
+Compatibility between versions, first batch (docs/audit-10-compat.md): every mix of versions either
+works or says which side to update.
+
+- The hub tells each panel its version and the layout formats it serves as it connects. A panel
+  newer than its hub says "update the add-on" on entering edit mode, before any change, rather than
+  after a refused save. A panel's system page shows the hub's version.
+- A panel whose app is older than the layout formats the hub serves is told so ("update the app")
+  instead of staying silent on its last layout, and the add-on marks it in the panel list and on its
+  page. The update the hub offers still reaches it.
+- The companion integration (0.8.0) tells the add-on its version. While Home Assistant still runs an
+  older one, waiting for a restart, the add-on says so at the top of its page.
+- A test now stops any change to what a layout holds without a new layout format: an older app saves
+  back only what its format holds.
+- Carries the panel app 0.84.0.
+
 ## 0.71.0
 
 Security review, second batch: the local network encrypted (docs/lan-tls-plan.md).

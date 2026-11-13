@@ -1,11 +1,11 @@
 {
-  "version_name": "0.83.0",
-  "version_code": 222,
+  "version_name": "0.84.0",
+  "version_code": 223,
   "min_sdk": 28,
-  "sha256": "94896d733e4b5e9d4606b01ce1c0264a55fd8b01056a0a2b82971e4adaa13d33",
+  "sha256": "92d3a05963ec5cdff94f1f85e7a6203adb8625ad25fcd223388d0451154f6a63",
   "size": 23855754,
   "dm": {
-    "sha256": "76cdf696f15f816645a0faa0d564338e708a4ee088b9aebbad06f800d1b37a81",
-    "size": 7072
+    "sha256": "ae481033a9fb129edcf94a8009febc1db9e30effa0e2724533076f346c080169",
+    "size": 7056
   }
 }

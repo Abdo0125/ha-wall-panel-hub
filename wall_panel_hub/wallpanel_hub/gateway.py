@@ -12,7 +12,9 @@ The hub opens its own connection to HA and forwards only what the panel may do:
 - the intercom (wallpanel/intercom/*): its SIP to Asterisk (intercom.py), carried here.
 
 Layouts are stored in the current format (migrate.SCHEMA). A panel names the format its app
-reads with "schema" in wallpanel/layout/subscribe or /get.
+reads with "schema" in wallpanel/layout/subscribe or /get. An app older than migrate.OLDEST gets
+app_too_old for its layout, and auth_ok tells every panel the hub's version and the formats it
+serves (docs/audit-10-compat.md).
 
 What a device can do is the hub's to say (catalog.features): it goes with each state to the panels,
 and what a card's settings offer comes from cards.offered_options.
@@ -40,8 +42,8 @@ from .catalog import DeviceFeatures, device_types, features_of, with_types
 from . import panel_settings, project_settings
 from .config import ConfigInvalid
 from .pins import PinInvalid
-from .settings import HA_MAX_MESSAGE
-from .migrate import SCHEMA, for_app
+from .settings import HA_MAX_MESSAGE, VERSION
+from .migrate import OLDEST, SCHEMA, for_app
 from .store import LayoutConflict, LayoutInvalid, Store, layout_entities, layout_summary
 
 PACKAGE = re.compile(r"[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+")
@@ -181,6 +183,8 @@ class PanelConnection:
         self.package_subs: set[int] = set()
         # Layout format the panel's app reads, until it says.
         self.schema = SCHEMA
+        # Its app reads a format older than this hub serves: no layout for it, only app_too_old.
+        self.too_old = False
         # What each of its devices can do, added to the states going to it.
         self.features = DeviceFeatures(self.device_types)
         # Its subscribe_entities, for a change that does not come from HA.
@@ -610,6 +614,16 @@ class PanelConnection:
         # The layout format the panel's app reads.
         if kind in ("wallpanel/layout/get", "wallpanel/layout/subscribe") and isinstance(msg.get("schema"), int):
             self.schema = min(msg["schema"], SCHEMA)
+            self.too_old = msg["schema"] < OLDEST
+        if kind == "wallpanel/layout/save" and isinstance((msg.get("layout") or {}).get("schema"), int):
+            self.too_old = self.too_old or msg["layout"]["schema"] < OLDEST
+        if self.too_old and kind in ("wallpanel/layout/get", "wallpanel/layout/subscribe", "wallpanel/layout/save"):
+            # Served as it is, it would be refused as newer and the panel would stay silent on its last
+            # layout; its edits would fail as if for any other reason (docs/audit-10-compat.md, item 2).
+            log.warning("panel %s: its app reads layout format %s, this add-on serves %s and %s: update the app",
+                        self.panel_id, msg.get("schema", (msg.get("layout") or {}).get("schema")), OLDEST, SCHEMA)
+            await self.send(_error(mid, "app_too_old", f"this add-on serves layout formats {OLDEST} and {SCHEMA}: update the app"))
+            return
         if kind == "wallpanel/layout/get":
             await self.send({"id": mid, "type": "result", "success": True,
                              "result": {"layout": self.layout_for_panel()}})
@@ -1050,6 +1064,10 @@ class Gateway:
     def online(self, panel_id: str) -> bool:
         return bool(self.connections.get(panel_id))
 
+    def app_too_old(self, panel_id: str) -> bool:
+        """Connected with an app that reads a layout format this hub no longer serves."""
+        return any(c.too_old for c in self.connections.get(panel_id, ()))
+
     async def notify_layout(self, panel_id: str) -> None:
         for conn in list(self.connections.get(panel_id, ())):
             await conn.push_layout()
@@ -1132,7 +1150,10 @@ class Gateway:
         self.connections.setdefault(panel.id, set()).add(conn)
         self.store.seen(panel.id, via_ha=loopback(request))
         log.info("panel %s (%s) connected%s", panel.name, panel.id, ", encrypted" if request.secure else "")
-        auth_ok = {"type": "auth_ok", "ha_version": ok.get("ha_version"), **self.tls_offer()}
+        # The hub's version and the layout formats it serves: the panel knows before anything whether
+        # one of them must be updated (docs/audit-10-compat.md, item 3).
+        auth_ok = {"type": "auth_ok", "ha_version": ok.get("ha_version"),
+                   "hub": {"version": VERSION, "schema": SCHEMA, "oldest": OLDEST}, **self.tls_offer()}
         if new_key:
             auth_ok["key"] = new_key
         await ws.send_json(auth_ok)

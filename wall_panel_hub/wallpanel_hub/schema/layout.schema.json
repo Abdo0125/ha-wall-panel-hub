@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Abdo0125/ha-wall-panel/schema/layout.schema.json",
-  "title": "Wall panel layout, format 4",
+  "title": "Wall panel layout, format 5",
   "description": "What one panel shows: pages of cards. Shared by the Android app, the ESP32 firmware and the management add-on; it never carries credentials. Which cards exist, what entities, sizes and options each accepts, is defined in cards.json and checked by the add-on on save.",
   "type": "object",
   "required": [

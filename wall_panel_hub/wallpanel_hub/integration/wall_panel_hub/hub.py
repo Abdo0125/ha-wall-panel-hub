@@ -21,6 +21,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .const import VERSION
+
 _LOGGER = logging.getLogger(__name__)
 
 BACKOFF_S = (1, 2, 5, 10, 30)
@@ -83,7 +85,7 @@ class HubLink:
         while True:
             try:
                 async with session.ws_connect(self.url, heartbeat=30) as ws:
-                    await ws.send_json({"type": "auth", "secret": self.secret})
+                    await ws.send_json({"type": "auth", "secret": self.secret, "version": VERSION})
                     first = await ws.receive_json(timeout=10)
                     if first.get("type") != "auth_ok":
                         _LOGGER.error("Wall Panel Hub refused this integration's secret; set it up again")

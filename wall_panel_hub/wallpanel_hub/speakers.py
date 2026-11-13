@@ -111,8 +111,21 @@ class Speakers:
         # Each panel's call, as it tells it (wallpanel/intercom/state).
         self.calls: dict[str, dict] = {}
         self.links: set[web.WebSocketResponse] = set()
+        # The version of the integration on each link: what Home Assistant runs, which is the one the
+        # add-on copied only once HA restarted (docs/audit-10-compat.md, item 5). None: before 0.8.0.
+        self.versions: dict[web.WebSocketResponse, str | None] = {}
         # Sounds of HA's handed out to panels on the add-on's network: token -> (path, time).
         self.media: dict[str, tuple[str, float, str | None]] = {}
+
+    def integration(self) -> dict | None:
+        """The integration Home Assistant runs, and the one this add-on carries; None with no link."""
+        if not self.links:
+            return None
+        from .companion import SOURCE, _version
+        # One link in practice; with more, any that is not the carried one is worth a word.
+        carried = _version(SOURCE)
+        running = [self.versions.get(ws) for ws in self.links]
+        return {"running": next((v for v in running if v != carried), carried), "carried": carried}
 
     # ---- what the integration sees ----
 
@@ -263,8 +276,10 @@ class Speakers:
             await ws.close()
             return ws
         await ws.send_json({"type": "auth_ok"})
+        version = first.get("version") if isinstance(first.get("version"), str) else None
         self.links.add(ws)
-        log.info("Home Assistant integration connected")
+        self.versions[ws] = version[:20] if version else None
+        log.info("Home Assistant integration %sconnected", f"{self.versions[ws]} " if version else "")
         try:
             await ws.send_str(self.message())
             airplay = getattr(self.gateway, "airplay", None)
@@ -289,5 +304,6 @@ class Speakers:
                                     **({"error": reason} if reason else {})})
         finally:
             self.links.discard(ws)
+            self.versions.pop(ws, None)
             log.info("Home Assistant integration disconnected")
         return ws

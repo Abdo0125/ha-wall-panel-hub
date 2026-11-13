@@ -395,6 +395,11 @@ async function loadOverview() {
   $("pinWarning").textContent = t("⚠ No installer PIN on {0} of the panels: anyone at them has every permission and can release the full lock. Set it in the project.", open.length);
   $("pinWarning").title = open.join(", ");
   renderSetAside(r.body.set_aside);
+  // HA runs the integration it loaded at its last start: the one copied since waits for a restart
+  // (docs/audit-10-compat.md, item 5).
+  const ig = r.body.integration;
+  $("integrationWarning").hidden = !ig || ig.running === ig.carried;
+  if (ig) $("integrationWarning").textContent = t("⚠ Home Assistant runs the integration {0}; this add-on carries {1}. Restart Home Assistant to load it.", ig.running || t("before 0.8.0"), ig.carried);
 }
 
 // Files the hub could not read and moved aside: told until the installer has seen them.
@@ -607,7 +612,8 @@ function renderNav() {
       el("span", { class: "dot " + (p.online ? "on" : "off") }, p.online ? "●" : "○"),
       el("span", { class: "grow" }, p.name),
       S.work[p.id]?.unsent ? el("span", { title: t("Unsent changes"), style: { color: "var(--accent)" } }, "✱") : null,
-      p.app?.needs_update ? el("span", { class: "badge", title: t("Update available") }, t("update")) : null,
+      p.app_too_old ? el("span", { class: "badge", title: APP_TOO_OLD() }, "⚠ " + t("update"))
+        : p.app?.needs_update ? el("span", { class: "badge", title: t("Update available") }, t("update")) : null,
     ));
   }
   const outdated = o.panels.filter((p) => p.app?.needs_update && !p.app?.update).length;
@@ -668,6 +674,7 @@ function renderPanel(view) {
     el("h2", {}, p.name),
     el("span", { class: "dot " + (p.online ? "on" : "off") }, p.online ? t("● Online") : t("○ Offline")),
     connectionNote(p),
+    p.app_too_old ? el("span", { class: "msg warn" }, APP_TOO_OLD()) : null,
     el("div", { class: "tabs" }, tabs.map(([id, label]) =>
       el("button", { class: S.view.tab === id ? "active" : "", onclick: () => { S.view.tab = id; render(); } }, label))),
     el("span", { class: "spacer" }),
@@ -2836,6 +2843,9 @@ function renderDevices(view) {
     el("div", { style: { marginTop: "12px" } }, rows.length ? table : el("p", { class: "muted" }, t("No devices of this kind."))),
     el("div", { class: "row", style: { marginTop: "14px" } }, save)));
 }
+
+// A panel whose app reads a layout format this add-on no longer serves (docs/audit-10-compat.md, item 2).
+const APP_TOO_OLD = () => t("Its app is too old for this add-on: it keeps its last layout and saves nothing until its app is updated.");
 
 // How the panel reaches the hub: through Home Assistant's address, or on the LAN in clear until its app
 // moves it to the encrypted port (docs/lan-tls-plan.md, 6). Encrypted needs no word.
